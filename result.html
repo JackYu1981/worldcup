@@ -31,85 +31,98 @@
             border-bottom-color: #1a73e8;
             font-weight: 600;
         }
-        .result-card {
-            background: white;
+        .plan-card {
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            color: white;
             border-radius: 12px;
             padding: 16px;
             margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .plan-card:active {
+            transform: scale(0.98);
+        }
+        .plan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .plan-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .plan-date {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+        .plan-arrow {
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+        .plan-card.expanded .plan-arrow {
+            transform: rotate(180deg);
+        }
+        .plan-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        .plan-detail {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .plan-card.expanded .plan-detail {
+            max-height: 2000px;
+        }
+        .plan-detail-inner {
+            padding-top: 14px;
+            margin-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+        .combo-section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
         }
         .combo-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             font-weight: 600;
+            font-size: 14px;
         }
         .combo-odds {
-            color: #e65100;
-            font-size: 18px;
+            color: #ffcc02;
         }
         .leg-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 14px;
+            padding: 5px 0;
+            font-size: 13px;
+            opacity: 0.9;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
         }
         .leg-item:last-child { border-bottom: none; }
         .stake-info {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
-            font-size: 14px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            font-size: 13px;
         }
-        .potential-return { color: #2e7d32; font-weight: 600; }
-        .summary-card {
-            background: linear-gradient(135deg, #1a73e8, #0d47a1);
-            color: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        .summary-card h2 { font-size: 14px; opacity: 0.8; margin-bottom: 8px; }
-        .summary-card .amount { font-size: 28px; font-weight: 700; }
-        .summary-card .passphrase { font-size: 12px; opacity: 0.7; margin-top: 8px; }
-        .summary-row {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 16px;
-        }
-        .summary-item { text-align: center; }
-        .summary-item .label { font-size: 12px; opacity: 0.7; }
-        .summary-item .val { font-size: 16px; font-weight: 600; margin-top: 4px; }
+        .potential-return { color: #a5d6a7; font-weight: 600; }
         .empty-state {
             text-align: center;
             color: #999;
             padding: 60px 20px;
             font-size: 14px;
-        }
-        .date-nav {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        .date-btn {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            background: white;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .date-btn.active {
-            background: #1a73e8;
-            color: white;
-            border-color: #1a73e8;
         }
     </style>
 </head>
@@ -122,7 +135,6 @@
         <a class="nav-tab" href="dashboard.html">看板</a>
     </div>
 
-    <div class="date-nav" id="dateNav"></div>
     <div id="content">
         <div class="empty-state">
             <p>加载中...</p>
@@ -132,95 +144,85 @@
     <script>
         const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
 
-        let resultFiles = [];
-        let currentFile = null;
+        let allResults = [];
 
-        async function loadResultsList() {
+        async function loadAllResults() {
             try {
                 const resp = await fetch(RESULTS_INDEX_URL);
                 const files = await resp.json();
-                resultFiles = files
+                const resultFiles = files
                     .filter(f => f.name.endsWith('.json'))
-                    .sort((a, b) => b.name.localeCompare(a.name));
+                    .sort((a, b) => a.name.localeCompare(b.name));
 
                 if (resultFiles.length === 0) {
                     document.getElementById('content').innerHTML = '<div class="empty-state"><p>暂无投注方案</p></div>';
                     return;
                 }
 
-                renderDateNav();
-                loadResult(resultFiles[0]);
+                const results = await Promise.all(resultFiles.map(async f => {
+                    const r = await fetch(f.download_url);
+                    return r.json();
+                }));
+
+                allResults = results;
+                renderAllPlans();
             } catch (e) {
                 document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
             }
         }
 
-        function renderDateNav() {
-            const nav = document.getElementById('dateNav');
-            nav.innerHTML = resultFiles.map(f => {
-                const name = f.name.replace('.json', '');
-                const parts = name.split('-');
-                const label = parts.length >= 4 ? `${parts[1]}/${parts[2]} ${parts.slice(3).join('-')}` : name;
-                const active = currentFile && currentFile.name === f.name ? 'active' : '';
-                return `<button class="date-btn ${active}" onclick="loadResult(resultFiles.find(r=>r.name==='${f.name}'))">${label}</button>`;
-            }).join('');
+        function togglePlan(el) {
+            el.classList.toggle('expanded');
         }
 
-        async function loadResult(file) {
-            currentFile = file;
-            renderDateNav();
-            try {
-                const resp = await fetch(file.download_url);
-                const data = await resp.json();
-                renderResults(data);
-            } catch (e) {
-                document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
-            }
-        }
-
-        function renderResults(data) {
+        function renderAllPlans() {
             const content = document.getElementById('content');
-            const summaryHtml = `
-                <div class="summary-card">
-                    <h2>投注方案 · ${data.date}</h2>
-                    <div class="amount">¥${data.budget}</div>
-                    <div class="passphrase">口令：${data.passphrase || '-'}</div>
-                    <div class="summary-row">
-                        <div class="summary-item">
-                            <div class="label">组合数</div>
-                            <div class="val">${data.combinations.length}注</div>
-                        </div>
-                        <div class="summary-item">
-                            <div class="label">回报范围</div>
-                            <div class="val">¥${data.expected_return_range}</div>
-                        </div>
-                    </div>
-                </div>`;
 
-            const combosHtml = data.combinations.map((c, i) => {
-                const legsHtml = c.legs.map(l =>
-                    `<div class="leg-item">
-                        <span>${l.match_desc} · ${l.pick_desc}</span>
-                        <span>@${l.odds.toFixed(2)}</span>
-                    </div>`
-                ).join('');
-                return `<div class="result-card">
-                    <div class="combo-header">
-                        <span>组合 ${i + 1}</span>
-                        <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
+            const html = allResults.map((data, idx) => {
+                const combosHtml = data.combinations.map((c, i) => {
+                    const legsHtml = c.legs.map(l =>
+                        `<div class="leg-item">
+                            <span>${l.match_desc} · ${l.pick_desc}</span>
+                            <span>@${l.odds.toFixed(2)}</span>
+                        </div>`
+                    ).join('');
+                    return `<div class="combo-section">
+                        <div class="combo-header">
+                            <span>组合 ${i + 1}</span>
+                            <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
+                        </div>
+                        ${legsHtml}
+                        <div class="stake-info">
+                            <span>投注 ¥${c.stake}</span>
+                            <span class="potential-return">可得 ¥${c.potential_return.toLocaleString()}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="plan-card" onclick="togglePlan(this)">
+                    <div class="plan-header">
+                        <div>
+                            <div class="plan-title">${data.passphrase || '未命名'}</div>
+                            <div class="plan-date">${data.date} · ${data.combinations.length}注</div>
+                        </div>
+                        <div class="plan-arrow">▼</div>
                     </div>
-                    ${legsHtml}
-                    <div class="stake-info">
-                        <span>投注 ¥${c.stake}</span>
-                        <span class="potential-return">可得 ¥${c.potential_return.toLocaleString()}</span>
+                    <div class="plan-meta">
+                        <span>投入 ¥${data.budget}</span>
+                        <span>回报 ¥${data.expected_return_range}</span>
+                    </div>
+                    <div class="plan-detail">
+                        <div class="plan-detail-inner">
+                            ${combosHtml}
+                        </div>
                     </div>
                 </div>`;
             }).join('');
 
-            content.innerHTML = summaryHtml + combosHtml;
+            content.innerHTML = html;
         }
 
-        loadResultsList();
+        loadAllResults();
     </script>
 </body>
 </html>
