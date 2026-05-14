@@ -191,7 +191,7 @@
 
     <script>
         const DATES = ['2026-06-12', '2026-06-13', '2026-06-14'];
-        const BASE_URL = '/worldcup';
+        const BASE_URL = '';
         let currentDate = DATES[0];
         let matches = [];
         let selections = {};
@@ -280,8 +280,6 @@
             setTimeout(() => toast.style.display = 'none', 2000);
         }
 
-        const WORKER_URL = 'https://worldmoney.yujuntao1981.workers.dev';
-
         async function submit() {
             const passphrase = document.getElementById('passphrase').value.trim();
             if (!passphrase || Object.keys(selections).length === 0) return;
@@ -301,7 +299,7 @@
             };
 
             try {
-                const resp = await fetch(WORKER_URL, {
+                const resp = await fetch('/api/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)

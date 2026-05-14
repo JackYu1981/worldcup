@@ -111,7 +111,7 @@
         async function loadResults() {
             // Demo: load sample result
             try {
-                const resp = await fetch('/worldcup/results/2026-06-12-demo.json');
+                const resp = await fetch('/results/2026-06-12-demo.json');
                 if (!resp.ok) throw new Error('no data');
                 const data = await resp.json();
                 renderResults(data);
