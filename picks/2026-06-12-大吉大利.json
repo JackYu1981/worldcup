@@ -1,0 +1,25 @@
+{
+  "date": "2026-06-12",
+  "passphrase": "大吉大利",
+  "submitted_at": "2026-05-14T15:00:33.018Z",
+  "picks": [
+    {
+      "match_id": "m001",
+      "selections": [
+        "home_win"
+      ]
+    },
+    {
+      "match_id": "m002",
+      "selections": [
+        "home_win"
+      ]
+    },
+    {
+      "match_id": "m003",
+      "selections": [
+        "draw"
+      ]
+    }
+  ]
+}
