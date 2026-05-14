@@ -75,6 +75,7 @@
         }
         .summary-card h2 { font-size: 14px; opacity: 0.8; margin-bottom: 8px; }
         .summary-card .amount { font-size: 28px; font-weight: 700; }
+        .summary-card .passphrase { font-size: 12px; opacity: 0.7; margin-top: 8px; }
         .summary-row {
             display: flex;
             justify-content: space-around;
@@ -89,6 +90,27 @@
             padding: 60px 20px;
             font-size: 14px;
         }
+        .date-nav {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .date-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .date-btn.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
     </style>
 </head>
 <body>
@@ -100,23 +122,59 @@
         <a class="nav-tab" href="dashboard.html">看板</a>
     </div>
 
+    <div class="date-nav" id="dateNav"></div>
     <div id="content">
         <div class="empty-state">
-            <p>暂无投注方案</p>
-            <p style="margin-top:8px;">等待AI计算中...</p>
+            <p>加载中...</p>
         </div>
     </div>
 
     <script>
-        async function loadResults() {
-            // Demo: load sample result
+        const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
+
+        let resultFiles = [];
+        let currentFile = null;
+
+        async function loadResultsList() {
             try {
-                const resp = await fetch('/results/2026-06-12-demo.json');
-                if (!resp.ok) throw new Error('no data');
+                const resp = await fetch(RESULTS_INDEX_URL);
+                const files = await resp.json();
+                resultFiles = files
+                    .filter(f => f.name.endsWith('.json'))
+                    .sort((a, b) => b.name.localeCompare(a.name));
+
+                if (resultFiles.length === 0) {
+                    document.getElementById('content').innerHTML = '<div class="empty-state"><p>暂无投注方案</p></div>';
+                    return;
+                }
+
+                renderDateNav();
+                loadResult(resultFiles[0]);
+            } catch (e) {
+                document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            }
+        }
+
+        function renderDateNav() {
+            const nav = document.getElementById('dateNav');
+            nav.innerHTML = resultFiles.map(f => {
+                const name = f.name.replace('.json', '');
+                const parts = name.split('-');
+                const label = parts.length >= 4 ? `${parts[1]}/${parts[2]} ${parts.slice(3).join('-')}` : name;
+                const active = currentFile && currentFile.name === f.name ? 'active' : '';
+                return `<button class="date-btn ${active}" onclick="loadResult(resultFiles.find(r=>r.name==='${f.name}'))">${label}</button>`;
+            }).join('');
+        }
+
+        async function loadResult(file) {
+            currentFile = file;
+            renderDateNav();
+            try {
+                const resp = await fetch(file.download_url);
                 const data = await resp.json();
                 renderResults(data);
-            } catch(e) {
-                // keep empty state
+            } catch (e) {
+                document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
             }
         }
 
@@ -124,16 +182,17 @@
             const content = document.getElementById('content');
             const summaryHtml = `
                 <div class="summary-card">
-                    <h2>本期投注 · ${data.date}</h2>
+                    <h2>投注方案 · ${data.date}</h2>
                     <div class="amount">¥${data.budget}</div>
+                    <div class="passphrase">口令：${data.passphrase || '-'}</div>
                     <div class="summary-row">
                         <div class="summary-item">
                             <div class="label">组合数</div>
                             <div class="val">${data.combinations.length}注</div>
                         </div>
                         <div class="summary-item">
-                            <div class="label">赔率范围</div>
-                            <div class="val">${data.expected_return_range}</div>
+                            <div class="label">回报范围</div>
+                            <div class="val">¥${data.expected_return_range}</div>
                         </div>
                     </div>
                 </div>`;
@@ -141,19 +200,19 @@
             const combosHtml = data.combinations.map((c, i) => {
                 const legsHtml = c.legs.map(l =>
                     `<div class="leg-item">
-                        <span>${l.match_desc || l.match_id} · ${l.pick_desc || l.pick}</span>
+                        <span>${l.match_desc} · ${l.pick_desc}</span>
                         <span>@${l.odds.toFixed(2)}</span>
                     </div>`
                 ).join('');
                 return `<div class="result-card">
                     <div class="combo-header">
-                        <span>组合 ${i+1}</span>
+                        <span>组合 ${i + 1}</span>
                         <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
                     </div>
                     ${legsHtml}
                     <div class="stake-info">
                         <span>投注 ¥${c.stake}</span>
-                        <span class="potential-return">可得 ¥${c.potential_return}</span>
+                        <span class="potential-return">可得 ¥${c.potential_return.toLocaleString()}</span>
                     </div>
                 </div>`;
             }).join('');
@@ -161,7 +220,7 @@
             content.innerHTML = summaryHtml + combosHtml;
         }
 
-        loadResults();
+        loadResultsList();
     </script>
 </body>
 </html>
