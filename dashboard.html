@@ -93,32 +93,90 @@
         .day-detail {
             background: white;
             border-radius: 12px;
-            padding: 16px;
             margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
             display: none;
+            overflow: hidden;
         }
-        .day-detail.visible { display: block; }
-        .day-detail h3 {
+        .day-detail.visible { display: block; animation: slideDown 0.3s ease; }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .day-detail-header {
+            padding: 14px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
             font-size: 14px;
-            color: #666;
-            margin-bottom: 12px;
-        }
-        .day-detail .plan-link {
+            font-weight: 600;
+            color: #333;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
         }
-        .day-detail .plan-link.won { background: #ffebee; }
-        .day-detail .plan-link.lost { background: #e8f5e9; }
-        .day-detail .plan-link.pending { background: #e3f2fd; }
-        .day-detail .plan-link .name { font-weight: 600; }
-        .day-detail .plan-link .info { font-size: 12px; color: #666; }
+        .day-detail-header .close-btn {
+            font-size: 18px;
+            color: #999;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .day-detail-body { padding: 12px 16px; }
+        .ticket {
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            border: 1px solid #eee;
+        }
+        .ticket:last-child { margin-bottom: 0; }
+        .ticket-header {
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .ticket.won .ticket-header { background: #ffebee; color: #c62828; }
+        .ticket.lost .ticket-header { background: #e8f5e9; color: #2e7d32; }
+        .ticket.pending .ticket-header { background: #e3f2fd; color: #1a73e8; }
+        .ticket-body {
+            padding: 10px 14px;
+            background: white;
+            font-size: 13px;
+            color: #555;
+        }
+        .ticket-combo {
+            padding: 8px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .ticket-combo:last-child { border-bottom: none; }
+        .ticket-combo-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #333;
+        }
+        .ticket-combo-header .odds { color: #e65100; }
+        .ticket-leg {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            font-size: 12px;
+        }
+        .ticket-leg.correct { color: #c62828; }
+        .ticket-leg.wrong { color: #999; text-decoration: line-through; }
+        .ticket-stake {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px dashed #eee;
+            font-size: 12px;
+            color: #333;
+        }
+        .ticket-stake .return { font-weight: 600; color: #c62828; }
     </style>
 </head>
 <body>
@@ -151,8 +209,11 @@
     </div>
 
     <div class="day-detail" id="dayDetail">
-        <h3 id="dayDetailTitle">-</h3>
-        <div id="dayDetailContent"></div>
+        <div class="day-detail-header">
+            <span id="dayDetailTitle">-</span>
+            <span class="close-btn" onclick="closeDayDetail()">✕</span>
+        </div>
+        <div class="day-detail-body" id="dayDetailContent"></div>
     </div>
 
     <div class="chart-card">
@@ -288,8 +349,17 @@
             }
         }
 
+        let currentOpenDate = null;
+
         function showDayDetail(dateStr, plans) {
             const detail = document.getElementById('dayDetail');
+
+            if (currentOpenDate === dateStr) {
+                closeDayDetail();
+                return;
+            }
+
+            currentOpenDate = dateStr;
             const title = document.getElementById('dayDetailTitle');
             const content = document.getElementById('dayDetailContent');
 
@@ -298,17 +368,48 @@
                 const status = p.status || 'pending';
                 const statusText = status === 'won' ? '🎉 中奖' : status === 'lost' ? '💣 未中' : '⏳ 待开';
                 const profitText = p.profit !== undefined ? (p.profit >= 0 ? `+¥${p.profit}` : `-¥${Math.abs(p.profit)}`) : '';
-                return `<div class="plan-link ${status}" onclick="window.location.href='result.html'">
-                    <div>
-                        <div class="name">${p.passphrase} ${statusText}</div>
-                        <div class="info">${p.combinations.length}注 · 投入¥${p.budget}</div>
+
+                const combosHtml = p.combinations.map((c, i) => {
+                    const hitLabel = c.hit === true ? ' ✓' : c.hit === false ? ' ✗' : '';
+                    const legsHtml = c.legs.map(l => {
+                        const legClass = l.correct === true ? 'correct' : l.correct === false ? 'wrong' : '';
+                        const icon = l.correct === true ? ' ✓' : l.correct === false ? ' ✗' : '';
+                        return `<div class="ticket-leg ${legClass}">
+                            <span>${l.match_desc} · ${l.pick_desc}${icon}</span>
+                            <span>@${l.odds.toFixed(2)}</span>
+                        </div>`;
+                    }).join('');
+                    return `<div class="ticket-combo">
+                        <div class="ticket-combo-header">
+                            <span>组合${i + 1}${hitLabel}</span>
+                            <span class="odds">×${c.combined_odds.toFixed(2)}</span>
+                        </div>
+                        ${legsHtml}
+                        <div class="ticket-stake">
+                            <span>¥${c.stake}</span>
+                            <span class="return">${c.hit ? '中奖' : '可得'} ¥${c.potential_return.toLocaleString()}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="ticket ${status}">
+                    <div class="ticket-header">
+                        <span>${p.passphrase} ${statusText}</span>
+                        <span>${profitText}</span>
                     </div>
-                    <div style="font-weight:600;">${profitText}</div>
+                    <div class="ticket-body">
+                        ${combosHtml}
+                    </div>
                 </div>`;
             }).join('');
 
             detail.classList.add('visible');
             detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function closeDayDetail() {
+            currentOpenDate = null;
+            document.getElementById('dayDetail').classList.remove('visible');
         }
 
         loadData();
