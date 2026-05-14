@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-14",
+  "matches": [
+    {
+      "id": "m008",
+      "home": "英格兰",
+      "away": "伊朗",
+      "kickoff": "20:00",
+      "group": "B",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.30,
+        "draw": 5.25,
+        "away_win": 10.00
+      }
+    },
+    {
+      "id": "m009",
+      "home": "荷兰",
+      "away": "塞内加尔",
+      "kickoff": "23:00",
+      "group": "A",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.75,
+        "draw": 3.60,
+        "away_win": 4.80
+      }
+    },
+    {
+      "id": "m010",
+      "home": "葡萄牙",
+      "away": "加纳",
+      "kickoff": "02:00",
+      "group": "H",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.45,
+        "draw": 4.50,
+        "away_win": 7.00
+      }
+    }
+  ]
+}

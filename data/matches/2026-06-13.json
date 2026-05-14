@@ -1,0 +1,57 @@
+{
+  "date": "2026-06-13",
+  "matches": [
+    {
+      "id": "m004",
+      "home": "巴西",
+      "away": "塞尔维亚",
+      "kickoff": "20:00",
+      "group": "G",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.40,
+        "draw": 4.75,
+        "away_win": 7.50
+      }
+    },
+    {
+      "id": "m005",
+      "home": "西班牙",
+      "away": "哥斯达黎加",
+      "kickoff": "23:00",
+      "group": "E",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.18,
+        "draw": 6.50,
+        "away_win": 15.00
+      }
+    },
+    {
+      "id": "m006",
+      "home": "法国",
+      "away": "墨西哥",
+      "kickoff": "02:00",
+      "group": "D",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 1.50,
+        "draw": 4.20,
+        "away_win": 6.00
+      }
+    },
+    {
+      "id": "m007",
+      "home": "加拿大",
+      "away": "喀麦隆",
+      "kickoff": "02:00",
+      "group": "F",
+      "stage": "小组赛第1轮",
+      "odds": {
+        "home_win": 2.30,
+        "draw": 3.20,
+        "away_win": 3.10
+      }
+    }
+  ]
+}

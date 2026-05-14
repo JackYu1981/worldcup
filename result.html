@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>投注方案 - 世界杯投注助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 16px;
+        }
+        h1 { font-size: 20px; text-align: center; padding: 12px 0; }
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .nav-tab {
+            padding: 8px 16px;
+            font-size: 14px;
+            color: #666;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tab.active {
+            color: #1a73e8;
+            border-bottom-color: #1a73e8;
+            font-weight: 600;
+        }
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .combo-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .combo-odds {
+            color: #e65100;
+            font-size: 18px;
+        }
+        .leg-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+        .leg-item:last-child { border-bottom: none; }
+        .stake-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        .potential-return { color: #2e7d32; font-weight: 600; }
+        .summary-card {
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .summary-card h2 { font-size: 14px; opacity: 0.8; margin-bottom: 8px; }
+        .summary-card .amount { font-size: 28px; font-weight: 700; }
+        .summary-row {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 16px;
+        }
+        .summary-item { text-align: center; }
+        .summary-item .label { font-size: 12px; opacity: 0.7; }
+        .summary-item .val { font-size: 16px; font-weight: 600; margin-top: 4px; }
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚽ 世界杯投注助手</h1>
+
+    <div class="nav-tabs">
+        <a class="nav-tab" href="index.html">选择</a>
+        <a class="nav-tab active" href="result.html">方案</a>
+        <a class="nav-tab" href="dashboard.html">看板</a>
+    </div>
+
+    <div id="content">
+        <div class="empty-state">
+            <p>暂无投注方案</p>
+            <p style="margin-top:8px;">等待AI计算中...</p>
+        </div>
+    </div>
+
+    <script>
+        async function loadResults() {
+            // Demo: load sample result
+            try {
+                const resp = await fetch('/results/2026-06-12-demo.json');
+                if (!resp.ok) throw new Error('no data');
+                const data = await resp.json();
+                renderResults(data);
+            } catch(e) {
+                // keep empty state
+            }
+        }
+
+        function renderResults(data) {
+            const content = document.getElementById('content');
+            const summaryHtml = `
+                <div class="summary-card">
+                    <h2>本期投注 · ${data.date}</h2>
+                    <div class="amount">¥${data.budget}</div>
+                    <div class="summary-row">
+                        <div class="summary-item">
+                            <div class="label">组合数</div>
+                            <div class="val">${data.combinations.length}注</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="label">赔率范围</div>
+                            <div class="val">${data.expected_return_range}</div>
+                        </div>
+                    </div>
+                </div>`;
+
+            const combosHtml = data.combinations.map((c, i) => {
+                const legsHtml = c.legs.map(l =>
+                    `<div class="leg-item">
+                        <span>${l.match_desc || l.match_id} · ${l.pick_desc || l.pick}</span>
+                        <span>@${l.odds.toFixed(2)}</span>
+                    </div>`
+                ).join('');
+                return `<div class="result-card">
+                    <div class="combo-header">
+                        <span>组合 ${i+1}</span>
+                        <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
+                    </div>
+                    ${legsHtml}
+                    <div class="stake-info">
+                        <span>投注 ¥${c.stake}</span>
+                        <span class="potential-return">可得 ¥${c.potential_return}</span>
+                    </div>
+                </div>`;
+            }).join('');
+
+            content.innerHTML = summaryHtml + combosHtml;
+        }
+
+        loadResults();
+    </script>
+</body>
+</html>

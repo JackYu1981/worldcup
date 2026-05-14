@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>世界杯投注助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+        h1 {
+            font-size: 20px;
+            text-align: center;
+            padding: 12px 0;
+            color: #1a1a1a;
+        }
+        .date-nav {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .date-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .date-btn.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        .match-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: #888;
+        }
+        .match-teams {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 14px;
+        }
+        .odds-row {
+            display: flex;
+            gap: 8px;
+        }
+        .odds-btn {
+            flex: 1;
+            padding: 12px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .odds-btn.selected {
+            border-color: #1a73e8;
+            background: #e8f0fe;
+        }
+        .odds-btn .label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .odds-btn .value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        .passphrase-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 12px 16px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .passphrase-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+        }
+        .passphrase-input:focus {
+            border-color: #1a73e8;
+        }
+        .submit-btn {
+            padding: 12px 24px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .submit-btn:active:not(:disabled) {
+            background: #1557b0;
+        }
+        .selection-count {
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+            z-index: 1000;
+        }
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .nav-tab {
+            padding: 8px 16px;
+            font-size: 14px;
+            color: #666;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tab.active {
+            color: #1a73e8;
+            border-bottom-color: #1a73e8;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚽ 世界杯投注助手</h1>
+
+    <div class="nav-tabs">
+        <a class="nav-tab active" href="index.html">选择</a>
+        <a class="nav-tab" href="result.html">方案</a>
+        <a class="nav-tab" href="dashboard.html">看板</a>
+    </div>
+
+    <div class="date-nav" id="dateNav"></div>
+    <div class="selection-count" id="selectionCount">已选 0 场比赛</div>
+    <div id="matchList"></div>
+
+    <div class="passphrase-section">
+        <input type="text" class="passphrase-input" id="passphrase" placeholder="输入口令（如：今晚吃鸡）">
+        <button class="submit-btn" id="submitBtn" disabled>提交</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const DATES = ['2026-06-12', '2026-06-13', '2026-06-14'];
+        const BASE_URL = '';
+        let currentDate = DATES[0];
+        let matches = [];
+        let selections = {};
+
+        const LABEL_MAP = {
+            home_win: '主胜',
+            draw: '平',
+            away_win: '客胜'
+        };
+
+        async function loadMatches(date) {
+            try {
+                const resp = await fetch(`${BASE_URL}/data/matches/${date}.json`);
+                const data = await resp.json();
+                matches = data.matches;
+                renderMatches();
+            } catch (e) {
+                document.getElementById('matchList').innerHTML = '<p style="text-align:center;color:#999;padding:40px;">暂无赛程数据</p>';
+            }
+        }
+
+        function renderDateNav() {
+            const nav = document.getElementById('dateNav');
+            nav.innerHTML = DATES.map(d => {
+                const label = d.slice(5).replace('-', '/');
+                const active = d === currentDate ? 'active' : '';
+                return `<button class="date-btn ${active}" onclick="switchDate('${d}')">${label}</button>`;
+            }).join('');
+        }
+
+        function switchDate(date) {
+            currentDate = date;
+            selections = {};
+            renderDateNav();
+            loadMatches(date);
+            updateCount();
+        }
+
+        function renderMatches() {
+            const list = document.getElementById('matchList');
+            list.innerHTML = matches.map(m => {
+                const oddsKeys = ['home_win', 'draw', 'away_win'];
+                const oddsHtml = oddsKeys.map(key => {
+                    const selected = (selections[m.id] || []).includes(key) ? 'selected' : '';
+                    return `<div class="odds-btn ${selected}" onclick="toggleOdds('${m.id}','${key}')">
+                        <div class="label">${LABEL_MAP[key]}</div>
+                        <div class="value">${m.odds[key].toFixed(2)}</div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="match-card">
+                    <div class="match-header">
+                        <span>${m.stage} · ${m.group}组</span>
+                        <span>${m.kickoff}</span>
+                    </div>
+                    <div class="match-teams">${m.home} vs ${m.away}</div>
+                    <div class="odds-row">${oddsHtml}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleOdds(matchId, key) {
+            if (!selections[matchId]) selections[matchId] = [];
+            const idx = selections[matchId].indexOf(key);
+            if (idx >= 0) {
+                selections[matchId].splice(idx, 1);
+                if (selections[matchId].length === 0) delete selections[matchId];
+            } else {
+                selections[matchId].push(key);
+            }
+            renderMatches();
+            updateCount();
+        }
+
+        function updateCount() {
+            const count = Object.keys(selections).length;
+            document.getElementById('selectionCount').textContent = `已选 ${count} 场比赛`;
+            const passphrase = document.getElementById('passphrase').value.trim();
+            document.getElementById('submitBtn').disabled = count === 0 || !passphrase;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2000);
+        }
+
+        async function submit() {
+            const passphrase = document.getElementById('passphrase').value.trim();
+            if (!passphrase || Object.keys(selections).length === 0) return;
+
+            const payload = {
+                date: currentDate,
+                passphrase: passphrase,
+                submitted_at: new Date().toISOString(),
+                picks: Object.entries(selections).map(([matchId, sels]) => ({
+                    match_id: matchId,
+                    selections: sels
+                }))
+            };
+
+            // Demo模式：直接下载JSON文件
+            // 正式模式：POST到Cloudflare Worker
+            const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentDate}-${passphrase}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast(`✅ 已保存！口令：${passphrase}`);
+        }
+
+        document.getElementById('passphrase').addEventListener('input', updateCount);
+        document.getElementById('submitBtn').addEventListener('click', submit);
+
+        renderDateNav();
+        loadMatches(currentDate);
+    </script>
+</body>
+</html>
