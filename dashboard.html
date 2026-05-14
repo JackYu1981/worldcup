@@ -90,18 +90,42 @@
         .calendar .day.pending { background: #e3f2fd; color: #1a73e8; }
         .calendar .day.empty { background: transparent; cursor: default; }
         .calendar .day .amount { font-size: 10px; margin-top: 2px; font-weight: 600; }
+        .day-detail-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .day-detail-overlay.visible {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
         .day-detail {
             background: white;
-            border-radius: 12px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-            display: none;
-            overflow: hidden;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: ticketPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .day-detail.visible { display: block; animation: slideDown 0.3s ease; }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes ticketPop {
+            from { opacity: 0; transform: scale(0.8) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .day-detail-header {
             padding: 14px 16px;
@@ -208,12 +232,14 @@
         <canvas id="profitChart" height="200"></canvas>
     </div>
 
-    <div class="day-detail" id="dayDetail">
-        <div class="day-detail-header">
-            <span id="dayDetailTitle">-</span>
-            <span class="close-btn" onclick="closeDayDetail()">✕</span>
+    <div class="day-detail-overlay" id="dayDetailOverlay" onclick="overlayClick(event)">
+        <div class="day-detail" id="dayDetail">
+            <div class="day-detail-header">
+                <span id="dayDetailTitle">-</span>
+                <span class="close-btn" onclick="closeDayDetail()">✕</span>
+            </div>
+            <div class="day-detail-body" id="dayDetailContent"></div>
         </div>
-        <div class="day-detail-body" id="dayDetailContent"></div>
     </div>
 
     <div class="chart-card">
@@ -352,14 +378,13 @@
         let currentOpenDate = null;
 
         function showDayDetail(dateStr, plans) {
-            const detail = document.getElementById('dayDetail');
-
             if (currentOpenDate === dateStr) {
                 closeDayDetail();
                 return;
             }
 
             currentOpenDate = dateStr;
+            const overlay = document.getElementById('dayDetailOverlay');
             const title = document.getElementById('dayDetailTitle');
             const content = document.getElementById('dayDetailContent');
 
@@ -403,13 +428,18 @@
                 </div>`;
             }).join('');
 
-            detail.classList.add('visible');
-            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            overlay.classList.add('visible');
         }
 
         function closeDayDetail() {
             currentOpenDate = null;
-            document.getElementById('dayDetail').classList.remove('visible');
+            document.getElementById('dayDetailOverlay').classList.remove('visible');
+        }
+
+        function overlayClick(event) {
+            if (event.target === document.getElementById('dayDetailOverlay')) {
+                closeDayDetail();
+            }
         }
 
         loadData();
