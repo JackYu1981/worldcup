@@ -2,14 +2,22 @@
   "date": "2026-06-13",
   "passphrase": "时来运转",
   "budget": 100,
+  "status": "lost",
+  "actual_results": {
+    "m004": {"result": "home_win", "score": "2-0"},
+    "m005": {"result": "home_win", "score": "7-0"},
+    "m006": {"result": "home_win", "score": "2-1"},
+    "m007": {"result": "draw", "score": "1-1"}
+  },
   "combinations": [
     {
       "combo_id": 1,
+      "hit": false,
       "legs": [
-        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50},
-        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50},
-        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00},
-        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30}
+        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50, "correct": false},
+        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50, "correct": false},
+        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00, "correct": false},
+        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30, "correct": false}
       ],
       "combined_odds": 672.75,
       "stake": 10,
@@ -17,11 +25,12 @@
     },
     {
       "combo_id": 2,
+      "hit": false,
       "legs": [
-        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50},
-        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "home_win", "pick_desc": "西班牙胜", "odds": 1.18},
-        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00},
-        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30}
+        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50, "correct": false},
+        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "home_win", "pick_desc": "西班牙胜", "odds": 1.18, "correct": true},
+        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00, "correct": false},
+        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30, "correct": false}
       ],
       "combined_odds": 122.13,
       "stake": 20,
@@ -29,11 +38,12 @@
     },
     {
       "combo_id": 3,
+      "hit": false,
       "legs": [
-        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "home_win", "pick_desc": "巴西胜", "odds": 1.40},
-        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50},
-        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00},
-        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30}
+        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "home_win", "pick_desc": "巴西胜", "odds": 1.40, "correct": true},
+        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50, "correct": false},
+        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00, "correct": false},
+        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30, "correct": false}
       ],
       "combined_odds": 125.58,
       "stake": 20,
@@ -41,11 +51,12 @@
     },
     {
       "combo_id": 4,
+      "hit": false,
       "legs": [
-        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50},
-        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50},
-        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "home_win", "pick_desc": "法国胜", "odds": 1.50},
-        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30}
+        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "away_win", "pick_desc": "塞尔维亚胜", "odds": 7.50, "correct": false},
+        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "draw", "pick_desc": "平", "odds": 6.50, "correct": false},
+        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "home_win", "pick_desc": "法国胜", "odds": 1.50, "correct": true},
+        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30, "correct": false}
       ],
       "combined_odds": 168.19,
       "stake": 20,
@@ -53,11 +64,12 @@
     },
     {
       "combo_id": 5,
+      "hit": false,
       "legs": [
-        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "home_win", "pick_desc": "巴西胜", "odds": 1.40},
-        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "home_win", "pick_desc": "西班牙胜", "odds": 1.18},
-        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00},
-        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30}
+        {"match_id": "m004", "match_desc": "巴西vs塞尔维亚", "pick": "home_win", "pick_desc": "巴西胜", "odds": 1.40, "correct": true},
+        {"match_id": "m005", "match_desc": "西班牙vs哥斯达黎加", "pick": "home_win", "pick_desc": "西班牙胜", "odds": 1.18, "correct": true},
+        {"match_id": "m006", "match_desc": "法国vs墨西哥", "pick": "away_win", "pick_desc": "墨西哥胜", "odds": 6.00, "correct": false},
+        {"match_id": "m007", "match_desc": "加拿大vs喀麦隆", "pick": "home_win", "pick_desc": "加拿大胜", "odds": 2.30, "correct": false}
       ],
       "combined_odds": 22.80,
       "stake": 30,
@@ -65,5 +77,7 @@
     }
   ],
   "total_stake": 100,
+  "actual_return": 0,
+  "profit": -100,
   "expected_return_range": "684 - 6728"
 }
