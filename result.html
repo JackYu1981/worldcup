@@ -233,7 +233,7 @@
                 }).join('');
 
                 const status = data.status || 'pending';
-                const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 未中' : '';
+                const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 💣 未中' : '';
 
                 return `<div class="plan-card ${status}" onclick="togglePlan(this)">
                     <div class="plan-summary">
