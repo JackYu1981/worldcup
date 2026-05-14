@@ -38,14 +38,24 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .plan-summary {
-            background: linear-gradient(135deg, #1a73e8, #0d47a1);
-            color: white;
             padding: 16px;
             cursor: pointer;
             transition: all 0.2s;
         }
         .plan-summary:active {
             opacity: 0.9;
+        }
+        .plan-card.pending .plan-summary {
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            color: white;
+        }
+        .plan-card.won .plan-summary {
+            background: linear-gradient(135deg, #ef5350, #c62828);
+            color: white;
+        }
+        .plan-card.lost .plan-summary {
+            background: linear-gradient(135deg, #90caf9, #64b5f6);
+            color: white;
         }
         .plan-header {
             display: flex;
@@ -205,11 +215,14 @@
                     </div>`;
                 }).join('');
 
-                return `<div class="plan-card" onclick="togglePlan(this)">
+                const status = data.status || 'pending';
+                const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 未中' : '';
+
+                return `<div class="plan-card ${status}" onclick="togglePlan(this)">
                     <div class="plan-summary">
                         <div class="plan-header">
                             <div>
-                                <div class="plan-title">${data.passphrase || '未命名'}</div>
+                                <div class="plan-title">${data.passphrase || '未命名'}${statusLabel}</div>
                                 <div class="plan-date">${data.date} · ${data.combinations.length}注</div>
                             </div>
                             <div class="plan-arrow">▼</div>
