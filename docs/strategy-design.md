@@ -42,13 +42,28 @@
                           └──────────────────┘
 ```
 
+### 口令机制
+
+每次提交选择时，用户需输入一个**口令短语**（任意中文短语，如"今晚吃鸡"、"梅西封神"等）。口令用于在session中快速定位对应的picks文件，避免日期/序号沟通出错。
+
+**流程：**
+1. 合伙人在前端选择比赛时，输入口令 → 提交
+2. 文件以口令命名存入仓库：`picks/2026-06-15-今晚吃鸡.json`
+3. 你在Claude Code session中说出口令（如"今晚吃鸡"）
+4. Claude Code执行：pull → 搜索匹配口令的文件 → 计算 → push结果
+
+**优势：**
+- 每日可多次提交（不同口令对应不同批次）
+- 沟通零歧义，一个词即可触发
+- 口令随意取，轻松好记
+
 ### 工作流详细步骤
 
 1. **数据采集**：Claude Code获取当日赛程+赔率 → 写入 `data/matches/YYYY-MM-DD.json` → push
 2. **前端展示**：GitHub Pages读取JSON，渲染为手机友好的选择页面
-3. **用户选择**：合伙人微信打开链接 → 勾选比赛结果 → 点提交
-4. **数据中转**：Cloudflare Worker接收提交 → 通过GitHub API写入 `picks/YYYY-MM-DD.json`
-5. **AI计算**：你通知Claude Code → 读取picks → 计算最优组合 → 写入 `results/YYYY-MM-DD.json` → push
+3. **用户选择**：合伙人微信打开链接 → 勾选比赛结果 → 输入口令 → 点提交
+4. **数据中转**：Cloudflare Worker接收提交 → 通过GitHub API写入 `picks/YYYY-MM-DD-{口令}.json`
+5. **AI计算**：你告诉Claude Code口令 → pull → 找到匹配文件 → 计算最优组合 → 写入 `results/YYYY-MM-DD-{口令}.json` → push
 6. **结果展示**：前端读取results，展示投注方案
 7. **赛后记录**：录入比赛结果 → 更新收益数据 → 曲线/日历自动刷新
 
@@ -86,12 +101,13 @@
 }
 ```
 
-#### 用户选择文件 `picks/2026-06-15.json`
+#### 用户选择文件 `picks/2026-06-15-今晚吃鸡.json`
 ```json
 {
   "date": "2026-06-15",
+  "passphrase": "今晚吃鸡",
   "submitted_by": "partner_a",
-  "submitted_at": "2026-06-15T15:30:00+08:00",
+  "submitted_at": "2026-06-15T18:30:00+08:00",
   "picks": [
     {
       "match_id": "m001",
@@ -105,7 +121,7 @@
 }
 ```
 
-#### 投注方案文件 `results/2026-06-15.json`
+#### 投注方案文件 `results/2026-06-15-今晚吃鸡.json`
 ```json
 {
   "date": "2026-06-15",
