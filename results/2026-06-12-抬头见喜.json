@@ -2,13 +2,20 @@
   "date": "2026-06-12",
   "passphrase": "抬头见喜",
   "budget": 100,
+  "status": "won",
+  "actual_results": {
+    "m001": {"result": "draw", "score": "1-1"},
+    "m002": {"result": "home_win", "score": "2-0"},
+    "m003": {"result": "home_win", "score": "3-1"}
+  },
   "combinations": [
     {
       "combo_id": 1,
+      "hit": false,
       "legs": [
-        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25},
-        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50},
-        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00}
+        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25, "correct": true},
+        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50, "correct": false},
+        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00, "correct": false}
       ],
       "combined_odds": 71.50,
       "stake": 15,
@@ -16,10 +23,11 @@
     },
     {
       "combo_id": 2,
+      "hit": false,
       "legs": [
-        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25},
-        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "home_win", "pick_desc": "阿根廷胜", "odds": 1.25},
-        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00}
+        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25, "correct": true},
+        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "home_win", "pick_desc": "阿根廷胜", "odds": 1.25, "correct": true},
+        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00, "correct": false}
       ],
       "combined_odds": 16.25,
       "stake": 25,
@@ -27,10 +35,11 @@
     },
     {
       "combo_id": 3,
+      "hit": false,
       "legs": [
-        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25},
-        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50},
-        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "home_win", "pick_desc": "德国胜", "odds": 1.55}
+        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25, "correct": true},
+        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50, "correct": false},
+        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "home_win", "pick_desc": "德国胜", "odds": 1.55, "correct": true}
       ],
       "combined_odds": 27.71,
       "stake": 20,
@@ -38,10 +47,11 @@
     },
     {
       "combo_id": 4,
+      "hit": false,
       "legs": [
-        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "home_win", "pick_desc": "美国胜", "odds": 2.10},
-        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50},
-        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00}
+        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "home_win", "pick_desc": "美国胜", "odds": 2.10, "correct": false},
+        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "draw", "pick_desc": "平", "odds": 5.50, "correct": false},
+        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "draw", "pick_desc": "平", "odds": 4.00, "correct": false}
       ],
       "combined_odds": 46.20,
       "stake": 20,
@@ -49,10 +59,11 @@
     },
     {
       "combo_id": 5,
+      "hit": true,
       "legs": [
-        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25},
-        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "home_win", "pick_desc": "阿根廷胜", "odds": 1.25},
-        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "home_win", "pick_desc": "德国胜", "odds": 1.55}
+        {"match_id": "m001", "match_desc": "美国vs摩洛哥", "pick": "draw", "pick_desc": "平", "odds": 3.25, "correct": true},
+        {"match_id": "m002", "match_desc": "阿根廷vs沙特", "pick": "home_win", "pick_desc": "阿根廷胜", "odds": 1.25, "correct": true},
+        {"match_id": "m003", "match_desc": "德国vs日本", "pick": "home_win", "pick_desc": "德国胜", "odds": 1.55, "correct": true}
       ],
       "combined_odds": 6.30,
       "stake": 20,
@@ -60,5 +71,7 @@
     }
   ],
   "total_stake": 100,
+  "actual_return": 126,
+  "profit": 26,
   "expected_return_range": "126 - 1073"
 }
