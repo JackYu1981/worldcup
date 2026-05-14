@@ -32,16 +32,20 @@
             font-weight: 600;
         }
         .plan-card {
+            border-radius: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .plan-summary {
             background: linear-gradient(135deg, #1a73e8, #0d47a1);
             color: white;
-            border-radius: 12px;
             padding: 16px;
-            margin-bottom: 12px;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .plan-card:active {
-            transform: scale(0.98);
+        .plan-summary:active {
+            opacity: 0.9;
         }
         .plan-header {
             display: flex;
@@ -75,20 +79,20 @@
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease;
+            background: white;
         }
         .plan-card.expanded .plan-detail {
             max-height: 2000px;
         }
         .plan-detail-inner {
-            padding-top: 14px;
-            margin-top: 14px;
-            border-top: 1px solid rgba(255,255,255,0.2);
+            padding: 16px;
         }
         .combo-section {
-            background: rgba(255,255,255,0.1);
+            background: #f8f9fa;
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 8px;
+            border: 1px solid #eee;
         }
         .combo-header {
             display: flex;
@@ -96,17 +100,18 @@
             margin-bottom: 8px;
             font-weight: 600;
             font-size: 14px;
+            color: #333;
         }
         .combo-odds {
-            color: #ffcc02;
+            color: #e65100;
         }
         .leg-item {
             display: flex;
             justify-content: space-between;
             padding: 5px 0;
             font-size: 13px;
-            opacity: 0.9;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: #555;
+            border-bottom: 1px solid #f0f0f0;
         }
         .leg-item:last-child { border-bottom: none; }
         .stake-info {
@@ -114,10 +119,11 @@
             justify-content: space-between;
             margin-top: 8px;
             padding-top: 8px;
-            border-top: 1px solid rgba(255,255,255,0.15);
+            border-top: 1px solid #eee;
             font-size: 13px;
+            color: #333;
         }
-        .potential-return { color: #a5d6a7; font-weight: 600; }
+        .potential-return { color: #2e7d32; font-weight: 600; }
         .empty-state {
             text-align: center;
             color: #999;
@@ -200,16 +206,18 @@
                 }).join('');
 
                 return `<div class="plan-card" onclick="togglePlan(this)">
-                    <div class="plan-header">
-                        <div>
-                            <div class="plan-title">${data.passphrase || '未命名'}</div>
-                            <div class="plan-date">${data.date} · ${data.combinations.length}注</div>
+                    <div class="plan-summary">
+                        <div class="plan-header">
+                            <div>
+                                <div class="plan-title">${data.passphrase || '未命名'}</div>
+                                <div class="plan-date">${data.date} · ${data.combinations.length}注</div>
+                            </div>
+                            <div class="plan-arrow">▼</div>
                         </div>
-                        <div class="plan-arrow">▼</div>
-                    </div>
-                    <div class="plan-meta">
-                        <span>投入 ¥${data.budget}</span>
-                        <span>回报 ¥${data.expected_return_range}</span>
+                        <div class="plan-meta">
+                            <span>投入 ¥${data.budget}</span>
+                            <span>回报 ¥${data.expected_return_range}</span>
+                        </div>
                     </div>
                     <div class="plan-detail">
                         <div class="plan-detail-inner">
