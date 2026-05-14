@@ -1,0 +1,42 @@
+{
+  "date": "2026-06-14",
+  "passphrase": "多多益善",
+  "budget": 100,
+  "combinations": [
+    {
+      "combo_id": 1,
+      "legs": [
+        {"match_id": "m008", "match_desc": "英格兰vs伊朗", "pick": "draw", "pick_desc": "平", "odds": 5.25},
+        {"match_id": "m009", "match_desc": "荷兰vs塞内加尔", "pick": "home_win", "pick_desc": "荷兰胜", "odds": 1.75},
+        {"match_id": "m010", "match_desc": "葡萄牙vs加纳", "pick": "home_win", "pick_desc": "葡萄牙胜", "odds": 1.45}
+      ],
+      "combined_odds": 13.32,
+      "stake": 30,
+      "potential_return": 400
+    },
+    {
+      "combo_id": 2,
+      "legs": [
+        {"match_id": "m008", "match_desc": "英格兰vs伊朗", "pick": "draw", "pick_desc": "平", "odds": 5.25},
+        {"match_id": "m009", "match_desc": "荷兰vs塞内加尔", "pick": "home_win", "pick_desc": "荷兰胜", "odds": 1.75},
+        {"match_id": "m010", "match_desc": "葡萄牙vs加纳", "pick": "draw", "pick_desc": "平", "odds": 4.50}
+      ],
+      "combined_odds": 41.34,
+      "stake": 25,
+      "potential_return": 1034
+    },
+    {
+      "combo_id": 3,
+      "legs": [
+        {"match_id": "m008", "match_desc": "英格兰vs伊朗", "pick": "home_win", "pick_desc": "英格兰胜", "odds": 1.30},
+        {"match_id": "m009", "match_desc": "荷兰vs塞内加尔", "pick": "home_win", "pick_desc": "荷兰胜", "odds": 1.75},
+        {"match_id": "m010", "match_desc": "葡萄牙vs加纳", "pick": "home_win", "pick_desc": "葡萄牙胜", "odds": 1.45}
+      ],
+      "combined_odds": 3.30,
+      "stake": 45,
+      "potential_return": 148
+    }
+  ],
+  "total_stake": 100,
+  "expected_return_range": "148 - 1034"
+}
