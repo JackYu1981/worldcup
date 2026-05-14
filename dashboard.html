@@ -47,8 +47,8 @@
         }
         .stat-card .label { font-size: 12px; color: #888; }
         .stat-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
-        .stat-card .value.positive { color: #2e7d32; }
-        .stat-card .value.negative { color: #c62828; }
+        .stat-card .value.positive { color: #c62828; }
+        .stat-card .value.negative { color: #2e7d32; }
         .chart-card {
             background: white;
             border-radius: 12px;
@@ -81,11 +81,44 @@
             justify-content: center;
             border-radius: 8px;
             font-size: 12px;
+            cursor: pointer;
+            transition: transform 0.1s;
         }
-        .calendar .day.win { background: #e8f5e9; color: #2e7d32; }
-        .calendar .day.lose { background: #ffebee; color: #c62828; }
-        .calendar .day.empty { background: transparent; }
+        .calendar .day:active { transform: scale(0.9); }
+        .calendar .day.won { background: #ffebee; color: #c62828; }
+        .calendar .day.lost { background: #e8f5e9; color: #2e7d32; }
+        .calendar .day.pending { background: #e3f2fd; color: #1a73e8; }
+        .calendar .day.empty { background: transparent; cursor: default; }
         .calendar .day .amount { font-size: 10px; margin-top: 2px; font-weight: 600; }
+        .day-detail {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .day-detail.visible { display: block; }
+        .day-detail h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .day-detail .plan-link {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .day-detail .plan-link.won { background: #ffebee; }
+        .day-detail .plan-link.lost { background: #e8f5e9; }
+        .day-detail .plan-link.pending { background: #e3f2fd; }
+        .day-detail .plan-link .name { font-weight: 600; }
+        .day-detail .plan-link .info { font-size: 12px; color: #666; }
     </style>
 </head>
 <body>
@@ -100,15 +133,15 @@
     <div class="stats-row">
         <div class="stat-card">
             <div class="label">累计投入</div>
-            <div class="value" id="totalStake">¥300</div>
+            <div class="value" id="totalStake">-</div>
         </div>
         <div class="stat-card">
             <div class="label">累计收益</div>
-            <div class="value positive" id="totalProfit">+¥832</div>
+            <div class="value" id="totalProfit">-</div>
         </div>
         <div class="stat-card">
             <div class="label">命中率</div>
-            <div class="value" id="hitRate">33%</div>
+            <div class="value" id="hitRate">-</div>
         </div>
     </div>
 
@@ -117,8 +150,13 @@
         <canvas id="profitChart" height="200"></canvas>
     </div>
 
+    <div class="day-detail" id="dayDetail">
+        <h3 id="dayDetailTitle">-</h3>
+        <div id="dayDetailContent"></div>
+    </div>
+
     <div class="chart-card">
-        <h3>每日盈亏日历</h3>
+        <h3>每日盈亏日历 · 2026年6月</h3>
         <div class="calendar" id="calendar">
             <div class="day-header">一</div>
             <div class="day-header">二</div>
@@ -131,21 +169,60 @@
     </div>
 
     <script>
-        // Demo data
-        const demoLedger = [
-            { date: '2026-06-12', stake: 100, profit: 1132 },
-            { date: '2026-06-13', stake: 100, profit: -100 },
-            { date: '2026-06-14', stake: 100, profit: -100 }
-        ];
+        const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
+        let allResults = [];
+        let dailyMap = {};
 
-        // Profit curve
+        async function loadData() {
+            try {
+                const resp = await fetch(RESULTS_INDEX_URL);
+                const files = await resp.json();
+                const resultFiles = files.filter(f => f.name.endsWith('.json')).sort((a, b) => a.name.localeCompare(b.name));
+
+                allResults = await Promise.all(resultFiles.map(async f => {
+                    const r = await fetch(f.download_url);
+                    return r.json();
+                }));
+
+                allResults.forEach(r => {
+                    if (!dailyMap[r.date]) dailyMap[r.date] = [];
+                    dailyMap[r.date].push(r);
+                });
+
+                renderStats();
+                renderChart();
+                renderCalendar();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderStats() {
+            let totalStake = 0, totalReturn = 0, wonCount = 0, settledCount = 0;
+            allResults.forEach(r => {
+                if (r.status === 'won' || r.status === 'lost') {
+                    totalStake += r.total_stake || r.budget;
+                    totalReturn += r.actual_return || 0;
+                    settledCount++;
+                    if (r.status === 'won') wonCount++;
+                }
+            });
+            const profit = totalReturn - totalStake;
+            document.getElementById('totalStake').textContent = `¥${totalStake}`;
+            const profitEl = document.getElementById('totalProfit');
+            profitEl.textContent = `${profit >= 0 ? '+' : ''}¥${profit}`;
+            profitEl.className = `value ${profit >= 0 ? 'positive' : 'negative'}`;
+            document.getElementById('hitRate').textContent = settledCount > 0 ? `${Math.round(wonCount / settledCount * 100)}%` : '-';
+        }
+
         function renderChart() {
             const ctx = document.getElementById('profitChart').getContext('2d');
+            const settled = allResults.filter(r => r.status === 'won' || r.status === 'lost').sort((a, b) => a.date.localeCompare(b.date));
             let cumulative = 0;
             const labels = ['开始'];
             const data = [0];
-            demoLedger.forEach(r => {
-                cumulative += r.profit;
+            settled.forEach(r => {
+                cumulative += (r.profit || ((r.actual_return || 0) - (r.total_stake || r.budget)));
                 labels.push(r.date.slice(5));
                 data.push(cumulative);
             });
@@ -162,38 +239,47 @@
                         fill: true,
                         tension: 0.3,
                         pointRadius: 4,
-                        pointBackgroundColor: data.map(v => v >= 0 ? '#2e7d32' : '#c62828')
+                        pointBackgroundColor: data.map(v => v >= 0 ? '#c62828' : '#2e7d32')
                     }]
                 },
                 options: {
                     responsive: true,
                     plugins: { legend: { display: false } },
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: '#f0f0f0' }
-                        },
+                        y: { grid: { color: '#f0f0f0' } },
                         x: { grid: { display: false } }
                     }
                 }
             });
         }
 
-        // Calendar
         function renderCalendar() {
             const cal = document.getElementById('calendar');
-            // June 2026 starts on Monday
+            // June 2026: June 1 is Monday
             const daysInMonth = 30;
-            const startDay = 0; // Monday = 0 offset
 
             for (let i = 1; i <= daysInMonth; i++) {
-                const dateStr = `2026-06-${String(i).padStart(2,'0')}`;
-                const record = demoLedger.find(r => r.date === dateStr);
+                const dateStr = `2026-06-${String(i).padStart(2, '0')}`;
+                const plans = dailyMap[dateStr];
                 const div = document.createElement('div');
                 div.className = 'day';
-                if (record) {
-                    div.classList.add(record.profit >= 0 ? 'win' : 'lose');
-                    div.innerHTML = `${i}<span class="amount">${record.profit >= 0 ? '+' : ''}${record.profit}</span>`;
+
+                if (plans && plans.length > 0) {
+                    const hasWon = plans.some(p => p.status === 'won');
+                    const allSettled = plans.every(p => p.status === 'won' || p.status === 'lost');
+                    const dayProfit = plans.reduce((sum, p) => sum + (p.profit || 0), 0);
+
+                    if (!allSettled && !hasWon) {
+                        div.classList.add('pending');
+                        div.innerHTML = `${i}<span class="amount">待开</span>`;
+                    } else if (hasWon) {
+                        div.classList.add('won');
+                        div.innerHTML = `${i}<span class="amount">+${dayProfit}</span>`;
+                    } else {
+                        div.classList.add('lost');
+                        div.innerHTML = `${i}<span class="amount">${dayProfit}</span>`;
+                    }
+                    div.onclick = () => showDayDetail(dateStr, plans);
                 } else {
                     div.classList.add('empty');
                     div.textContent = i;
@@ -202,8 +288,30 @@
             }
         }
 
-        renderChart();
-        renderCalendar();
+        function showDayDetail(dateStr, plans) {
+            const detail = document.getElementById('dayDetail');
+            const title = document.getElementById('dayDetailTitle');
+            const content = document.getElementById('dayDetailContent');
+
+            title.textContent = `${dateStr} 投注方案`;
+            content.innerHTML = plans.map(p => {
+                const status = p.status || 'pending';
+                const statusText = status === 'won' ? '🎉 中奖' : status === 'lost' ? '💣 未中' : '⏳ 待开';
+                const profitText = p.profit !== undefined ? (p.profit >= 0 ? `+¥${p.profit}` : `-¥${Math.abs(p.profit)}`) : '';
+                return `<div class="plan-link ${status}" onclick="window.location.href='result.html'">
+                    <div>
+                        <div class="name">${p.passphrase} ${statusText}</div>
+                        <div class="info">${p.combinations.length}注 · 投入¥${p.budget}</div>
+                    </div>
+                    <div style="font-weight:600;">${profitText}</div>
+                </div>`;
+            }).join('');
+
+            detail.classList.add('visible');
+            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        loadData();
     </script>
 </body>
 </html>
