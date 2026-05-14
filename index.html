@@ -280,9 +280,15 @@
             setTimeout(() => toast.style.display = 'none', 2000);
         }
 
+        const WORKER_URL = 'https://worldmoney.yujuntao1981.workers.dev';
+
         async function submit() {
             const passphrase = document.getElementById('passphrase').value.trim();
             if (!passphrase || Object.keys(selections).length === 0) return;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '提交中...';
 
             const payload = {
                 date: currentDate,
@@ -294,17 +300,28 @@
                 }))
             };
 
-            // Demo模式：直接下载JSON文件
-            // 正式模式：POST到Cloudflare Worker
-            const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${currentDate}-${passphrase}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            try {
+                const resp = await fetch(WORKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    showToast(`✅ 提交成功！口令：${passphrase}`);
+                    selections = {};
+                    renderMatches();
+                    updateCount();
+                    document.getElementById('passphrase').value = '';
+                } else {
+                    showToast(`❌ 提交失败：${result.error}`);
+                }
+            } catch (e) {
+                showToast(`❌ 网络错误：${e.message}`);
+            }
 
-            showToast(`✅ 已保存！口令：${passphrase}`);
+            btn.disabled = false;
+            btn.textContent = '提交';
         }
 
         document.getElementById('passphrase').addEventListener('input', updateCount);
