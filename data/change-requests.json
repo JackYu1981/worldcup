@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778816607046,
+      "author": "brian",
+      "type": "improvement",
+      "text": "如果500.com的数据读进来，可以把之前模拟的世界杯数据清除，并把之前的测试数据以及看板一并清除，以方便进行uat",
+      "time": "2026-05-14 21:43",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778816364419,
       "author": "brian",
       "type": "improvement",
