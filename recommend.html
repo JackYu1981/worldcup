@@ -755,9 +755,8 @@
         }
 
         function copyPickText(legs, date) {
-            const matchCodes = {'m001':'001','m002':'002','m003':'003','m004':'004','m005':'005','m006':'006','m007':'007','m008':'008','m009':'009','m010':'010','m011':'011','m012':'012','m013':'013','m014':'014','m015':'015'};
             const lines = legs.map((l, i) => {
-                const code = matchCodes[l.match_id] || String(i+1).padStart(3, '0');
+                const code = l.code || String(i+1).padStart(3, '0');
                 return `${code} ${l.match_desc} ${l.pick_desc}`;
             });
             const text = lines.join('\n');
