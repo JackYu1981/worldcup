@@ -217,6 +217,41 @@
             };
         }
 
+        function buildCombinations(legs, stake) {
+            const byMatch = {};
+            legs.forEach(l => {
+                const mid = l.match_id;
+                if (!byMatch[mid]) byMatch[mid] = [];
+                byMatch[mid].push(l);
+            });
+            const groups = Object.values(byMatch);
+            const results = [];
+            function cartesian(idx, current) {
+                if (idx === groups.length) {
+                    const odds = current.reduce((acc, l) => acc * l.odds, 1);
+                    results.push({
+                        legs: current.slice(),
+                        combined_odds: parseFloat(odds.toFixed(4)),
+                        stake: 2,
+                        potential_return: Math.round(odds * 2),
+                        hit: null
+                    });
+                    return;
+                }
+                groups[idx].forEach(l => {
+                    current.push(l);
+                    cartesian(idx + 1, current);
+                    current.pop();
+                });
+            }
+            cartesian(0, []);
+            if (results.length === 1) {
+                results[0].stake = stake;
+                results[0].potential_return = Math.round(results[0].combined_odds * stake);
+            }
+            return results;
+        }
+
         function evaluateLegs(data, matchesByDate) {
             const matches = matchesByDate || [];
             if (!data.legs && data.combinations) {
@@ -287,13 +322,7 @@
 
                 allResults = planResults.map(data => {
                     if (!data.combinations && data.legs) {
-                        data.combinations = [{
-                            legs: data.legs,
-                            combined_odds: data.combined_odds || 1,
-                            stake: data.stake || 100,
-                            potential_return: Math.round((data.combined_odds || 1) * (data.stake || 100)),
-                            hit: null
-                        }];
+                        data.combinations = buildCombinations(data.legs, data.stake || 100);
                     }
                     const matches = matchDataCache[data.date] || [];
                     return evaluateLegs(data, matches);
@@ -357,9 +386,19 @@
 
                 const status = data.status || 'pending';
                 const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 💣 未中' : '';
-                const budget = data.budget || data.stake || 100;
-                const totalReturn = data.expected_return_range || `¥${Math.round((data.combined_odds || 1) * budget)}`;
+                const comboCount = data.combinations.length;
+                const budget = comboCount > 1 ? comboCount * 2 : (data.budget || data.stake || 100);
                 const by = data.submitted_by ? ` · by ${data.submitted_by}` : '';
+
+                let totalReturn;
+                if (comboCount === 1) {
+                    totalReturn = `¥${data.combinations[0].potential_return}`;
+                } else {
+                    const returns = data.combinations.map(c => c.potential_return);
+                    const minR = Math.min(...returns);
+                    const maxR = Math.max(...returns);
+                    totalReturn = `¥${minR}~¥${maxR}`;
+                }
 
                 return `<div class="plan-card ${status}" onclick="togglePlan(this)">
                     <div class="plan-summary">
@@ -372,7 +411,7 @@
                         </div>
                         <div class="plan-meta">
                             <span>投入 ¥${budget}</span>
-                            <span>回报 ${typeof totalReturn === 'number' ? '¥' + totalReturn : totalReturn}</span>
+                            <span>回报 ${totalReturn}</span>
                         </div>
                     </div>
                     <div class="plan-detail">
