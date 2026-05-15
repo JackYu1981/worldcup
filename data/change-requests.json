@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778854163563,
+      "author": "brian",
+      "type": "bug",
+      "text": "工作日北京时间十点，周末十一点，就不能买彩票了，系统了就自动刷新了明天的比赛，但是在赛程页面，日期没有变化，当前比赛应该是周六的比赛，并且下面应该显示周六001",
+      "time": "2026-05-15T14:09:23.563Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778853955689,
       "author": "brian",
       "type": "bug",
