@@ -343,6 +343,42 @@
             content.innerHTML = html;
         }
 
+        function computeComboOdds(rec) {
+            const byMatch = {};
+            rec.legs.forEach(l => {
+                const mid = l.match_id;
+                if (!byMatch[mid]) byMatch[mid] = [];
+                byMatch[mid].push(l);
+            });
+            const groups = Object.values(byMatch);
+            const comboCount = groups.reduce((acc, g) => acc * g.length, 1);
+            if (comboCount <= 1) {
+                const totalOdds = rec.legs.reduce((acc, l) => acc * l.odds, 1);
+                return { comboCount: 1, minOdds: totalOdds, maxOdds: totalOdds, matchCount: groups.length };
+            }
+            let minOdds = Infinity, maxOdds = 0;
+            function cartesian(idx, curr) {
+                if (idx === groups.length) {
+                    if (curr < minOdds) minOdds = curr;
+                    if (curr > maxOdds) maxOdds = curr;
+                    return;
+                }
+                groups[idx].forEach(l => cartesian(idx + 1, curr * l.odds));
+            }
+            cartesian(0, 1);
+            return { comboCount, minOdds, maxOdds, matchCount: groups.length };
+        }
+
+        function formatOddsSummary(rec) {
+            const info = computeComboOdds(rec);
+            const stake = rec.stake || 100;
+            if (info.comboCount === 1) {
+                return `${info.matchCount}串1 ×${info.maxOdds.toFixed(2)} → ¥${Math.round(info.maxOdds * 2)}`;
+            }
+            const totalStake = info.comboCount * 2;
+            return `${info.matchCount}串1 · ${info.comboCount}注${totalStake}元 → ¥${Math.round(info.minOdds * 2)}~¥${Math.round(info.maxOdds * 2)}`;
+        }
+
         function renderRecCard(rec, idx, isSelected) {
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
@@ -359,6 +395,8 @@
             const selectedStyle = isSelected ? 'border-left-color:#1a73e8;opacity:0.7;' : '';
             const selectedBadge = isSelected ? '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已选</span>' : '';
 
+            const oddsSummary = formatOddsSummary(rec);
+
             return `<div class="rec-card" style="${selectedStyle}">
                 <div class="rec-header">
                     <span class="rec-tier">${icon} ${tierName}${selectedBadge}</span>
@@ -366,7 +404,7 @@
                 </div>
                 ${legsHtml}
                 <div class="rec-summary">
-                    <span>×${rec.combined_odds.toFixed(2)} → ¥${Math.round(rec.combined_odds * rec.stake)}</span>
+                    <span>${oddsSummary}</span>
                 </div>
                 <div class="rec-actions">
                     <button class="btn-select-rec" onclick="selectRec(${idx})">选择此推荐 → 生成方案</button>
@@ -404,7 +442,7 @@
                 <div style="position:relative;z-index:1;">
                 ${legsHtml}
                 <div class="plan-summary">
-                    <span>×${plan.combined_odds.toFixed(2)} → ¥${Math.round(plan.combined_odds * plan.stake)}</span>
+                    <span>${formatOddsSummary(plan)}</span>
                     <span>by ${plan.submitted_by || '未知'}</span>
                 </div>
                 <button class="plan-copy-btn" onclick="copyLegs(${JSON.stringify(plan.legs).replace(/"/g,'&quot;')})">📋 复制竞彩格式</button>
@@ -417,11 +455,12 @@
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const tierName = tierNames[selectedRec.selected_tier] || selectedRec.selected_tier;
             const legsText = selectedRec.legs.map(l => `${l.code || '000'} ${l.match_desc} · ${l.pick_desc} @${l.odds.toFixed(2)}`).join('<br>');
+            const summary = formatOddsSummary(selectedRec);
 
             document.getElementById('confirmSummary').innerHTML = `
                 <strong>${tierName}</strong> by ${selectedRec.submitted_by || '未知'}<br>
                 ${legsText}<br>
-                <strong>综合赔率 ×${selectedRec.combined_odds.toFixed(2)}</strong> · 投¥100得 <strong>¥${Math.round(selectedRec.combined_odds * selectedRec.stake)}</strong>`;
+                <strong>${summary}</strong>`;
             document.getElementById('confirmOverlay').classList.add('visible');
             document.getElementById('passphraseInput').value = '';
             document.getElementById('submitBtn').disabled = true;
