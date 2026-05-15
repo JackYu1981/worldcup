@@ -32,7 +32,7 @@
         }
         .date-tabs::-webkit-scrollbar { display: none; }
         .date-tab {
-            flex: 1; min-width: 80px; padding: 12px 8px; text-align: center;
+            flex: 0 0 auto; min-width: 70px; padding: 12px 8px; text-align: center;
             font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent;
             white-space: nowrap; transition: all 0.2s;
         }
@@ -230,7 +230,7 @@
             const dates = [];
             const now = new Date();
             const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-            for (let i = 0; i <= 3; i++) {
+            for (let i = -7; i <= 3; i++) {
                 const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
                 const y = d.getFullYear();
@@ -247,7 +247,8 @@
         }
 
         const DATES = generateDates();
-        let currentDate = DATES[0];
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+        let currentDate = todayStr;
         let userRecs = [];
         let plans = [];
         let selectedRec = null;
@@ -263,11 +264,14 @@
                 const weekday = '周' + WEEKDAY_SHORT[getBeijingDay(d)];
                 const dayStr = d.slice(5).replace('-', '/');
                 const active = d === currentDate ? 'active' : '';
+                const isToday = d === todayStr ? ' (今天)' : '';
                 return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
-                    <div class="day">${dayStr}</div>
+                    <div class="day">${dayStr}${isToday}</div>
                     <div class="weekday">${weekday}</div>
                 </div>`;
             }).join('');
+            const activeTab = container.querySelector('.date-tab.active');
+            if (activeTab) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
         }
 
         function switchDate(date) {
