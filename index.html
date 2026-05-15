@@ -340,10 +340,12 @@
             const showing = filtered.length;
             const countText = activeLeague === 'all' ? `${total}场比赛` : `${showing}/${total}场`;
             const filterActive = activeLeague !== 'all' ? ' active' : '';
+            const weekday = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
+            const dateInfo = `${currentDate}期 ${weekday}`;
 
             header.innerHTML = `
                 <div class="period-left">
-                    <div class="period-info"><span class="match-count">${countText}</span></div>
+                    <div class="period-info">${dateInfo} <span class="match-count">${countText}</span></div>
                 </div>
                 <div class="filter-btn${filterActive}" onclick="toggleFilter()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
@@ -402,21 +404,8 @@
                 return;
             }
 
-            const groups = {};
-            filtered.forEach(m => {
-                const d = m.date || currentDate;
-                if (!groups[d]) groups[d] = [];
-                groups[d].push(m);
-            });
-
             let html = '';
-            const sortedDates = Object.keys(groups).sort();
-            sortedDates.forEach(d => {
-                const weekday = WEEKDAY_PREFIX[getBeijingDay(d)];
-                const dateLabel = `${d.slice(5).replace('-','/')} ${weekday}`;
-                html += `<div style="padding:8px 4px 4px;font-size:12px;color:#999;font-weight:600;">${dateLabel} (${groups[d].length}场)</div>`;
-                groups[d].forEach(m => { html += renderMatchCard(m); });
-            });
+            filtered.forEach(m => { html += renderMatchCard(m); });
             list.innerHTML = html;
 
             updatePeriodHeader();
@@ -465,8 +454,7 @@
 
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
-            const matchDate = m.date || currentDate;
-            const prefix = WEEKDAY_PREFIX[getBeijingDay(matchDate)];
+            const prefix = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
             const codeText = `${prefix}${m.code || '000'}`;
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
@@ -548,8 +536,7 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                const matchDate = m.date || currentDate;
-                const weekday = WEEKDAY_PREFIX[getBeijingDay(matchDate)];
+                const weekday = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
                 combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', weekday, kickoff: m.kickoff || '' };
             }
             renderMatches();
