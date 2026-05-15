@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-15",
+  "passphrase": "测试",
+  "submitted_at": "2026-05-15T02:03:05.112Z",
+  "selected_tier": "aggressive",
+  "source": "custom",
+  "stake": 100,
+  "combined_odds": 20.48,
+  "legs": [
+    {
+      "match_id": "m011",
+      "match_desc": "丹麦vs突尼斯",
+      "market": "handicap",
+      "pick": "away_win",
+      "pick_desc": "让球客胜",
+      "odds": 2
+    },
+    {
+      "match_id": "m012",
+      "match_desc": "墨西哥vs波兰",
+      "market": "handicap",
+      "pick": "draw",
+      "pick_desc": "让球平",
+      "odds": 3.2
+    },
+    {
+      "match_id": "m013",
+      "match_desc": "阿根廷vs墨西哥",
+      "market": "handicap",
+      "pick": "draw",
+      "pick_desc": "让球平",
+      "odds": 3.2
+    }
+  ],
+  "submitted_by": "brian"
+}
