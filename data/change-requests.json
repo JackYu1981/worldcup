@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778855992784,
+      "author": "brian",
+      "type": "bug",
+      "text": "比赛缺失，周六比赛缺了017-020",
+      "time": "2026-05-15T14:39:52.784Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778855795247,
       "author": "jack",
       "type": "improvement",
