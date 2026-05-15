@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-15",
+  "passphrase": "测试啊",
+  "submitted_at": "2026-05-15T02:36:12.958Z",
+  "selected_tier": "conservative",
+  "option_id": 1,
+  "stake": 100,
+  "combined_odds": 6.83,
+  "legs": [
+    {
+      "match_id": "m011",
+      "match_desc": "丹麦vs突尼斯",
+      "market": "1x2",
+      "pick": "home_win",
+      "pick_desc": "丹麦胜",
+      "odds": 1.75
+    },
+    {
+      "match_id": "m013",
+      "match_desc": "阿根廷vs墨西哥",
+      "market": "1x2",
+      "pick": "home_win",
+      "pick_desc": "阿根廷胜",
+      "odds": 1.55
+    },
+    {
+      "match_id": "m014",
+      "match_desc": "沙特vs波兰",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "波兰胜",
+      "odds": 1.85
+    }
+  ],
+  "submitted_by": "brian"
+}
