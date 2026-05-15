@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778823595904,
+      "author": "jack",
+      "type": "bug",
+      "text": "修订页面的时间戳还是有问题，市区没有转换到当前用户的时区，注意是所有人的回复的时间戳不仅仅是当前用户自己的",
+      "time": "2026-05-15T05:39:55.904Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778823416591,
       "author": "jack",
       "type": "bug",
