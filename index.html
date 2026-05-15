@@ -75,30 +75,34 @@
             padding: 10px 12px; border-bottom: 1px solid #f5f5f5;
         }
         .match-top-row {
-            display: flex; align-items: center; margin-bottom: 8px;
+            display: flex; align-items: center;
         }
         .match-left-info {
-            display: flex; flex-direction: column; gap: 2px; min-width: 70px;
+            display: flex; flex-direction: column; gap: 3px; min-width: 70px;
         }
         .match-code {
             font-size: 13px; font-weight: 600; color: #333;
         }
         .match-code.finished { color: #999; }
         .league-tag {
-            font-size: 10px; color: #4caf50; font-weight: 500;
+            font-size: 10px; padding: 1px 6px; border-radius: 3px;
+            font-weight: 500; color: white; display: inline-block; align-self: flex-start;
         }
         .match-center {
-            flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+            flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px;
         }
         .match-center .home {
             flex: 1; text-align: right; font-size: 15px; font-weight: 600; color: #333;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .match-center .kickoff-time {
-            font-size: 11px; color: #999; white-space: nowrap; min-width: 70px; text-align: center;
+        .match-center .kickoff-box {
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 60px; line-height: 1.3;
         }
+        .match-center .kickoff-box .kickoff-date { font-size: 10px; color: #aaa; }
+        .match-center .kickoff-box .kickoff-time { font-size: 13px; color: #666; font-weight: 500; }
         .match-center .score-badge {
-            font-size: 15px; font-weight: 700; color: #e74c3c; min-width: 50px; text-align: center;
+            font-size: 16px; font-weight: 700; color: #e74c3c; min-width: 50px; text-align: center;
         }
         .match-center .away {
             flex: 1; text-align: left; font-size: 15px; font-weight: 600; color: #333;
@@ -363,6 +367,26 @@
             list.innerHTML = html;
         }
 
+        const USER_TIMEZONES = { jack: 'Asia/Shanghai', brian: 'America/Montreal' };
+        function getUserTimezone() {
+            const user = (sessionStorage.getItem('auth_user') || 'jack').toLowerCase();
+            return USER_TIMEZONES[user] || 'Asia/Shanghai';
+        }
+        function formatKickoff(date, time) {
+            const tz = getUserTimezone();
+            const dt = new Date(`${date}T${time}:00+08:00`);
+            if (isNaN(dt.getTime())) return { date: date.slice(5), time: time };
+            try {
+                const datePart = new Intl.DateTimeFormat('zh-CN', {
+                    timeZone: tz, month: '2-digit', day: '2-digit'
+                }).format(dt);
+                const timePart = new Intl.DateTimeFormat('zh-CN', {
+                    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false
+                }).format(dt);
+                return { date: datePart, time: timePart };
+            } catch(e) { return { date: date.slice(5), time: time }; }
+        }
+
         const LEAGUE_COLORS = {
             '英超': '#3d195b',
             '德甲': '#d20515',
@@ -384,23 +408,6 @@
             return `hsl(${h}, 50%, 40%)`;
         }
 
-        const USER_TIMEZONES = { jack: 'Asia/Shanghai', brian: 'America/Montreal' };
-        function getUserTimezone() {
-            const user = (sessionStorage.getItem('auth_user') || 'jack').toLowerCase();
-            return USER_TIMEZONES[user] || 'Asia/Shanghai';
-        }
-        function formatKickoff(date, time) {
-            const tz = getUserTimezone();
-            const dt = new Date(`${date}T${time}:00+08:00`);
-            if (isNaN(dt.getTime())) return time;
-            try {
-                return new Intl.DateTimeFormat('zh-CN', {
-                    timeZone: tz, month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', hour12: false
-                }).format(dt);
-            } catch(e) { return time; }
-        }
-
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
             const dt = new Date(currentDate + 'T00:00:00+08:00');
@@ -408,7 +415,8 @@
             const codeText = `${prefix}${m.code || '000'}`;
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
-            const kickoffDisplay = formatKickoff(m.date, m.kickoff);
+            const kickoff = formatKickoff(m.date, m.kickoff);
+            const leagueColor = getLeagueColor(m.league || '其他');
 
             let centerHtml;
             if (status === 'finished' && m.score) {
@@ -421,7 +429,7 @@
                 }
                 centerHtml = `<span class="score-badge">${homeScore}-${awayScore}</span>`;
             } else {
-                centerHtml = `<span class="kickoff-time">${kickoffDisplay}</span>`;
+                centerHtml = `<div class="kickoff-box"><span class="kickoff-date">${kickoff.date}</span><span class="kickoff-time">${kickoff.time}</span></div>`;
             }
 
             const sel = combo[m.id];
@@ -468,7 +476,7 @@
                     <div class="match-top-row">
                         <div class="match-left-info">
                             <span class="${codeClass}">${codeText}</span>
-                            <span class="league-tag">${m.league || '其他'}</span>
+                            <span class="league-tag" style="background:${leagueColor}">${m.league || '其他'}</span>
                         </div>
                         <div class="match-center">
                             <span class="home">${m.home}</span>
