@@ -48,6 +48,7 @@ function parseMatches(html) {
     const matchTime = getAttr('matchtime');
     const rangqiu = getAttr('rangqiu');
     const matchNum = getAttr('matchnum');
+    const league = getAttr('simpleleague');
 
     const codeMatch = matchNum.match(/(\d+)/);
     const code = codeMatch ? codeMatch[1] : '000';
@@ -59,6 +60,7 @@ function parseMatches(html) {
     matches.push({
       id: `f${fixtureId}`,
       code: code,
+      league: league,
       home: homeName,
       away: awayName,
       date: matchDate,
