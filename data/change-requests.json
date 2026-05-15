@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778823827439,
+      "author": "jack",
+      "type": "bug",
+      "text": "当前方案要点也没有同步到真正的当前方案的要点，每次推新代码都需要同步总结一次，这个需求和claude code当前session的记忆有关，更新到记忆文件",
+      "time": "2026-05-15T05:43:47.439Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778823595904,
       "author": "jack",
       "type": "bug",
