@@ -130,9 +130,10 @@ function mergeResults(matches, results) {
   return matches;
 }
 
-function getBeijingDate(offsetHours = 0) {
-  const now = new Date(Date.now() + offsetHours * 3600000);
+function getBeijingDate(offsetDays = 0) {
+  const now = new Date();
   const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  beijing.setDate(beijing.getDate() + offsetDays);
   return beijing.toISOString().slice(0, 10);
 }
 
@@ -159,51 +160,57 @@ function shouldFetchResults(matches) {
 
 export default {
   async scheduled(event, env, ctx) {
-    const today = getBeijingDate();
+    const today = getBeijingDate(0);
+    const yesterday = getBeijingDate(-1);
+    const tomorrow = getBeijingDate(1);
     const hour = getBeijingHour();
 
     console.log(`[Cron] Running at Beijing hour ${hour}, date ${today}`);
 
-    try {
-      const html = await fetch500(today);
-      if (!html || html.length < 1000) {
-        console.log('[Cron] Empty page, skipping');
-        return;
-      }
+    const datesToFetch = [today, tomorrow];
+    if (hour < 12) datesToFetch.push(yesterday);
 
-      let matches = parseMatches(html);
-      if (matches.length === 0) {
-        console.log('[Cron] No matches found');
-        return;
-      }
-
-      // 检查是否有已结束的比赛需要抓赛果
-      const existing = await env.MATCH_DATA.get(`matches:${today}`, 'json');
-      if (existing && shouldFetchResults(existing.matches)) {
-        console.log('[Cron] Fetching results for finished matches...');
-        const resultHtml = await fetchResults(today);
-        if (resultHtml) {
-          const results = parseResults(resultHtml);
-          matches = mergeResults(matches, results);
+    for (const date of datesToFetch) {
+      try {
+        const html = await fetch500(date);
+        if (!html || html.length < 1000) {
+          console.log(`[Cron] Empty page for ${date}, skipping`);
+          continue;
         }
+
+        let matches = parseMatches(html);
+        if (matches.length === 0) {
+          console.log(`[Cron] No matches for ${date}`);
+          continue;
+        }
+
+        const existing = await env.MATCH_DATA.get(`matches:${date}`, 'json');
+        if (existing && shouldFetchResults(existing.matches)) {
+          console.log(`[Cron] Fetching results for ${date}...`);
+          const resultHtml = await fetchResults(date);
+          if (resultHtml) {
+            const results = parseResults(resultHtml);
+            matches = mergeResults(matches, results);
+          }
+        }
+
+        const output = {
+          date: date,
+          source: '500.com',
+          fetched_at: new Date().toISOString(),
+          match_count: matches.length,
+          matches: matches
+        };
+
+        await env.MATCH_DATA.put(`matches:${date}`, JSON.stringify(output), {
+          expirationTtl: 86400 * 5
+        });
+
+        console.log(`[Cron] Saved ${matches.length} matches for ${date}`);
+
+      } catch (e) {
+        console.error(`[Cron] Error for ${date}: ${e.message}`);
       }
-
-      const output = {
-        date: today,
-        source: '500.com',
-        fetched_at: new Date().toISOString(),
-        match_count: matches.length,
-        matches: matches
-      };
-
-      await env.MATCH_DATA.put(`matches:${today}`, JSON.stringify(output), {
-        expirationTtl: 86400 * 3
-      });
-
-      console.log(`[Cron] Saved ${matches.length} matches for ${today}`);
-
-    } catch (e) {
-      console.error(`[Cron] Error: ${e.message}`);
     }
   },
 
