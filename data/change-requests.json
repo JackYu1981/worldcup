@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778853054962,
+      "author": "brian",
+      "type": "bug",
+      "text": "在比赛选择页面，每个比赛只能选择一个选项，无法复选进行复式投注",
+      "time": "2026-05-15T13:50:54.962Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778852827859,
       "author": "brian",
       "type": "bug",
