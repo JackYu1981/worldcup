@@ -33,7 +33,7 @@
         }
         .date-tabs::-webkit-scrollbar { display: none; }
         .date-tab {
-            flex: 1; min-width: 80px; padding: 12px 8px; text-align: center;
+            flex: 0 0 auto; min-width: 80px; padding: 12px 8px; text-align: center;
             font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent;
             white-space: nowrap; transition: all 0.2s;
         }
@@ -138,6 +138,9 @@
         .odds-cell:last-child { border-right: none; }
         .odds-cell:active { background: #f0f0f0; }
         .odds-cell.selected { background: #e8f0fe; }
+        .odds-cell.picked { background: #fff3e0; border: 1px solid #ffcc80; }
+        .odds-cell.picked-hit { background: #e8f5e9; border: 1px solid #a5d6a7; }
+        .odds-cell.picked-miss { background: #ffebee; border: 1px solid #ef9a9a; }
         .odds-cell .label { font-size: 10px; color: #999; }
         .odds-cell .value { font-size: 14px; font-weight: 600; color: #333; margin-top: 1px; }
         .odds-row-border { grid-column: 1 / -1; height: 1px; background: #f5f5f5; }
@@ -271,16 +274,8 @@
         function generateDates() {
             const dates = [];
             const now = new Date();
-            const beijingStr = now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai', hour12: false });
-            const beijing = new Date(beijingStr);
-            const hour = beijing.getHours();
-            const day = beijing.getDay();
-            const isWeekend = (day === 0 || day === 6);
-            const cutoff = isWeekend ? 11 : 10;
-            const startOffset = hour >= cutoff ? 1 : 0;
-
             const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-            for (let i = startOffset; i <= startOffset + 3; i++) {
+            for (let i = -7; i <= 3; i++) {
                 const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
                 const y = d.getFullYear();
@@ -291,8 +286,27 @@
             return dates;
         }
 
+        function getTodayBettingDate() {
+            const now = new Date();
+            const beijingStr = now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai', hour12: false });
+            const beijing = new Date(beijingStr);
+            const hour = beijing.getHours();
+            const day = beijing.getDay();
+            const isWeekend = (day === 0 || day === 6);
+            const cutoff = isWeekend ? 11 : 10;
+            const offset = hour >= cutoff ? 1 : 0;
+            const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+            const d = new Date(baseDate + 'T00:00:00+08:00');
+            d.setDate(d.getDate() + offset);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        }
+
         const DATES = generateDates();
-        currentDate = DATES[0];
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+        currentDate = getTodayBettingDate();
 
         function getBeijingDay(dateStr) {
             const d = new Date(dateStr + 'T12:00:00+08:00');
@@ -306,12 +320,14 @@
                 const month = parseInt(parts[1]);
                 const day = parseInt(parts[2]);
                 const active = d === currentDate ? 'active' : '';
-                const isToday = d === DATES[0] ? ' (今天)' : '';
+                const isToday = d === todayStr ? ' (今天)' : '';
                 return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
                     <div class="day">${month}月${day}日${isToday}</div>
                     <div class="weekday">周${WEEKDAY_SHORT[getBeijingDay(d)]}</div>
                 </div>`;
             }).join('');
+            const activeTab = container.querySelector('.date-tab.active');
+            if (activeTab) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
         }
 
         function switchDate(date) {
@@ -376,21 +392,36 @@
             renderMatches();
         }
 
+        let pickedSelections = {};
+
         async function loadMatches(date) {
             const list = document.getElementById('matchList');
             list.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
-                let resp = await fetch(`/api/matches?date=${date}`);
-                if (!resp.ok) {
-                    resp = await fetch(`/data/matches/${date}.json`);
-                }
-                if (!resp.ok) throw new Error('no data');
-                const data = await resp.json();
+                const [matchResp, picksResp] = await Promise.all([
+                    fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`)),
+                    fetch(`/api/picks?date=${date}`).catch(() => null)
+                ]);
+                if (!matchResp.ok) throw new Error('no data');
+                const data = await matchResp.json();
                 matches = data.matches;
+
+                pickedSelections = {};
+                if (picksResp && picksResp.ok) {
+                    const picksData = await picksResp.json();
+                    (picksData.picks || []).forEach(p => {
+                        (p.legs || []).forEach(l => {
+                            const key = `${l.match_id}|${l.market}|${l.pick}`;
+                            pickedSelections[key] = true;
+                        });
+                    });
+                }
+
                 updatePeriodHeader();
                 renderMatches();
             } catch(e) {
                 matches = [];
+                pickedSelections = {};
                 updatePeriodHeader();
                 list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
             }
@@ -452,6 +483,24 @@
             return `hsl(${h}, 50%, 40%)`;
         }
 
+        function getMatchResult(m, market) {
+            if (!m.score) return null;
+            let homeScore, awayScore;
+            if (typeof m.score === 'string') {
+                const parts = m.score.split('-');
+                homeScore = parseInt(parts[0]); awayScore = parseInt(parts[1]);
+            } else {
+                homeScore = m.score.home; awayScore = m.score.away;
+            }
+            const diff = homeScore - awayScore;
+            if (market === 'handicap') {
+                const line = m.handicap ? m.handicap.line : 0;
+                const adj = diff + line;
+                return adj > 0 ? 'home_win' : adj === 0 ? 'draw' : 'away_win';
+            }
+            return diff > 0 ? 'home_win' : diff === 0 ? 'draw' : 'away_win';
+        }
+
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
             const prefix = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
@@ -477,7 +526,17 @@
 
             const sel = combo;
             function cellClass(market, pick) {
-                return sel[`${m.id}|${market}|${pick}`] ? 'selected' : '';
+                let cls = sel[`${m.id}|${market}|${pick}`] ? 'selected' : '';
+                const pickKey = `${m.id}|${market}|${pick}`;
+                if (pickedSelections[pickKey]) {
+                    if (status === 'finished' && m.score) {
+                        const result = getMatchResult(m, market);
+                        cls += result === pick ? ' picked-hit' : ' picked-miss';
+                    } else {
+                        cls += ' picked';
+                    }
+                }
+                return cls;
             }
 
             let oddsHtml = '';
