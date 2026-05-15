@@ -1,41 +1,10 @@
 {
-  "records": [
-    {
-      "date": "2026-06-12",
-      "passphrase": "抬头见喜",
-      "tier": "conservative",
-      "stake": 100,
-      "combined_odds": 6.30,
-      "return": 126,
-      "profit": 26,
-      "status": "won"
-    },
-    {
-      "date": "2026-06-13",
-      "passphrase": "时来运转",
-      "tier": "progressive",
-      "stake": 100,
-      "combined_odds": 12.50,
-      "return": 0,
-      "profit": -100,
-      "status": "lost"
-    },
-    {
-      "date": "2026-06-14",
-      "passphrase": "多多益善",
-      "tier": "progressive",
-      "stake": 100,
-      "combined_odds": 13.32,
-      "return": 0,
-      "profit": -100,
-      "status": "lost"
-    }
-  ],
+  "records": [],
   "summary": {
-    "total_invested": 300,
-    "total_return": 126,
-    "net_profit": -174,
-    "win_rate": "33%",
-    "consecutive_losses": 2
+    "total_invested": 0,
+    "total_return": 0,
+    "net_profit": 0,
+    "win_rate": "-",
+    "consecutive_losses": 0
   }
 }
