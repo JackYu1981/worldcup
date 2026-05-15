@@ -271,16 +271,22 @@
         function generateDates() {
             const dates = [];
             const now = new Date();
-            const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            const beijingStr = now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai', hour12: false });
+            const beijing = new Date(beijingStr);
             const hour = beijing.getHours();
             const day = beijing.getDay();
             const isWeekend = (day === 0 || day === 6);
             const cutoff = isWeekend ? 11 : 10;
             const startOffset = hour >= cutoff ? 1 : 0;
+
+            const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
             for (let i = startOffset; i <= startOffset + 3; i++) {
-                const d = new Date(beijing);
+                const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
-                dates.push(d.toISOString().slice(0, 10));
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                dates.push(`${y}-${m}-${dd}`);
             }
             return dates;
         }
@@ -288,15 +294,22 @@
         const DATES = generateDates();
         currentDate = DATES[0];
 
+        function getBeijingDay(dateStr) {
+            const d = new Date(dateStr + 'T12:00:00+08:00');
+            return d.getUTCDay();
+        }
+
         function renderDateTabs() {
             const container = document.getElementById('dateTabs');
             container.innerHTML = DATES.map(d => {
-                const dt = new Date(d + 'T00:00:00+08:00');
+                const parts = d.split('-');
+                const month = parseInt(parts[1]);
+                const day = parseInt(parts[2]);
                 const active = d === currentDate ? 'active' : '';
                 const isToday = d === DATES[0] ? ' (今天)' : '';
                 return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
-                    <div class="day">${dt.getMonth()+1}月${dt.getDate()}日${isToday}</div>
-                    <div class="weekday">周${WEEKDAY_SHORT[dt.getDay()]}</div>
+                    <div class="day">${month}月${day}日${isToday}</div>
+                    <div class="weekday">周${WEEKDAY_SHORT[getBeijingDay(d)]}</div>
                 </div>`;
             }).join('');
         }
@@ -399,8 +412,7 @@
             let html = '';
             const sortedDates = Object.keys(groups).sort();
             sortedDates.forEach(d => {
-                const dt = new Date(d + 'T00:00:00+08:00');
-                const weekday = WEEKDAY_PREFIX[dt.getDay()];
+                const weekday = WEEKDAY_PREFIX[getBeijingDay(d)];
                 const dateLabel = `${d.slice(5).replace('-','/')} ${weekday}`;
                 html += `<div style="padding:8px 4px 4px;font-size:12px;color:#999;font-weight:600;">${dateLabel} (${groups[d].length}场)</div>`;
                 groups[d].forEach(m => { html += renderMatchCard(m); });
@@ -454,8 +466,7 @@
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
             const matchDate = m.date || currentDate;
-            const dt = new Date(matchDate + 'T00:00:00+08:00');
-            const prefix = WEEKDAY_PREFIX[dt.getDay()];
+            const prefix = WEEKDAY_PREFIX[getBeijingDay(matchDate)];
             const codeText = `${prefix}${m.code || '000'}`;
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
@@ -538,8 +549,7 @@
             } else {
                 const m = matches.find(x => x.id === matchId);
                 const matchDate = m.date || currentDate;
-                const dt = new Date(matchDate + 'T00:00:00+08:00');
-                const weekday = WEEKDAY_PREFIX[dt.getDay()];
+                const weekday = WEEKDAY_PREFIX[getBeijingDay(matchDate)];
                 combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', weekday, kickoff: m.kickoff || '' };
             }
             renderMatches();

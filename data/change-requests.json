@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "比赛日期不对，周六里面是周日的比赛，周日里面是周一的",
       "time": "2026-05-15T15:12:09.334Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.4",
+      "resolution": "日期/星期计算改为UTC+8固定时区，不再依赖浏览器本地时区，解决跨时区用户显示偏移",
       "replies": []
     },
     {

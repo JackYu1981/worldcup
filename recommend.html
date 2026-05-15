@@ -230,13 +230,21 @@
         function generateDates() {
             const dates = [];
             const now = new Date();
-            const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
             for (let i = 0; i <= 3; i++) {
-                const d = new Date(beijing);
+                const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
-                dates.push(d.toISOString().slice(0, 10));
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                dates.push(`${y}-${m}-${dd}`);
             }
             return dates;
+        }
+
+        function getBeijingDay(dateStr) {
+            const d = new Date(dateStr + 'T12:00:00+08:00');
+            return d.getUTCDay();
         }
 
         const DATES = generateDates();
@@ -253,8 +261,7 @@
         function renderDateTabs() {
             const container = document.getElementById('dateTabs');
             container.innerHTML = DATES.map(d => {
-                const dt = new Date(d + 'T00:00:00+08:00');
-                const weekday = '周' + WEEKDAY_SHORT[dt.getDay()];
+                const weekday = '周' + WEEKDAY_SHORT[getBeijingDay(d)];
                 const dayStr = d.slice(5).replace('-', '/');
                 const active = d === currentDate ? 'active' : '';
                 return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
