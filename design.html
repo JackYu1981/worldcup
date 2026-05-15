@@ -376,7 +376,7 @@
     </div>
 
     <div class="version-badge">
-        当前版本 <span>v2.2</span> · 更新于 <span id="updateTime">2026-05-15</span>
+        当前版本 <span id="currentVersion">--</span> · 更新于 <span id="updateTime">--</span>
     </div>
 
     <div class="section">
@@ -431,6 +431,34 @@
         const GITHUB_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents';
         const CR_FILE = 'data/change-requests.json';
 
+        const USER_TIMEZONES = {
+            jack: 'Asia/Shanghai',
+            brian: 'America/Montreal'
+        };
+
+        function getUserTimezone() {
+            const user = AUTH.getUser();
+            if (user && USER_TIMEZONES[user.username]) return USER_TIMEZONES[user.username];
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+
+        function formatTime(isoOrStr) {
+            if (!isoOrStr) return '--';
+            let d;
+            if (isoOrStr.includes('T')) {
+                d = new Date(isoOrStr);
+            } else {
+                d = new Date(isoOrStr.replace(' ', 'T') + '+08:00');
+            }
+            if (isNaN(d.getTime())) return isoOrStr;
+            const tz = getUserTimezone();
+            return d.toLocaleString('zh-CN', {
+                timeZone: tz,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', hour12: false
+            });
+        }
+
         let requests = [];
         let versions = [];
         let currentFilter = 'all';
@@ -460,12 +488,20 @@
                 versions = data.versions || [];
                 renderCRs();
                 renderVersionHistory();
+                updateVersionBadge();
             } catch (e) {
                 requests = [];
                 versions = [];
                 renderCRs();
                 renderVersionHistory();
             }
+        }
+
+        function updateVersionBadge() {
+            if (versions.length === 0) return;
+            const latest = versions[versions.length - 1];
+            document.getElementById('currentVersion').textContent = latest.version;
+            document.getElementById('updateTime').textContent = formatTime(latest.date);
         }
 
         function setFilter(filter) {
@@ -557,7 +593,7 @@
                     r.replies.map((reply, idx) => {
                         const deleteBtn = isAdmin ? `<button class="btn-delete" onclick="event.stopPropagation();deleteReply(${r.id},${idx})">删除</button>` : '';
                         return `<div class="cr-reply">
-                        <div class="reply-meta"><span class="reply-author">${reply.author}</span> · ${reply.time} ${deleteBtn}</div>
+                        <div class="reply-meta"><span class="reply-author">${reply.author}</span> · ${formatTime(reply.time)} ${deleteBtn}</div>
                         <div class="reply-text">${reply.text}</div>
                     </div>`;
                     }).join('') + `</div>`;
@@ -572,7 +608,7 @@
             return `<div class="cr-item ${r.status}">
                 <div class="cr-header">
                     <span>${crId} ${typeTag}<span class="cr-author">${r.author}</span> ${statusTag}</span>
-                    <span class="cr-time">${r.time}</span>
+                    <span class="cr-time">${formatTime(r.time)}</span>
                 </div>
                 <div class="cr-text" id="crText-${r.id}">${r.text}</div>
                 <div class="edit-form" id="editForm-${r.id}">
@@ -606,9 +642,6 @@
             const text = input.value.trim();
             if (!text) return;
 
-            const now = new Date();
-            const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
             const cr = requests.find(r => r.id === crId);
             if (!cr) return;
 
@@ -616,7 +649,7 @@
             cr.replies.push({
                 author: AUTH.getUser().username,
                 text: text,
-                time: timeStr
+                time: new Date().toISOString()
             });
 
             renderCRs();
@@ -668,15 +701,12 @@
             const text = input.value.trim();
             if (!text) return;
 
-            const now = new Date();
-            const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
             const newCR = {
                 id: Date.now(),
                 author: AUTH.getUser().username,
                 type: selectedType,
                 text: text,
-                time: timeStr,
+                time: new Date().toISOString(),
                 status: 'pending',
                 resolved_in: null,
                 resolution: null,
@@ -711,7 +741,7 @@
                 return `<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-size:13px;font-weight:600;">${v.version}</span>
-                        <span style="font-size:11px;color:#888;">${v.date}</span>
+                        <span style="font-size:11px;color:#888;">${formatTime(v.date)}</span>
                     </div>
                     <div style="font-size:12px;color:#555;margin-top:4px;">${v.summary}</div>
                     <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;">

@@ -211,25 +211,25 @@
   "versions": [
     {
       "version": "v2.0",
-      "date": "2026-05-14",
+      "date": "2026-05-14T14:00:00+08:00",
       "summary": "初版：AI三档推荐 + 赛程页 + 看板",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     },
     {
       "version": "v2.1",
-      "date": "2026-05-15",
+      "date": "2026-05-15T01:30:00+08:00",
       "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     },
     {
       "version": "v2.2",
-      "date": "2026-05-15",
+      "date": "2026-05-15T15:00:00+08:00",
       "summary": "用户方案展示到推荐页、竞彩格式一键复制、赛果赔率红色高亮",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     },
     {
       "version": "v2.3",
-      "date": "2026-05-15",
+      "date": "2026-05-15T23:30:00+08:00",
       "summary": "500.com数据抓取、复制编号bug修复、Admin删除/编辑功能",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
