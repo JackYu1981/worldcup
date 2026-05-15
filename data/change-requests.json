@@ -1,11 +1,11 @@
 {
   "requests": [
     {
-      "id": 1778822896634,
+      "id": 1778823416591,
       "author": "jack",
-      "type": "feature",
-      "text": "test",
-      "time": "2026-05-15T05:28:16.634Z",
+      "type": "bug",
+      "text": "现在还是demo数据，抓取的数据还是没读到，下一版需要过去两天到未来两天的500网真实数据做测试，不用全部比赛每天随便选10场",
+      "time": "2026-05-15T05:36:56.591Z",
       "status": "pending",
       "resolved_in": null,
       "resolution": null,
