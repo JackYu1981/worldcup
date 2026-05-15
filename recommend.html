@@ -428,7 +428,7 @@
             const dates = [];
             const now = new Date();
             const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-            for (let i = -2; i <= 2; i++) {
+            for (let i = 0; i <= 3; i++) {
                 const d = new Date(beijing);
                 d.setDate(d.getDate() + i);
                 dates.push(d.toISOString().slice(0, 10));
@@ -438,7 +438,7 @@
         const DATES = generateDates();
         const BASE_URL = '';
         const PICKS_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
-        let currentDate = DATES[2];
+        let currentDate = DATES[0];
         let recommendation = null;
         let userPicks = [];
         let selectedTier = null;
