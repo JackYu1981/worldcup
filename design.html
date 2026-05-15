@@ -139,25 +139,6 @@
             font-size: 11px;
             color: #888;
         }
-        .author-select {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-        .author-btn {
-            padding: 6px 14px;
-            border: 1px solid #ddd;
-            border-radius: 16px;
-            background: white;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .author-btn.active {
-            background: #1a73e8;
-            color: white;
-            border-color: #1a73e8;
-        }
         .comment-input-row {
             display: flex;
             gap: 8px;
@@ -266,6 +247,7 @@
 </head>
 <body>
     <h1>⚽ 世界杯投注助手</h1>
+    <div id="userBadge" style="text-align:center;margin-bottom:8px;"></div>
 
     <div class="nav-tabs">
         <a class="nav-tab" href="index.html">赛程</a>
@@ -409,10 +391,6 @@ D日  11:00   Jack: "结算 06-15"
             <span>💬 提建议</span>
             <span class="comment-count" id="commentCount">0条反馈</span>
         </div>
-        <div class="author-select">
-            <button class="author-btn active" data-author="Brian" onclick="setAuthor('Brian')">Brian</button>
-            <button class="author-btn" data-author="Jack" onclick="setAuthor('Jack')">Jack</button>
-        </div>
         <div class="comment-input-row">
             <textarea class="comment-input" id="commentInput" placeholder="输入修改建议..."></textarea>
             <button class="comment-btn" onclick="submitComment()">发送</button>
@@ -421,24 +399,16 @@ D日  11:00   Jack: "结算 06-15"
 
     <div class="toast" id="toast"></div>
 
+    <script src="auth.js"></script>
     <script>
         const GITHUB_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents';
         const COMMENTS_FILE = 'data/design-comments.json';
 
         let comments = [];
-        let currentAuthor = localStorage.getItem('designAuthor') || 'Brian';
 
-        function setAuthor(name) {
-            currentAuthor = name;
-            localStorage.setItem('designAuthor', name);
-            document.querySelectorAll('.author-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.author === name);
-            });
-        }
-
-        // init author buttons
-        document.querySelectorAll('.author-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.author === currentAuthor);
+        AUTH.requireLogin(function(user) {
+            AUTH.renderUserBadge('userBadge');
+            loadComments();
         });
 
         async function loadComments() {
@@ -494,7 +464,7 @@ D日  11:00   Jack: "结算 06-15"
 
             const newComment = {
                 id: Date.now(),
-                author: currentAuthor,
+                author: AUTH.getUser().username,
                 text: text,
                 time: timeStr,
                 resolved: false
@@ -526,7 +496,7 @@ D日  11:00   Jack: "结算 06-15"
 
                 await fetch('/api/submit-comment', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: AUTH.headers(),
                     body: JSON.stringify(body)
                 });
             } catch(e) {
@@ -540,8 +510,6 @@ D日  11:00   Jack: "结算 06-15"
             toast.style.display = 'block';
             setTimeout(() => toast.style.display = 'none', 2000);
         }
-
-        loadComments();
     </script>
 </body>
 </html>

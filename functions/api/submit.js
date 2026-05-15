@@ -1,11 +1,21 @@
-export async function onRequestPost(context) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+import { verifyToken } from '../lib/auth.js';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function onRequestPost(context) {
   try {
+    const user = await verifyToken(context.request, context.env);
+    if (!user) {
+      return new Response(JSON.stringify({ error: '未登录或登录已过期' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await context.request.json();
     const { date, passphrase } = body;
 
@@ -15,6 +25,8 @@ export async function onRequestPost(context) {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    body.submitted_by = user.username;
 
     const filename = `picks/${date}-${passphrase}.json`;
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(body, null, 2))));
@@ -29,7 +41,7 @@ export async function onRequestPost(context) {
           'User-Agent': 'worldmoney-pages',
         },
         body: JSON.stringify({
-          message: `pick: ${date} ${passphrase}`,
+          message: `pick: ${date} ${passphrase} by ${user.username}`,
           content: content,
         }),
       }
@@ -57,11 +69,5 @@ export async function onRequestPost(context) {
 }
 
 export async function onRequestOptions() {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+  return new Response(null, { headers: corsHeaders });
 }
