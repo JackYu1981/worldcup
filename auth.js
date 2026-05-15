@@ -103,8 +103,7 @@ const AUTH = {
         if (!container) return;
         const user = this.getUser();
         if (user) {
-            container.innerHTML = `<span style="font-size:12px;color:#666;">👤 ${user.username}</span>
-                <a href="#" onclick="AUTH.logout();return false;" style="font-size:11px;color:#999;margin-left:8px;">退出</a>`;
+            container.innerHTML = `👤 ${user.username} <a href="#" onclick="AUTH.logout();return false;">退出</a>`;
         }
     }
 };
