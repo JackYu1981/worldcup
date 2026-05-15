@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778814251558,
+      "author": "jack",
+      "type": "feature",
+      "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求",
+      "time": "2026-05-15 11:04",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778813098350,
       "author": "jack",
       "type": "feature",
