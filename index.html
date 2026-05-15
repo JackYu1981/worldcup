@@ -225,7 +225,7 @@
 
     <div class="combo-bar" id="comboBar">
         <div class="combo-info">
-            <div class="left">已选 <strong id="comboCount">0</strong> 场 · 赔率 <strong id="comboOdds">-</strong></div>
+            <div class="left">已选 <strong id="comboCount">0</strong></div>
             <div class="right" id="comboReturn"></div>
         </div>
         <div class="combo-legs" id="comboLegs"></div>
@@ -568,19 +568,15 @@
             bar.classList.add('visible');
 
             const info = getComboInfo();
+            const stake = info.comboCount * 2;
 
-            let oddsText, returnText;
             if (info.comboCount === 1) {
-                oddsText = `×${info.maxOdds.toFixed(2)}`;
-                returnText = `投¥100得¥${Math.round(info.maxOdds * 100).toLocaleString()}`;
+                document.getElementById('comboCount').textContent = `${info.matchCount}串1`;
+                document.getElementById('comboReturn').textContent = `预计奖 ¥${(info.maxOdds * 2).toFixed(2)}`;
             } else {
-                oddsText = `${info.comboCount}注`;
-                returnText = `¥${Math.round(info.minOdds * 100).toLocaleString()}~¥${Math.round(info.maxOdds * 100).toLocaleString()}`;
+                document.getElementById('comboCount').textContent = `${info.matchCount}串1 · ${info.comboCount}注1倍${stake}元`;
+                document.getElementById('comboReturn').textContent = `预计奖 ¥${(info.minOdds * 2).toFixed(2)}~${(info.maxOdds * 2).toFixed(2)}`;
             }
-
-            document.getElementById('comboCount').textContent = `${info.matchCount}场${info.comboCount > 1 ? '(复式'+info.comboCount+'注)' : ''}`;
-            document.getElementById('comboOdds').textContent = oddsText;
-            document.getElementById('comboReturn').textContent = returnText;
 
             const legsHtml = keys.map(k => {
                 const c = combo[k];
