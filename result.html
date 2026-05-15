@@ -274,7 +274,8 @@
                 }
                 if (picksResp && picksResp.ok) {
                     const files = await picksResp.json();
-                    allFiles = allFiles.concat(files.filter(f => f.name.endsWith('.json')));
+                    const planFiles = files.filter(f => f.name.endsWith('.json') && !f.name.includes('-rec-'));
+                    allFiles = allFiles.concat(planFiles);
                 }
 
                 allFiles.sort((a, b) => b.name.localeCompare(a.name));
@@ -289,10 +290,21 @@
                     return r.json();
                 }));
 
-                const dates = [...new Set(results.map(r => r.date).filter(Boolean))];
+                const planResults = results.filter(r => r.source === 'plan' || r.combinations || (!r.source));
+
+                const dates = [...new Set(planResults.map(r => r.date).filter(Boolean))];
                 await Promise.all(dates.map(d => fetchMatchData(d)));
 
-                allResults = results.map(data => {
+                allResults = planResults.map(data => {
+                    if (!data.combinations && data.legs) {
+                        data.combinations = [{
+                            legs: data.legs,
+                            combined_odds: data.combined_odds || 1,
+                            stake: data.stake || 100,
+                            potential_return: Math.round((data.combined_odds || 1) * (data.stake || 100)),
+                            hit: null
+                        }];
+                    }
                     const matches = matchDataCache[data.date] || [];
                     return evaluateLegs(data, matches);
                 });
@@ -310,6 +322,11 @@
         function renderAllPlans() {
             const content = document.getElementById('content');
 
+            if (allResults.length === 0) {
+                content.innerHTML = '<div class="empty-state"><p>暂无投注方案</p></div>';
+                return;
+            }
+
             const html = allResults.map((data, idx) => {
                 if (!data.combinations || data.combinations.length === 0) {
                     return '';
@@ -322,7 +339,7 @@
                         const legClass = l.correct === true ? 'leg-correct' : l.correct === false ? 'leg-wrong' : '';
                         const scoreInfo = l.actual_score ? ` (${l.actual_score})` : '';
                         return `<div class="leg-item ${legClass}">
-                            <span>${l.match_desc} · ${l.pick_desc}${scoreInfo}${icon}</span>
+                            <span>${l.code || ''} ${l.match_desc} · ${l.pick_desc}${scoreInfo}${icon}</span>
                             <span class="odds-val">@${l.odds.toFixed(2)}</span>
                         </div>`;
                     }).join('');
@@ -344,19 +361,22 @@
 
                 const status = data.status || 'pending';
                 const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 💣 未中' : '';
+                const budget = data.budget || data.stake || 100;
+                const totalReturn = data.expected_return_range || `¥${Math.round((data.combined_odds || 1) * budget)}`;
+                const by = data.submitted_by ? ` · by ${data.submitted_by}` : '';
 
                 return `<div class="plan-card ${status}" onclick="togglePlan(this)">
                     <div class="plan-summary">
                         <div class="plan-header">
                             <div>
                                 <div class="plan-title">${data.passphrase || '未命名'}${statusLabel}</div>
-                                <div class="plan-date">${data.date} · ${data.combinations.length}注</div>
+                                <div class="plan-date">${data.date} · ${data.combinations.length}注${by}</div>
                             </div>
                             <div class="plan-arrow">▼</div>
                         </div>
                         <div class="plan-meta">
-                            <span>投入 ¥${data.budget}</span>
-                            <span>回报 ¥${data.expected_return_range}</span>
+                            <span>投入 ¥${budget}</span>
+                            <span>回报 ${typeof totalReturn === 'number' ? '¥' + totalReturn : totalReturn}</span>
                         </div>
                     </div>
                     <div class="plan-detail">
@@ -367,7 +387,7 @@
                 </div>`;
             }).join('');
 
-            content.innerHTML = html;
+            content.innerHTML = html || '<div class="empty-state"><p>暂无投注方案</p></div>';
         }
 
         function copyCombo(resultIdx, comboIdx) {
