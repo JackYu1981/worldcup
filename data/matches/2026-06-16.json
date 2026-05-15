@@ -1,0 +1,68 @@
+{
+  "date": "2026-06-16",
+  "matches": [
+    {
+      "id": "m015",
+      "home": "日本",
+      "away": "哥斯达黎加",
+      "kickoff": "02:00",
+      "group": "E",
+      "stage": "小组赛第2轮",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 1.45,
+        "draw": 4.20,
+        "away_win": 7.50
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 2.20,
+        "draw": 3.20,
+        "away_win": 3.10
+      }
+    },
+    {
+      "id": "m016",
+      "home": "比利时",
+      "away": "摩洛哥",
+      "kickoff": "05:00",
+      "group": "F",
+      "stage": "小组赛第2轮",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 1.65,
+        "draw": 3.80,
+        "away_win": 5.50
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 2.45,
+        "draw": 3.10,
+        "away_win": 2.80
+      }
+    },
+    {
+      "id": "m017",
+      "home": "克罗地亚",
+      "away": "加拿大",
+      "kickoff": "08:00",
+      "group": "F",
+      "stage": "小组赛第2轮",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 1.55,
+        "draw": 4.00,
+        "away_win": 6.00
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 2.30,
+        "draw": 3.25,
+        "away_win": 2.90
+      }
+    }
+  ]
+}

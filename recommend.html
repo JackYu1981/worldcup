@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI推荐 - 世界杯投注助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+        h1 { font-size: 20px; text-align: center; padding: 12px 0; }
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .nav-tab {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #666;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tab.active {
+            color: #1a73e8;
+            border-bottom-color: #1a73e8;
+            font-weight: 600;
+        }
+        .strategy-banner {
+            background: linear-gradient(135deg, #fff8e1, #fff3e0);
+            border: 1px solid #ffe0b2;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .strategy-banner .icon { font-size: 18px; }
+        .strategy-banner .text { color: #e65100; font-weight: 500; }
+        .date-nav {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding: 4px 0;
+        }
+        .date-btn {
+            padding: 8px 14px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background: white;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .date-btn.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        .tier-card {
+            border-radius: 14px;
+            margin-bottom: 14px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tier-card.selected { border-color: #1a73e8; box-shadow: 0 4px 16px rgba(26,115,232,0.3); }
+        .tier-header {
+            padding: 14px 16px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tier-card.conservative .tier-header { background: linear-gradient(135deg, #43a047, #2e7d32); }
+        .tier-card.progressive .tier-header { background: linear-gradient(135deg, #fb8c00, #e65100); }
+        .tier-card.aggressive .tier-header { background: linear-gradient(135deg, #e53935, #b71c1c); }
+        .tier-title { font-size: 15px; font-weight: 600; }
+        .tier-odds { font-size: 14px; opacity: 0.9; }
+        .tier-return {
+            font-size: 12px;
+            opacity: 0.85;
+            margin-top: 2px;
+        }
+        .tier-body {
+            background: white;
+            padding: 14px 16px;
+        }
+        .leg-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .leg-item:last-child { border-bottom: none; }
+        .leg-match {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .leg-match-info {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+        .leg-match-odds {
+            font-size: 14px;
+            font-weight: 700;
+            color: #e65100;
+        }
+        .leg-pick {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .leg-pick .market-tag {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-right: 4px;
+        }
+        .leg-pick .market-tag.handicap {
+            background: #fce4ec;
+            color: #c62828;
+        }
+        .prob-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .prob-label {
+            font-size: 10px;
+            color: #999;
+            min-width: 32px;
+        }
+        .prob-track {
+            flex: 1;
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+        .prob-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .prob-fill.implied { background: #bdbdbd; }
+        .prob-fill.ai { background: #4caf50; }
+        .prob-value {
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 30px;
+            text-align: right;
+        }
+        .prob-value.implied { color: #888; }
+        .prob-value.ai { color: #2e7d32; }
+        .value-badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+        .leg-reasoning {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .analysis-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        .analysis-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        .analysis-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        .analysis-label { color: #666; }
+        .analysis-value { font-weight: 600; }
+        .analysis-value.positive { color: #2e7d32; }
+        .analysis-value.highlight { color: #e65100; }
+        .combined-prob-bars {
+            margin: 8px 0;
+        }
+        .combined-prob-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+        .combined-prob-row .label {
+            font-size: 11px;
+            color: #666;
+            min-width: 50px;
+        }
+        .combined-prob-row .bar-track {
+            flex: 1;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .combined-prob-row .bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.8s ease;
+        }
+        .combined-prob-row .bar-fill.implied { background: #bdbdbd; }
+        .combined-prob-row .bar-fill.ai { background: #66bb6a; }
+        .combined-prob-row .pct {
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 32px;
+        }
+        .select-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: all 0.2s;
+        }
+        .tier-card.conservative .select-btn { background: #e8f5e9; color: #2e7d32; }
+        .tier-card.progressive .select-btn { background: #fff3e0; color: #e65100; }
+        .tier-card.aggressive .select-btn { background: #ffebee; color: #c62828; }
+        .select-btn:active { transform: scale(0.98); opacity: 0.8; }
+        .select-btn.chosen {
+            background: #1a73e8 !important;
+            color: white !important;
+        }
+
+        .confirm-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .confirm-overlay.visible { display: flex; }
+        .confirm-modal {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 360px;
+            padding: 24px;
+            animation: modalPop 0.3s ease;
+        }
+        @keyframes modalPop {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .confirm-modal h3 {
+            font-size: 16px;
+            margin-bottom: 6px;
+            color: #333;
+        }
+        .confirm-modal .summary {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .confirm-modal .summary strong { color: #e65100; }
+        .confirm-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 12px;
+            outline: none;
+        }
+        .confirm-input:focus { border-color: #1a73e8; }
+        .confirm-btns {
+            display: flex;
+            gap: 10px;
+        }
+        .confirm-btns button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-cancel { background: #f5f5f5; color: #666; }
+        .btn-submit { background: #1a73e8; color: white; }
+        .btn-submit:disabled { background: #ccc; }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+            font-size: 14px;
+        }
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚽ 世界杯投注助手</h1>
+
+    <div class="nav-tabs">
+        <a class="nav-tab" href="index.html">赛程</a>
+        <a class="nav-tab active" href="recommend.html">推荐</a>
+        <a class="nav-tab" href="result.html">方案</a>
+        <a class="nav-tab" href="dashboard.html">看板</a>
+    </div>
+
+    <div class="strategy-banner" id="strategyBanner" style="display:none;">
+        <span class="icon">📊</span>
+        <span class="text" id="strategyText"></span>
+    </div>
+
+    <div class="date-nav" id="dateNav"></div>
+
+    <div id="content">
+        <div class="empty-state">加载中...</div>
+    </div>
+
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-modal">
+            <h3>确认投注方案</h3>
+            <div class="summary" id="confirmSummary"></div>
+            <input class="confirm-input" id="passphraseInput" placeholder="输入口令（如：一路发财）">
+            <div class="confirm-btns">
+                <button class="btn-cancel" onclick="closeConfirm()">取消</button>
+                <button class="btn-submit" id="submitBtn" onclick="submitPick()" disabled>确认提交</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const DATES = ['2026-06-12', '2026-06-13', '2026-06-14', '2026-06-15', '2026-06-16'];
+        const BASE_URL = '';
+        let currentDate = '2026-06-15';
+        let recommendation = null;
+        let selectedTier = null;
+
+        function renderDateNav() {
+            const nav = document.getElementById('dateNav');
+            nav.innerHTML = DATES.map(d => {
+                const label = d.slice(5).replace('-', '/');
+                const active = d === currentDate ? 'active' : '';
+                return `<button class="date-btn ${active}" onclick="switchDate('${d}')">${label}</button>`;
+            }).join('');
+        }
+
+        function switchDate(date) {
+            currentDate = date;
+            selectedTier = null;
+            renderDateNav();
+            loadRecommendation(date);
+        }
+
+        async function loadLedger() {
+            try {
+                const resp = await fetch(`${BASE_URL}/data/ledger.json`);
+                const ledger = await resp.json();
+                const losses = ledger.summary.consecutive_losses || 0;
+                const banner = document.getElementById('strategyBanner');
+                const text = document.getElementById('strategyText');
+
+                let tierSuggest, icon;
+                if (losses >= 3) {
+                    tierSuggest = '保守型';
+                    icon = '🟢';
+                } else if (losses === 0) {
+                    tierSuggest = '可选激进型';
+                    icon = '🔴';
+                } else {
+                    tierSuggest = '进取型';
+                    icon = '🟡';
+                }
+                text.textContent = `当前策略建议: ${icon} ${tierSuggest}（连续未中${losses}天）`;
+                banner.style.display = 'flex';
+            } catch(e) {}
+        }
+
+        async function loadRecommendation(date) {
+            const content = document.getElementById('content');
+            try {
+                const resp = await fetch(`${BASE_URL}/recommendations/${date}.json`);
+                if (!resp.ok) throw new Error('no data');
+                recommendation = await resp.json();
+                renderRecommendation();
+            } catch(e) {
+                content.innerHTML = '<div class="empty-state"><p>该日期暂无AI推荐</p><p style="margin-top:8px;font-size:12px;">请等待出方案指令生成</p></div>';
+            }
+        }
+
+        function renderRecommendation() {
+            const content = document.getElementById('content');
+            const tiers = ['conservative', 'progressive', 'aggressive'];
+            const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
+
+            content.innerHTML = tiers.map(tier => {
+                const data = recommendation.recommendations[tier];
+                if (!data) return '';
+
+                const isSelected = selectedTier === tier;
+                const legsHtml = data.legs.map(leg => {
+                    const marketTag = leg.market === 'handicap'
+                        ? `<span class="market-tag handicap">让球</span>`
+                        : `<span class="market-tag">胜平负</span>`;
+                    const impliedPct = Math.round(leg.implied_prob * 100);
+                    const aiPct = Math.round(leg.ai_prob * 100);
+                    const valuePct = Math.round(leg.value_index * 100);
+
+                    return `<div class="leg-item">
+                        <div class="leg-match">
+                            <span class="leg-match-info">${leg.match_desc}</span>
+                            <span class="leg-match-odds">@${leg.odds.toFixed(2)}</span>
+                        </div>
+                        <div class="leg-pick">
+                            ${marketTag}${leg.pick_desc}
+                            ${leg.handicap !== undefined ? `(让${Math.abs(leg.handicap)}球)` : ''}
+                        </div>
+                        <div class="prob-bar">
+                            <span class="prob-label">庄家</span>
+                            <div class="prob-track"><div class="prob-fill implied" style="width:${impliedPct}%"></div></div>
+                            <span class="prob-value implied">${impliedPct}%</span>
+                        </div>
+                        <div class="prob-bar">
+                            <span class="prob-label">AI</span>
+                            <div class="prob-track"><div class="prob-fill ai" style="width:${aiPct}%"></div></div>
+                            <span class="prob-value ai">${aiPct}%</span>
+                            <span class="value-badge">+${valuePct}%</span>
+                        </div>
+                        <div class="leg-reasoning">${leg.reasoning}</div>
+                    </div>`;
+                }).join('');
+
+                const analysis = data.analysis;
+                const impliedHitPct = Math.round(analysis.combined_hit_prob_implied * 100);
+                const aiHitPct = Math.round(analysis.combined_hit_prob_ai * 100);
+                const evDisplay = analysis.expected_value >= 0 ? `+${analysis.expected_value.toFixed(2)}` : analysis.expected_value.toFixed(2);
+                const kellyPct = Math.round(analysis.kelly_fraction * 100);
+
+                const analysisHtml = `<div class="analysis-section">
+                    <div class="analysis-title">📊 AI 分析摘要</div>
+                    <div class="combined-prob-bars">
+                        <div class="combined-prob-row">
+                            <span class="label">庄家隐含</span>
+                            <div class="bar-track"><div class="bar-fill implied" style="width:${impliedHitPct * 2}%"></div></div>
+                            <span class="pct">${impliedHitPct}%</span>
+                        </div>
+                        <div class="combined-prob-row">
+                            <span class="label">AI修正</span>
+                            <div class="bar-track"><div class="bar-fill ai" style="width:${aiHitPct * 2}%"></div></div>
+                            <span class="pct" style="color:#2e7d32;">${aiHitPct}%</span>
+                        </div>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">期望价值(EV)</span>
+                        <span class="analysis-value positive">${evDisplay} ${analysis.expected_value >= 0 ? '✓ 值得投' : '✗'}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">Kelly建议</span>
+                        <span class="analysis-value">${kellyPct}% (${analysis.confidence})</span>
+                    </div>
+                </div>`;
+
+                return `<div class="tier-card ${tier} ${isSelected ? 'selected' : ''}">
+                    <div class="tier-header">
+                        <div>
+                            <div class="tier-title">${tierIcons[tier]} ${data.label}</div>
+                            <div class="tier-return">投入¥100 → 预期回报 ¥${data.potential_return.toLocaleString()}</div>
+                        </div>
+                        <div class="tier-odds">×${data.combined_odds.toFixed(2)}</div>
+                    </div>
+                    <div class="tier-body">
+                        ${legsHtml}
+                        ${analysisHtml}
+                        <button class="select-btn ${isSelected ? 'chosen' : ''}" onclick="selectTier('${tier}')">
+                            ${isSelected ? '✓ 已选择' : '选择此方案'}
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function selectTier(tier) {
+            selectedTier = tier;
+            renderRecommendation();
+            openConfirm();
+        }
+
+        function openConfirm() {
+            const data = recommendation.recommendations[selectedTier];
+            const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
+            const summary = document.getElementById('confirmSummary');
+            summary.innerHTML = `已选择 <strong>${tierNames[selectedTier]}</strong> 方案<br>综合赔率 <strong>×${data.combined_odds.toFixed(2)}</strong>，投入¥100可得 <strong>¥${data.potential_return.toLocaleString()}</strong>`;
+            document.getElementById('confirmOverlay').classList.add('visible');
+            document.getElementById('passphraseInput').value = '';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('passphraseInput').focus();
+        }
+
+        function closeConfirm() {
+            document.getElementById('confirmOverlay').classList.remove('visible');
+        }
+
+        document.getElementById('passphraseInput').addEventListener('input', function() {
+            document.getElementById('submitBtn').disabled = !this.value.trim();
+        });
+
+        async function submitPick() {
+            const passphrase = document.getElementById('passphraseInput').value.trim();
+            if (!passphrase || !selectedTier) return;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '提交中...';
+
+            const data = recommendation.recommendations[selectedTier];
+            const payload = {
+                date: currentDate,
+                passphrase: passphrase,
+                submitted_at: new Date().toISOString(),
+                selected_tier: selectedTier,
+                stake: 100,
+                combined_odds: data.combined_odds,
+                legs: data.legs.map(l => ({
+                    match_id: l.match_id,
+                    match_desc: l.match_desc,
+                    market: l.market,
+                    pick: l.pick,
+                    pick_desc: l.pick_desc,
+                    odds: l.odds
+                }))
+            };
+
+            try {
+                const resp = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    closeConfirm();
+                    showToast(`✅ 提交成功！口令：${passphrase}`);
+                } else {
+                    showToast(`❌ 提交失败：${result.error}`);
+                }
+            } catch(e) {
+                showToast(`❌ 网络错误：${e.message}`);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '确认提交';
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2500);
+        }
+
+        renderDateNav();
+        loadLedger();
+        loadRecommendation(currentDate);
+    </script>
+</body>
+</html>

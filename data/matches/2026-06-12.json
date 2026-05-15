@@ -8,10 +8,18 @@
       "kickoff": "21:00",
       "group": "A",
       "stage": "小组赛第1轮",
+      "status": "finished",
+      "score": {"home": 1, "away": 1},
       "odds": {
         "home_win": 2.10,
         "draw": 3.25,
         "away_win": 3.60
+      },
+      "handicap": {
+        "line": -0.5,
+        "home_win": 2.75,
+        "draw": 3.10,
+        "away_win": 2.65
       }
     },
     {
@@ -21,10 +29,18 @@
       "kickoff": "23:00",
       "group": "C",
       "stage": "小组赛第1轮",
+      "status": "finished",
+      "score": {"home": 2, "away": 0},
       "odds": {
         "home_win": 1.25,
         "draw": 5.50,
         "away_win": 12.00
+      },
+      "handicap": {
+        "line": -2,
+        "home_win": 2.30,
+        "draw": 3.15,
+        "away_win": 2.85
       }
     },
     {
@@ -34,10 +50,18 @@
       "kickoff": "02:00",
       "group": "E",
       "stage": "小组赛第1轮",
+      "status": "finished",
+      "score": {"home": 3, "away": 1},
       "odds": {
         "home_win": 1.55,
         "draw": 4.00,
         "away_win": 6.50
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 2.20,
+        "draw": 3.25,
+        "away_win": 3.10
       }
     }
   ]

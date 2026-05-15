@@ -7,20 +7,24 @@ export async function onRequestPost(context) {
 
   try {
     const body = await context.request.json();
-    const { date, passphrase } = body;
+    const { message, content, sha } = body;
 
-    if (!date || !passphrase) {
-      return new Response(JSON.stringify({ error: '缺少必填字段' }), {
+    if (!content) {
+      return new Response(JSON.stringify({ error: '缺少内容' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const filename = `picks/${date}-${passphrase}.json`;
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(body, null, 2))));
+    const filename = 'data/design-comments.json';
+    const ghBody = {
+      message: message || 'design feedback',
+      content: content,
+    };
+    if (sha) ghBody.sha = sha;
 
     const ghResp = await fetch(
-      `https://api.github.com/repos/JackYu1981/worldcup/contents/${encodeURIComponent(filename)}`,
+      `https://api.github.com/repos/JackYu1981/worldcup/contents/${filename}`,
       {
         method: 'PUT',
         headers: {
@@ -28,10 +32,7 @@ export async function onRequestPost(context) {
           'Content-Type': 'application/json',
           'User-Agent': 'worldmoney-pages',
         },
-        body: JSON.stringify({
-          message: `pick: ${date} ${passphrase}`,
-          content: content,
-        }),
+        body: JSON.stringify(ghBody),
       }
     );
 
@@ -43,7 +44,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, file: filename }), {
+    return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
