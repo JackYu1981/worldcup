@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778816364419,
+      "author": "brian",
+      "type": "improvement",
+      "text": "对于方案推荐，引入多结果投注，比如其中一场根据分析，选出两个结果，比如胜和让胜，让胜和让平，这对应的就是两单三串一。并根据总赔率对这两单投注金额进行优化，达到两种结果奖金类似的目的",
+      "time": "2026-05-14 21:39",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778816253265,
       "author": "brian",
       "type": "bug",
