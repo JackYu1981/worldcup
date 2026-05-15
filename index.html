@@ -70,25 +70,26 @@
         .match-card {
             background: white; border-radius: 8px; margin-top: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
-        }
-        .match-header {
-            padding: 10px 12px; border-bottom: 1px solid #f5f5f5;
+            display: grid; grid-template-columns: auto 1fr 1fr 1fr;
         }
         .match-top-row {
-            display: grid; grid-template-columns: 12% 29.3% 29.3% 29.3%;
-            align-items: center;
+            display: grid; grid-template-columns: subgrid;
+            grid-column: 1 / -1; align-items: center;
+            padding: 10px 12px; border-bottom: 1px solid #f5f5f5;
         }
         .match-left-info {
-            display: flex; flex-direction: column; gap: 3px;
+            display: inline-flex; flex-direction: column; gap: 3px;
             grid-column: 1; align-items: stretch; white-space: nowrap;
+            padding-right: 8px;
         }
         .match-code {
             font-size: 11px; font-weight: 400; color: #333; white-space: nowrap;
-            text-align: center;
+            text-align: center; background: #f0f0f0; border-radius: 3px;
+            padding: 1px 4px;
         }
         .match-code.finished { color: #999; }
         .league-tag {
-            font-size: 10px; padding: 1px 0; border-radius: 3px;
+            font-size: 10px; padding: 1px 4px; border-radius: 3px;
             font-weight: 500; color: white; display: block;
             white-space: nowrap; text-align: center;
         }
@@ -118,7 +119,8 @@
         }
 
         .odds-table {
-            display: grid; grid-template-columns: 12% 29.3% 29.3% 29.3%;
+            display: grid; grid-template-columns: subgrid;
+            grid-column: 1 / -1;
             border-top: 1px solid #f5f5f5;
         }
         .odds-row-label {
@@ -480,7 +482,6 @@
             }
 
             return `<div class="match-card">
-                <div class="match-header">
                     <div class="match-top-row">
                         <div class="match-left-info">
                             <span class="${codeClass}">${codeText}</span>
@@ -492,7 +493,6 @@
                             <span class="away">${m.away}</span>
                         </div>
                     </div>
-                </div>
                 ${oddsHtml}
             </div>`;
         }
