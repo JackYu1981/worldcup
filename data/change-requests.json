@@ -6,9 +6,9 @@
       "type": "improvement",
       "text": "看起来赛程的外观还是要进一步完善，我把500网的赛程页面的截图保存在项目工作区目录了，下一版你自己根据截图仿照完善一下。日期选择按照每一期展开，比赛序号如001，002，003这些细节你都学习一下",
       "time": "2026-05-15T12:05:10.145Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.1",
+      "resolution": "赛程页仿500.com风格重构，日期tab+期数头+编号标签+紧凑赔率网格",
       "replies": []
     },
     {
@@ -320,6 +320,12 @@
       "version": "v3.0",
       "date": "2026-05-15T18:20:00+08:00",
       "summary": "里程碑：数据适配器架构（schema + adapter模式），解耦数据源与业务逻辑，支持多数据源扩展，ESM模块化",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.1",
+      "date": "2026-05-15T18:40:00+08:00",
+      "summary": "赛程页UI仿500.com风格重构：日期tab、期数头、编号标签、紧凑赔率网格、让球盘口标签",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
