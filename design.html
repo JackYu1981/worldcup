@@ -399,7 +399,10 @@ D日  11:00   Jack: "结算 06-15"
                     return;
                 }
                 const file = await resp.json();
-                const content = JSON.parse(atob(file.content));
+                const binary = atob(file.content);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const content = JSON.parse(new TextDecoder().decode(bytes));
                 comments = content.comments || [];
                 renderComments();
             } catch (e) {
