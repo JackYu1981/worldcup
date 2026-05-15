@@ -386,8 +386,8 @@
     </div>
 
     <div class="section">
-        <h2>📦 版本历史</h2>
-        <div id="versionHistory"></div>
+        <h2 style="cursor:pointer;" onclick="toggleVersionHistory()">📦 版本历史 <span id="vhToggle" style="font-size:12px;color:#888;float:right;">▼ 展开</span></h2>
+        <div id="versionHistory" style="max-height:0;overflow:hidden;transition:max-height 0.3s ease;"></div>
     </div>
 
     <div class="section">
@@ -725,6 +725,20 @@
             el.classList.add('active');
         }
 
+        let vhExpanded = false;
+        function toggleVersionHistory() {
+            const container = document.getElementById('versionHistory');
+            const toggle = document.getElementById('vhToggle');
+            vhExpanded = !vhExpanded;
+            if (vhExpanded) {
+                container.style.maxHeight = container.scrollHeight + 'px';
+                toggle.textContent = '▲ 收起';
+            } else {
+                container.style.maxHeight = '0';
+                toggle.textContent = '▼ 展开';
+            }
+        }
+
         function renderVersionHistory() {
             const container = document.getElementById('versionHistory');
             if (versions.length === 0) {
@@ -748,6 +762,7 @@
                     </div>
                 </div>`;
             }).join('');
+            if (vhExpanded) container.style.maxHeight = container.scrollHeight + 'px';
         }
 
         async function saveCRs(commitMsg) {
