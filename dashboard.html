@@ -15,8 +15,8 @@
         }
         .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: white; border-bottom: 1px solid #eee; }
         .site-header .title { font-size: 20px; font-weight: 700; }
-        .site-header .user-badge { position: absolute; right: 16px; font-size: 12px; color: #666; }
-        .site-header .user-badge a { color: #999; margin-left: 6px; font-size: 11px; text-decoration: none; }
+        .site-header .user-badge { position: absolute; right: 12px; bottom: 6px; font-size: 10px; color: #999; }
+        .site-header .user-badge a { color: #bbb; margin-left: 4px; font-size: 10px; text-decoration: none; }
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
             padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
@@ -241,15 +241,12 @@
     </div>
 
     <div class="chart-card">
-        <h3 id="calendarTitle">每日盈亏日历</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span onclick="changeMonth(-1)" style="cursor:pointer;font-size:18px;padding:0 8px;color:#666;">◀</span>
+            <span id="calendarTitle" style="font-size:14px;font-weight:600;color:#666;"></span>
+            <span onclick="changeMonth(1)" style="cursor:pointer;font-size:18px;padding:0 8px;color:#666;">▶</span>
+        </div>
         <div class="calendar" id="calendar">
-            <div class="day-header">一</div>
-            <div class="day-header">二</div>
-            <div class="day-header">三</div>
-            <div class="day-header">四</div>
-            <div class="day-header">五</div>
-            <div class="day-header">六</div>
-            <div class="day-header">日</div>
         </div>
     </div>
     </div>
@@ -339,19 +336,30 @@
             });
         }
 
+        let calYear, calMonth;
+        (function() {
+            const now = new Date();
+            calYear = now.getFullYear();
+            calMonth = now.getMonth();
+        })();
+
+        function changeMonth(delta) {
+            calMonth += delta;
+            if (calMonth < 0) { calMonth = 11; calYear--; }
+            if (calMonth > 11) { calMonth = 0; calYear++; }
+            renderCalendar();
+        }
+
         function renderCalendar() {
             const cal = document.getElementById('calendar');
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
 
-            document.getElementById('calendarTitle').textContent = `每日盈亏日历 · ${year}年${month+1}月`;
+            document.getElementById('calendarTitle').textContent = `${calYear}年${calMonth+1}月`;
 
             const headers = ['一','二','三','四','五','六','日'];
             cal.innerHTML = headers.map(h => `<div class="day-header">${h}</div>`).join('');
 
-            const firstDay = new Date(year, month, 1).getDay();
+            const firstDay = new Date(calYear, calMonth, 1).getDay();
             const startOffset = firstDay === 0 ? 6 : firstDay - 1;
             for (let i = 0; i < startOffset; i++) {
                 const empty = document.createElement('div');
@@ -360,7 +368,7 @@
             }
 
             for (let i = 1; i <= daysInMonth; i++) {
-                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2, '0')}`;
+                const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(i).padStart(2, '0')}`;
                 const plans = dailyMap[dateStr];
                 const div = document.createElement('div');
                 div.className = 'day';
