@@ -225,7 +225,6 @@
     <script src="pull-refresh.js"></script>
     <script>
         const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
-        const PICKS_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
 
         function generateDates() {
             const dates = [];
@@ -285,14 +284,10 @@
             plans = [];
 
             try {
-                const resp = await fetch(PICKS_API);
+                const resp = await fetch(`/api/picks?date=${date}`);
                 if (resp.ok) {
-                    const files = await resp.json();
-                    const dayFiles = files.filter(f => f.name.startsWith(date));
-                    const allPicks = await Promise.all(dayFiles.map(async f => {
-                        const r = await fetch(f.download_url);
-                        return r.json();
-                    }));
+                    const data = await resp.json();
+                    const allPicks = data.picks || [];
                     userRecs = allPicks.filter(p => p.source === 'recommendation');
                     plans = allPicks.filter(p => p.source === 'plan');
                 }

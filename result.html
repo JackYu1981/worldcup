@@ -185,7 +185,6 @@
     <script src="pull-refresh.js"></script>
     <script>
         const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
-        const PICKS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
 
         let allResults = [];
         let matchDataCache = {};
@@ -262,33 +261,26 @@
             try {
                 const [resultsResp, picksResp] = await Promise.all([
                     fetch(RESULTS_INDEX_URL).catch(() => null),
-                    fetch(PICKS_INDEX_URL).catch(() => null)
+                    fetch('/api/picks').catch(() => null)
                 ]);
 
-                let allFiles = [];
+                let allData = [];
                 if (resultsResp && resultsResp.ok) {
                     const files = await resultsResp.json();
-                    allFiles = allFiles.concat(files.filter(f => f.name.endsWith('.json')));
+                    const resultFiles = files.filter(f => f.name.endsWith('.json'));
+                    const results = await Promise.all(resultFiles.map(async f => {
+                        const r = await fetch(f.download_url);
+                        return r.json();
+                    }));
+                    allData = allData.concat(results);
                 }
                 if (picksResp && picksResp.ok) {
-                    const files = await picksResp.json();
-                    const planFiles = files.filter(f => f.name.endsWith('.json') && !f.name.includes('-rec-'));
-                    allFiles = allFiles.concat(planFiles);
+                    const data = await picksResp.json();
+                    const planPicks = (data.picks || []).filter(p => p.source === 'plan' || p.source === 'custom');
+                    allData = allData.concat(planPicks);
                 }
 
-                allFiles.sort((a, b) => b.name.localeCompare(a.name));
-
-                if (allFiles.length === 0) {
-                    document.getElementById('content').innerHTML = '<div class="empty-state"><p>暂无投注方案</p></div>';
-                    return;
-                }
-
-                const results = await Promise.all(allFiles.map(async f => {
-                    const r = await fetch(f.download_url);
-                    return r.json();
-                }));
-
-                const planResults = results.filter(r => r.source === 'plan' || r.combinations || (!r.source));
+                const planResults = allData.filter(r => r.source === 'plan' || r.source === 'custom' || r.combinations || (!r.source));
 
                 const dates = [...new Set(planResults.map(r => r.date).filter(Boolean))];
                 await Promise.all(dates.map(d => fetchMatchData(d)));
