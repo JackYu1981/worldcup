@@ -72,31 +72,31 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
         }
         .match-header {
-            display: flex; align-items: center; padding: 10px 12px;
-            border-bottom: 1px solid #f5f5f5;
+            padding: 10px 12px; border-bottom: 1px solid #f5f5f5;
+        }
+        .match-top-row {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 6px;
         }
         .match-code {
-            background: #4caf50; color: white; font-size: 11px; font-weight: 600;
-            padding: 2px 8px; border-radius: 3px; margin-right: 10px; white-space: nowrap;
+            font-size: 12px; font-weight: 600; color: #4caf50;
         }
-        .match-code.finished { background: #999; }
-        .match-info {
-            flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+        .match-code.finished { color: #999; }
+        .league-tag {
+            font-size: 10px; padding: 2px 8px; border-radius: 3px;
+            font-weight: 500; color: white;
+        }
+        .match-time-badge {
+            font-size: 11px; color: #999;
         }
         .match-teams-row {
             display: flex; justify-content: space-between; align-items: center;
-            font-size: 14px; font-weight: 500;
+            font-size: 15px; font-weight: 500;
         }
         .match-teams-row .home { text-align: left; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .match-teams-row .away { text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .match-teams-row .vs { font-size: 12px; color: #aaa; padding: 0 8px; flex-shrink: 0; }
-        .match-teams-row .score { font-size: 16px; font-weight: 700; color: #e74c3c; padding: 0 8px; flex-shrink: 0; }
-        .match-meta {
-            display: flex; align-items: center; gap: 8px; font-size: 11px; color: #999;
-        }
-        .league-tag {
-            background: #f0f0f0; color: #666; padding: 1px 6px; border-radius: 3px; font-size: 10px;
-        }
+        .match-teams-row .vs { font-size: 12px; color: #ccc; padding: 0 10px; flex-shrink: 0; }
+        .match-teams-row .score { font-size: 16px; font-weight: 700; color: #e74c3c; padding: 0 10px; flex-shrink: 0; }
 
         .odds-table {
             display: grid; grid-template-columns: 50px 1fr 1fr 1fr;
@@ -382,6 +382,8 @@
                 return sel && sel.market === market && sel.pick === pick ? 'selected' : '';
             }
 
+            const leagueColor = getLeagueColor(m.league || '其他');
+
             let oddsHtml = '';
             if (m.odds && m.odds.home_win != null) {
                 const hLine = (m.handicap && m.handicap.line != null) ? m.handicap.line : 0;
@@ -418,21 +420,40 @@
 
             return `<div class="match-card">
                 <div class="match-header">
-                    <span class="${codeClass}">${codeText}</span>
-                    <div class="match-info">
-                        <div class="match-teams-row">
-                            <span class="home">${m.home}</span>
-                            ${centerHtml}
-                            <span class="away">${m.away}</span>
-                        </div>
-                        <div class="match-meta">
-                            <span class="league-tag">${m.league || '其他'}</span>
-                            <span>${m.kickoff}</span>
-                        </div>
+                    <div class="match-top-row">
+                        <span class="${codeClass}">${codeText}</span>
+                        <span class="league-tag" style="background:${leagueColor}">${m.league || '其他'}</span>
+                        <span class="match-time-badge">${m.kickoff}</span>
+                    </div>
+                    <div class="match-teams-row">
+                        <span class="home">${m.home}</span>
+                        ${centerHtml}
+                        <span class="away">${m.away}</span>
                     </div>
                 </div>
                 ${oddsHtml}
             </div>`;
+        }
+
+        const LEAGUE_COLORS = {
+            '英超': '#3d195b',
+            '德甲': '#d20515',
+            '法甲': '#1a428a',
+            '意甲': '#024494',
+            '西甲': '#ee8707',
+            '日职': '#e60012',
+            '韩职': '#1c3c7d',
+            '澳超': '#f26522',
+            '英足总杯': '#6b2d5b',
+            '沙特职业联赛': '#1b6e3c',
+            '世界杯': '#8b0000',
+        };
+        function getLeagueColor(league) {
+            if (LEAGUE_COLORS[league]) return LEAGUE_COLORS[league];
+            let hash = 0;
+            for (let i = 0; i < league.length; i++) hash = league.charCodeAt(i) + ((hash << 5) - hash);
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 50%, 40%)`;
         }
 
         function togglePick(matchId, market, pick, odds, desc) {
