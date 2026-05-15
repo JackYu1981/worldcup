@@ -17,10 +17,10 @@ export async function onRequestPost(context) {
     }
 
     const body = await context.request.json();
-    const { date, passphrase } = body;
+    const { date, passphrase, source } = body;
 
-    if (!date || !passphrase) {
-      return new Response(JSON.stringify({ error: '缺少必填字段' }), {
+    if (!date) {
+      return new Response(JSON.stringify({ error: '缺少日期字段' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -28,7 +28,22 @@ export async function onRequestPost(context) {
 
     body.submitted_by = user.username;
 
-    const filename = `picks/${date}-${passphrase}.json`;
+    let filename, commitMsg;
+    if (source === 'recommendation') {
+      const ts = Date.now();
+      filename = `picks/${date}-rec-${user.username}-${ts}.json`;
+      commitMsg = `recommendation: ${date} by ${user.username}`;
+    } else {
+      if (!passphrase) {
+        return new Response(JSON.stringify({ error: '方案需要口令' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      filename = `picks/${date}-${passphrase}.json`;
+      commitMsg = `pick: ${date} ${passphrase} by ${user.username}`;
+    }
+
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(body, null, 2))));
 
     const ghResp = await fetch(
@@ -41,7 +56,7 @@ export async function onRequestPost(context) {
           'User-Agent': 'worldmoney-pages',
         },
         body: JSON.stringify({
-          message: `pick: ${date} ${passphrase} by ${user.username}`,
+          message: commitMsg,
           content: content,
         }),
       }

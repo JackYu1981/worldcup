@@ -226,18 +226,17 @@
         <div class="combo-legs" id="comboLegs"></div>
         <div class="combo-btns">
             <button class="btn-clear" onclick="clearCombo()">清空</button>
-            <button class="btn-generate" onclick="generateCombo()">生成方案</button>
+            <button class="btn-generate" onclick="generateCombo()">生成推荐</button>
         </div>
     </div>
 
     <div class="confirm-overlay" id="confirmOverlay">
         <div class="confirm-modal">
-            <h3>生成自定义方案</h3>
+            <h3>确认推荐</h3>
             <div class="summary" id="confirmSummary"></div>
-            <input class="confirm-input" id="passphraseInput" placeholder="输入口令（如：自由搭配）">
             <div class="btns">
                 <button class="btn-cancel" onclick="closeConfirm()">取消</button>
-                <button class="btn-submit" id="submitBtn" onclick="submitCustom()" disabled>确认提交</button>
+                <button class="btn-submit" id="submitBtn" onclick="submitCustom()">确认提交</button>
             </div>
         </div>
     </div>
@@ -567,22 +566,13 @@
                 <strong>综合赔率 ×${totalOdds.toFixed(2)}</strong> · 投¥100得 <strong>¥${returnVal.toLocaleString()}</strong>
                 <div class="tier-badge ${tierClass}">${tierLabel}</div>`;
             document.getElementById('confirmOverlay').classList.add('visible');
-            document.getElementById('passphraseInput').value = '';
-            document.getElementById('submitBtn').disabled = true;
         }
 
         function closeConfirm() {
             document.getElementById('confirmOverlay').classList.remove('visible');
         }
 
-        document.getElementById('passphraseInput').addEventListener('input', function() {
-            document.getElementById('submitBtn').disabled = !this.value.trim();
-        });
-
         async function submitCustom() {
-            const passphrase = document.getElementById('passphraseInput').value.trim();
-            if (!passphrase) return;
-
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
             btn.textContent = '提交中...';
@@ -596,10 +586,9 @@
 
             const payload = {
                 date: currentDate,
-                passphrase: passphrase,
                 submitted_at: new Date().toISOString(),
                 selected_tier: tierName,
-                source: 'custom',
+                source: 'recommendation',
                 stake: 100,
                 combined_odds: parseFloat(totalOdds.toFixed(2)),
                 legs: keys.map(k => ({
@@ -622,8 +611,7 @@
                 const result = await resp.json();
                 if (result.success) {
                     closeConfirm();
-                    copyPickText(payload.legs);
-                    showToast('方案已提交！已复制竞彩格式');
+                    showToast('推荐已提交！');
                     clearCombo();
                 } else {
                     showToast(`提交失败：${result.error}`);
@@ -633,11 +621,6 @@
             }
             btn.disabled = false;
             btn.textContent = '确认提交';
-        }
-
-        function copyPickText(legs) {
-            const lines = legs.map(l => `${l.code} ${l.match_desc} ${l.pick_desc}`);
-            navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
         }
 
         function showToast(msg) {
