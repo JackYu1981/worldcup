@@ -20,7 +20,13 @@
       "status": "pending",
       "resolved_in": null,
       "resolution": null,
-      "replies": []
+      "replies": [
+        {
+          "author": "jack",
+          "text": "这样就是分为三组推荐，ai大聪明，brian专栏和jack专栏",
+          "time": "2026-05-15 10:11"
+        }
+      ]
     },
     {
       "id": 1778810502648,
