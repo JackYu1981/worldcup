@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778872441480,
+      "author": "brian",
+      "type": "bug",
+      "text": "已经勾选过方案的比赛的赔率被highlight显示了",
+      "time": "2026-05-15T19:14:01.480Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778860908447,
       "author": "brian",
       "type": "bug",
