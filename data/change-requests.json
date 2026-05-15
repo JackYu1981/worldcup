@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778856716472,
+      "author": "brian",
+      "type": "bug",
+      "text": "也就是说一场比赛只有一个赔率能参与结果的计算，多选的赔率出多个结果",
+      "time": "2026-05-15T14:51:56.472Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778856066910,
       "author": "brian",
       "type": "bug",
