@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "工作日北京时间十点，周末十一点，就不能买彩票了，系统了就自动刷新了明天的比赛，但是在赛程页面，日期没有变化，当前比赛应该是周六的比赛，并且下面应该显示周六001",
       "time": "2026-05-15T14:09:23.563Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.2",
+      "resolution": "日期生成考虑购彩截止时间（工作日10点/周末11点），过期自动切到下一天",
       "replies": []
     },
     {
@@ -17,9 +17,9 @@
       "type": "bug",
       "text": "赛程中banner显示的比赛数量与列表中的数量不一致",
       "time": "2026-05-15T14:05:55.689Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.2",
+      "resolution": "banner数量随筛选联动更新，始终反映当前列表实际显示数",
       "replies": []
     },
     {
@@ -28,9 +28,9 @@
       "type": "bug",
       "text": "在比赛选择页面，每个比赛只能选择一个选项，无法复选进行复式投注",
       "time": "2026-05-15T13:50:54.962Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.2",
+      "resolution": "支持同场比赛多选（复式投注），每场可选多个赔率选项",
       "replies": []
     },
     {
@@ -39,9 +39,9 @@
       "type": "bug",
       "text": "比赛列表里，要根据日期把比赛放到一起。周五只有五场比赛，对应001-005，剩下的比赛是周六的",
       "time": "2026-05-15T13:47:07.859Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.2",
+      "resolution": "比赛按日期分组显示，每组有日期+星期+场次数小标题，场次编号使用比赛自身日期的周几前缀",
       "replies": []
     },
     {
@@ -370,6 +370,12 @@
       "version": "v3.1",
       "date": "2026-05-15T18:40:00+08:00",
       "summary": "赛程页UI仿500.com风格重构：日期tab、期数头、编号标签、紧凑赔率网格、让球盘口标签",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.2",
+      "date": "2026-05-15T22:10:00+08:00",
+      "summary": "交互流程重构（推荐→方案分离）、4项bug修复（日期截止/比赛分组/复式投注/banner数量）、下拉刷新、方案水印",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
