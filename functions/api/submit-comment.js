@@ -1,11 +1,21 @@
-export async function onRequestPost(context) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+import { verifyToken } from '../lib/auth.js';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function onRequestPost(context) {
   try {
+    const user = await verifyToken(context.request, context.env);
+    if (!user) {
+      return new Response(JSON.stringify({ error: '未登录或登录已过期' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await context.request.json();
     const { message, content, sha } = body;
 
@@ -18,7 +28,7 @@ export async function onRequestPost(context) {
 
     const filename = 'data/design-comments.json';
     const ghBody = {
-      message: message || 'design feedback',
+      message: message || `design feedback by ${user.username}`,
       content: content,
     };
     if (sha) ghBody.sha = sha;
@@ -58,11 +68,5 @@ export async function onRequestPost(context) {
 }
 
 export async function onRequestOptions() {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+  return new Response(null, { headers: corsHeaders });
 }

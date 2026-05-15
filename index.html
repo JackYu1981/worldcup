@@ -145,6 +145,7 @@
 
     <div class="toast" id="toast"></div>
 
+    <script src="auth.js"></script>
     <script>
         const DATES = ['2026-06-12','2026-06-13','2026-06-14','2026-06-15','2026-06-16'];
         const WEEKDAYS = ['日','一','二','三','四','五','六'];
@@ -395,7 +396,7 @@
             try {
                 const resp = await fetch('/api/submit', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: AUTH.headers(),
                     body: JSON.stringify(payload)
                 });
                 const result = await resp.json();
@@ -420,8 +421,10 @@
             setTimeout(() => toast.style.display = 'none', 2500);
         }
 
-        renderDateScroll();
-        loadMatches(currentDate);
+        AUTH.requireLogin(function(user) {
+            renderDateScroll();
+            loadMatches(currentDate);
+        });
     </script>
 </body>
 </html>
