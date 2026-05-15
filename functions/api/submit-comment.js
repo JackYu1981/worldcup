@@ -17,7 +17,7 @@ export async function onRequestPost(context) {
     }
 
     const body = await context.request.json();
-    const { message, content, sha } = body;
+    const { message, content, sha, filename: customFile } = body;
 
     if (!content) {
       return new Response(JSON.stringify({ error: '缺少内容' }), {
@@ -26,7 +26,8 @@ export async function onRequestPost(context) {
       });
     }
 
-    const filename = 'data/design-comments.json';
+    const allowedFiles = ['data/design-comments.json', 'data/change-requests.json'];
+    const filename = allowedFiles.includes(customFile) ? customFile : 'data/design-comments.json';
     const ghBody = {
       message: message || `design feedback by ${user.username}`,
       content: content,
