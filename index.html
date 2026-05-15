@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>世界杯投注助手</title>
+    <title>赛程 - 世界杯投注助手</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -11,153 +11,18 @@
             background: #f5f5f5;
             color: #333;
             padding: 16px;
-            padding-bottom: 100px;
         }
-        h1 {
-            font-size: 20px;
-            text-align: center;
-            padding: 12px 0;
-            color: #1a1a1a;
-        }
-        .date-nav {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        .date-btn {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            background: white;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .date-btn.active {
-            background: #1a73e8;
-            color: white;
-            border-color: #1a73e8;
-        }
-        .match-card {
-            background: white;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .match-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            font-size: 12px;
-            color: #888;
-        }
-        .match-teams {
-            text-align: center;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 14px;
-        }
-        .odds-row {
-            display: flex;
-            gap: 8px;
-        }
-        .odds-btn {
-            flex: 1;
-            padding: 12px 8px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            background: white;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .odds-btn.selected {
-            border-color: #1a73e8;
-            background: #e8f0fe;
-        }
-        .odds-btn .label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-        .odds-btn .value {
-            font-size: 16px;
-            font-weight: 600;
-            color: #1a73e8;
-        }
-        .passphrase-section {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 12px 16px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .passphrase-input {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            outline: none;
-        }
-        .passphrase-input:focus {
-            border-color: #1a73e8;
-        }
-        .submit-btn {
-            padding: 12px 24px;
-            background: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        .submit-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .submit-btn:active:not(:disabled) {
-            background: #1557b0;
-        }
-        .selection-count {
-            text-align: center;
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 12px;
-        }
-        .toast {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 16px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            display: none;
-            z-index: 1000;
-        }
+        h1 { font-size: 20px; text-align: center; padding: 12px 0; }
         .nav-tabs {
             display: flex;
             justify-content: center;
-            gap: 16px;
+            gap: 12px;
             margin-bottom: 16px;
+            flex-wrap: wrap;
         }
         .nav-tab {
-            padding: 8px 16px;
-            font-size: 14px;
+            padding: 8px 12px;
+            font-size: 13px;
             color: #666;
             text-decoration: none;
             border-bottom: 2px solid transparent;
@@ -167,165 +32,275 @@
             border-bottom-color: #1a73e8;
             font-weight: 600;
         }
+        .date-scroll {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 8px 0;
+            margin-bottom: 14px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .date-scroll::-webkit-scrollbar { display: none; }
+        .date-chip {
+            padding: 8px 14px;
+            border-radius: 18px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            font-size: 12px;
+            white-space: nowrap;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .date-chip.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        .date-chip .day { font-weight: 600; }
+        .date-chip .weekday { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+        .stage-label {
+            font-size: 12px;
+            color: #888;
+            padding: 6px 0;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #eee;
+            font-weight: 500;
+        }
+        .match-card {
+            background: white;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .match-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .match-time {
+            font-size: 12px;
+            color: #888;
+        }
+        .match-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .match-status.finished { background: #e8f5e9; color: #2e7d32; }
+        .match-status.live { background: #ffebee; color: #c62828; animation: pulse 1.5s infinite; }
+        .match-status.scheduled { background: #e3f2fd; color: #1565c0; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .match-teams {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .team {
+            flex: 1;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .team.winner { color: #c62828; }
+        .score-display {
+            font-size: 22px;
+            font-weight: 700;
+            color: #333;
+            min-width: 60px;
+            text-align: center;
+        }
+        .score-display.pending {
+            font-size: 14px;
+            color: #aaa;
+            font-weight: 400;
+        }
+        .odds-section {
+            border-top: 1px solid #f5f5f5;
+            padding-top: 10px;
+        }
+        .odds-label {
+            font-size: 10px;
+            color: #aaa;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .odds-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .odds-cell {
+            flex: 1;
+            text-align: center;
+            padding: 6px 4px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-size: 11px;
+        }
+        .odds-cell .type { color: #888; font-size: 10px; }
+        .odds-cell .val { font-weight: 600; color: #333; margin-top: 1px; }
+        .handicap-line {
+            font-size: 10px;
+            color: #c62828;
+            text-align: center;
+            margin: 2px 0 4px;
+            font-weight: 500;
+        }
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
     <h1>⚽ 世界杯投注助手</h1>
 
     <div class="nav-tabs">
-        <a class="nav-tab active" href="index.html">选择</a>
+        <a class="nav-tab active" href="index.html">赛程</a>
+        <a class="nav-tab" href="recommend.html">推荐</a>
         <a class="nav-tab" href="result.html">方案</a>
         <a class="nav-tab" href="dashboard.html">看板</a>
     </div>
 
-    <div class="date-nav" id="dateNav"></div>
-    <div class="selection-count" id="selectionCount">已选 0 场比赛</div>
-    <div id="matchList"></div>
+    <div class="date-scroll" id="dateScroll"></div>
 
-    <div class="passphrase-section">
-        <input type="text" class="passphrase-input" id="passphrase" placeholder="输入口令（如：今晚吃鸡）">
-        <button class="submit-btn" id="submitBtn" disabled>提交</button>
+    <div id="matchList">
+        <div class="empty-state">加载中...</div>
     </div>
 
-    <div class="toast" id="toast"></div>
-
     <script>
-        const DATES = ['2026-06-12', '2026-06-13', '2026-06-14'];
+        const DATES = [
+            '2026-06-12', '2026-06-13', '2026-06-14',
+            '2026-06-15', '2026-06-16'
+        ];
+        const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
         const BASE_URL = '';
-        let currentDate = DATES[0];
-        let matches = [];
-        let selections = {};
+        let currentDate = DATES[DATES.length - 1];
 
-        const LABEL_MAP = {
-            home_win: '主胜',
-            draw: '平',
-            away_win: '客胜'
-        };
-
-        async function loadMatches(date) {
-            try {
-                const resp = await fetch(`${BASE_URL}/data/matches/${date}.json`);
-                const data = await resp.json();
-                matches = data.matches;
-                renderMatches();
-            } catch (e) {
-                document.getElementById('matchList').innerHTML = '<p style="text-align:center;color:#999;padding:40px;">暂无赛程数据</p>';
-            }
-        }
-
-        function renderDateNav() {
-            const nav = document.getElementById('dateNav');
-            nav.innerHTML = DATES.map(d => {
-                const label = d.slice(5).replace('-', '/');
+        function renderDateScroll() {
+            const scroll = document.getElementById('dateScroll');
+            scroll.innerHTML = DATES.map(d => {
+                const dt = new Date(d + 'T00:00:00+08:00');
+                const day = dt.getDate();
+                const wd = WEEKDAYS[dt.getDay()];
                 const active = d === currentDate ? 'active' : '';
-                return `<button class="date-btn ${active}" onclick="switchDate('${d}')">${label}</button>`;
+                return `<div class="date-chip ${active}" onclick="switchDate('${d}')">
+                    <div class="day">${dt.getMonth()+1}/${day}</div>
+                    <div class="weekday">周${wd}</div>
+                </div>`;
             }).join('');
+
+            const activeEl = scroll.querySelector('.active');
+            if (activeEl) activeEl.scrollIntoView({ inline: 'center', behavior: 'smooth' });
         }
 
         function switchDate(date) {
             currentDate = date;
-            selections = {};
-            renderDateNav();
+            renderDateScroll();
             loadMatches(date);
-            updateCount();
         }
 
-        function renderMatches() {
+        async function loadMatches(date) {
             const list = document.getElementById('matchList');
-            list.innerHTML = matches.map(m => {
-                const oddsKeys = ['home_win', 'draw', 'away_win'];
-                const oddsHtml = oddsKeys.map(key => {
-                    const selected = (selections[m.id] || []).includes(key) ? 'selected' : '';
-                    return `<div class="odds-btn ${selected}" onclick="toggleOdds('${m.id}','${key}')">
-                        <div class="label">${LABEL_MAP[key]}</div>
-                        <div class="value">${m.odds[key].toFixed(2)}</div>
-                    </div>`;
-                }).join('');
-
-                return `<div class="match-card">
-                    <div class="match-header">
-                        <span>${m.stage} · ${m.group}组</span>
-                        <span>${m.kickoff}</span>
-                    </div>
-                    <div class="match-teams">${m.home} vs ${m.away}</div>
-                    <div class="odds-row">${oddsHtml}</div>
-                </div>`;
-            }).join('');
-        }
-
-        function toggleOdds(matchId, key) {
-            if (!selections[matchId]) selections[matchId] = [];
-            const idx = selections[matchId].indexOf(key);
-            if (idx >= 0) {
-                selections[matchId].splice(idx, 1);
-                if (selections[matchId].length === 0) delete selections[matchId];
-            } else {
-                selections[matchId].push(key);
-            }
-            renderMatches();
-            updateCount();
-        }
-
-        function updateCount() {
-            const count = Object.keys(selections).length;
-            document.getElementById('selectionCount').textContent = `已选 ${count} 场比赛`;
-            const passphrase = document.getElementById('passphrase').value.trim();
-            document.getElementById('submitBtn').disabled = count === 0 || !passphrase;
-        }
-
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 2000);
-        }
-
-        async function submit() {
-            const passphrase = document.getElementById('passphrase').value.trim();
-            if (!passphrase || Object.keys(selections).length === 0) return;
-
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.textContent = '提交中...';
-
-            const payload = {
-                date: currentDate,
-                passphrase: passphrase,
-                submitted_at: new Date().toISOString(),
-                picks: Object.entries(selections).map(([matchId, sels]) => ({
-                    match_id: matchId,
-                    selections: sels
-                }))
-            };
-
             try {
-                const resp = await fetch('/api/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await resp.json();
-                if (result.success) {
-                    showToast(`✅ 提交成功！口令：${passphrase}`);
-                    selections = {};
-                    renderMatches();
-                    updateCount();
-                    document.getElementById('passphrase').value = '';
-                } else {
-                    showToast(`❌ 提交失败：${result.error}`);
-                }
-            } catch (e) {
-                showToast(`❌ 网络错误：${e.message}`);
+                const resp = await fetch(`${BASE_URL}/data/matches/${date}.json`);
+                if (!resp.ok) throw new Error('no data');
+                const data = await resp.json();
+                renderMatches(data.matches);
+            } catch(e) {
+                list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
             }
-
-            btn.disabled = false;
-            btn.textContent = '提交';
         }
 
-        document.getElementById('passphrase').addEventListener('input', updateCount);
-        document.getElementById('submitBtn').addEventListener('click', submit);
+        function renderMatches(matches) {
+            const list = document.getElementById('matchList');
+            if (!matches || matches.length === 0) {
+                list.innerHTML = '<div class="empty-state">该日期暂无比赛</div>';
+                return;
+            }
 
-        renderDateNav();
+            const grouped = {};
+            matches.forEach(m => {
+                const key = `${m.stage} · ${m.group}组`;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(m);
+            });
+
+            let html = '';
+            for (const [stage, mats] of Object.entries(grouped)) {
+                html += `<div class="stage-label">${stage}</div>`;
+                mats.forEach(m => {
+                    html += renderMatchCard(m);
+                });
+            }
+            list.innerHTML = html;
+        }
+
+        function renderMatchCard(m) {
+            const status = m.status || 'scheduled';
+            let statusHtml, scoreHtml;
+            let homeClass = '', awayClass = '';
+
+            if (status === 'finished' && m.score) {
+                statusHtml = `<span class="match-status finished">已结束</span>`;
+                scoreHtml = `<div class="score-display">${m.score.home} - ${m.score.away}</div>`;
+                if (m.score.home > m.score.away) homeClass = 'winner';
+                else if (m.score.away > m.score.home) awayClass = 'winner';
+            } else if (status === 'live') {
+                statusHtml = `<span class="match-status live">● 进行中</span>`;
+                scoreHtml = `<div class="score-display">${m.score ? m.score.home + ' - ' + m.score.away : '0 - 0'}</div>`;
+            } else {
+                statusHtml = `<span class="match-status scheduled">未开始</span>`;
+                scoreHtml = `<div class="score-display pending">vs</div>`;
+            }
+
+            let oddsHtml = '';
+            if (m.odds) {
+                oddsHtml += `<div class="odds-section">
+                    <div class="odds-label">胜平负</div>
+                    <div class="odds-row">
+                        <div class="odds-cell"><div class="type">主胜</div><div class="val">${m.odds.home_win.toFixed(2)}</div></div>
+                        <div class="odds-cell"><div class="type">平</div><div class="val">${m.odds.draw.toFixed(2)}</div></div>
+                        <div class="odds-cell"><div class="type">客胜</div><div class="val">${m.odds.away_win.toFixed(2)}</div></div>
+                    </div>`;
+                if (m.handicap) {
+                    const lineText = m.handicap.line < 0
+                        ? `主让${Math.abs(m.handicap.line)}球`
+                        : m.handicap.line > 0 ? `客让${m.handicap.line}球` : '平手盘';
+                    oddsHtml += `<div class="handicap-line">让球: ${lineText}</div>
+                    <div class="odds-row">
+                        <div class="odds-cell"><div class="type">主胜</div><div class="val">${m.handicap.home_win.toFixed(2)}</div></div>
+                        <div class="odds-cell"><div class="type">平</div><div class="val">${m.handicap.draw.toFixed(2)}</div></div>
+                        <div class="odds-cell"><div class="type">客胜</div><div class="val">${m.handicap.away_win.toFixed(2)}</div></div>
+                    </div>`;
+                }
+                oddsHtml += '</div>';
+            }
+
+            return `<div class="match-card">
+                <div class="match-top">
+                    <span class="match-time">${m.kickoff} 北京时间</span>
+                    ${statusHtml}
+                </div>
+                <div class="match-teams">
+                    <span class="team ${homeClass}">${m.home}</span>
+                    ${scoreHtml}
+                    <span class="team ${awayClass}">${m.away}</span>
+                </div>
+                ${oddsHtml}
+            </div>`;
+        }
+
+        renderDateScroll();
         loadMatches(currentDate);
     </script>
 </body>
