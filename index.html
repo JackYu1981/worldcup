@@ -14,14 +14,7 @@
             color: #333;
             padding: 0 0 160px 0;
         }
-        .header {
-            background: white;
-            padding: 12px 16px;
-            text-align: center;
-            border-bottom: 1px solid #eee;
-        }
-        .header h1 { font-size: 18px; font-weight: 600; }
-        .header .subtitle { font-size: 11px; color: #999; margin-top: 2px; }
+        h1 { font-size: 20px; text-align: center; padding: 12px 0; background: white; border-bottom: 1px solid #eee; }
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
             padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
@@ -49,9 +42,28 @@
             padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee;
             display: flex; justify-content: space-between; align-items: center;
         }
+        .period-header .period-left { display: flex; align-items: center; gap: 8px; }
         .period-header .period-info { font-size: 13px; font-weight: 600; color: #333; }
         .period-header .period-info .match-count { color: #e74c3c; }
-        .period-header .period-meta { font-size: 11px; color: #999; }
+        .filter-btn {
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 14px; border: 1px solid #ddd;
+            background: white; font-size: 11px; color: #666; cursor: pointer;
+        }
+        .filter-btn.active { border-color: #1a73e8; color: #1a73e8; background: #e8f0fe; }
+        .filter-btn svg { width: 12px; height: 12px; }
+
+        .filter-dropdown {
+            display: none; background: white; border-bottom: 1px solid #eee;
+            padding: 10px 16px; flex-wrap: wrap; gap: 8px;
+        }
+        .filter-dropdown.visible { display: flex; }
+        .filter-chip {
+            padding: 5px 12px; border-radius: 14px; border: 1px solid #e0e0e0;
+            font-size: 11px; cursor: pointer; background: white; color: #555;
+            white-space: nowrap;
+        }
+        .filter-chip.active { background: #1a73e8; color: white; border-color: #1a73e8; }
 
         .match-list { padding: 0 12px 12px; }
 
@@ -65,57 +77,47 @@
         }
         .match-code {
             background: #4caf50; color: white; font-size: 11px; font-weight: 600;
-            padding: 2px 8px; border-radius: 3px; margin-right: 10px;
+            padding: 2px 8px; border-radius: 3px; margin-right: 10px; white-space: nowrap;
         }
         .match-code.finished { background: #999; }
+        .match-info {
+            flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+        }
         .match-teams-row {
-            flex: 1; display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
             font-size: 14px; font-weight: 500;
         }
-        .match-teams-row .home { text-align: left; }
-        .match-teams-row .away { text-align: right; }
-        .match-teams-row .vs {
-            font-size: 12px; color: #aaa; padding: 0 8px;
+        .match-teams-row .home { text-align: left; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .match-teams-row .away { text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .match-teams-row .vs { font-size: 12px; color: #aaa; padding: 0 8px; flex-shrink: 0; }
+        .match-teams-row .score { font-size: 16px; font-weight: 700; color: #e74c3c; padding: 0 8px; flex-shrink: 0; }
+        .match-meta {
+            display: flex; align-items: center; gap: 8px; font-size: 11px; color: #999;
         }
-        .match-teams-row .score {
-            font-size: 16px; font-weight: 700; color: #e74c3c; padding: 0 8px;
-        }
-        .match-time-badge {
-            font-size: 11px; color: #999; margin-left: 8px; white-space: nowrap;
+        .league-tag {
+            background: #f0f0f0; color: #666; padding: 1px 6px; border-radius: 3px; font-size: 10px;
         }
 
-        .odds-grid {
-            display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 0;
+        .odds-table {
+            display: grid; grid-template-columns: 50px 1fr 1fr 1fr;
+            border-top: 1px solid #f5f5f5;
         }
-        .odds-grid-row {
-            display: contents;
+        .odds-row-label {
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; color: #4caf50; font-weight: 600;
+            border-right: 1px solid #f5f5f5; padding: 8px 4px;
+            background: #fafafa;
         }
         .odds-cell {
             text-align: center; padding: 10px 4px; cursor: pointer;
-            border-right: 1px solid #f5f5f5; border-bottom: 1px solid #f5f5f5;
-            transition: background 0.15s;
+            border-right: 1px solid #f5f5f5; transition: background 0.15s;
         }
-        .odds-cell:nth-child(3n) { border-right: none; }
+        .odds-cell:last-child { border-right: none; }
         .odds-cell:active { background: #f0f0f0; }
         .odds-cell.selected { background: #e8f0fe; }
         .odds-cell .label { font-size: 10px; color: #999; }
-        .odds-cell .value { font-size: 14px; font-weight: 600; color: #333; margin-top: 2px; }
-        .odds-cell .value.red { color: #e74c3c; }
-
-        .handicap-row {
-            display: flex; align-items: center; padding: 0;
-            background: #fafafa;
-        }
-        .handicap-tag {
-            font-size: 11px; color: #4caf50; font-weight: 600;
-            padding: 10px 12px; border-right: 1px solid #f0f0f0;
-            min-width: 50px; text-align: center;
-        }
-        .handicap-odds {
-            flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr;
-        }
-        .handicap-odds .odds-cell { background: #fafafa; border-bottom: none; }
-        .handicap-odds .odds-cell.selected { background: #e8f0fe; }
+        .odds-cell .value { font-size: 14px; font-weight: 600; color: #333; margin-top: 1px; }
+        .odds-row-border { grid-column: 1 / -1; height: 1px; background: #f5f5f5; }
 
         .empty-state { text-align: center; color: #999; padding: 60px 20px; font-size: 14px; }
 
@@ -173,10 +175,7 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>竞足·混合过关</h1>
-        <div class="subtitle">500彩票平台，仅提供官方信息展示</div>
-    </div>
+    <h1>⚽ 世界杯投注助手</h1>
 
     <div class="nav-tabs">
         <a class="nav-tab active" href="index.html">赛程</a>
@@ -189,8 +188,12 @@
     <div class="date-tabs" id="dateTabs"></div>
 
     <div class="period-header" id="periodHeader">
-        <div class="period-info">加载中...</div>
+        <div class="period-left">
+            <div class="period-info">加载中...</div>
+        </div>
     </div>
+
+    <div class="filter-dropdown" id="filterDropdown"></div>
 
     <div class="match-list" id="matchList"></div>
 
@@ -224,10 +227,10 @@
     <script>
         const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
         const WEEKDAY_PREFIX = ['周日','周一','周二','周三','周四','周五','周六'];
-        const BASE_URL = '';
         let currentDate = '';
         let matches = [];
         let combo = {};
+        let activeLeague = 'all';
 
         function generateDates() {
             const dates = [];
@@ -259,8 +262,21 @@
 
         function switchDate(date) {
             currentDate = date;
+            activeLeague = 'all';
             renderDateTabs();
             loadMatches(date);
+        }
+
+        function getLeagues() {
+            if (!matches || matches.length === 0) return [];
+            const set = new Set();
+            matches.forEach(m => { if (m.league) set.add(m.league); });
+            return [...set].sort();
+        }
+
+        function getFilteredMatches() {
+            if (activeLeague === 'all') return matches;
+            return matches.filter(m => m.league === activeLeague);
         }
 
         function updatePeriodHeader() {
@@ -268,10 +284,43 @@
             const dt = new Date(currentDate + 'T00:00:00+08:00');
             const weekday = WEEKDAY_PREFIX[dt.getDay()];
             const dateStr = `${currentDate}期`;
-            const count = matches ? matches.length : 0;
+            const filtered = getFilteredMatches();
+            const total = matches ? matches.length : 0;
+            const showing = filtered.length;
+            const countText = activeLeague === 'all' ? `${total}场比赛` : `${showing}/${total}场`;
+            const filterActive = activeLeague !== 'all' ? ' active' : '';
+
             header.innerHTML = `
-                <div class="period-info">${dateStr} ${weekday} <span class="match-count">${count}场比赛</span></div>
-                <div class="period-meta">开售 11:00 截止 22:00</div>`;
+                <div class="period-left">
+                    <div class="period-info">${dateStr} ${weekday} <span class="match-count">${countText}</span></div>
+                </div>
+                <div class="filter-btn${filterActive}" onclick="toggleFilter()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                    <span>${activeLeague === 'all' ? '筛选' : activeLeague}</span>
+                </div>`;
+        }
+
+        function toggleFilter() {
+            const dropdown = document.getElementById('filterDropdown');
+            if (dropdown.classList.contains('visible')) {
+                dropdown.classList.remove('visible');
+                return;
+            }
+            const leagues = getLeagues();
+            let html = `<div class="filter-chip ${activeLeague === 'all' ? 'active' : ''}" onclick="setLeague('all')">全部</div>`;
+            leagues.forEach(l => {
+                const active = activeLeague === l ? 'active' : '';
+                html += `<div class="filter-chip ${active}" onclick="setLeague('${l}')">${l}</div>`;
+            });
+            dropdown.innerHTML = html;
+            dropdown.classList.add('visible');
+        }
+
+        function setLeague(league) {
+            activeLeague = league;
+            document.getElementById('filterDropdown').classList.remove('visible');
+            updatePeriodHeader();
+            renderMatches();
         }
 
         async function loadMatches(date) {
@@ -296,13 +345,14 @@
 
         function renderMatches() {
             const list = document.getElementById('matchList');
-            if (!matches || matches.length === 0) {
-                list.innerHTML = '<div class="empty-state">该日期暂无比赛</div>';
+            const filtered = getFilteredMatches();
+            if (!filtered || filtered.length === 0) {
+                list.innerHTML = '<div class="empty-state">该筛选条件下暂无比赛</div>';
                 return;
             }
 
             let html = '';
-            matches.forEach(m => { html += renderMatchCard(m); });
+            filtered.forEach(m => { html += renderMatchCard(m); });
             list.innerHTML = html;
         }
 
@@ -334,7 +384,11 @@
 
             let oddsHtml = '';
             if (m.odds && m.odds.home_win != null) {
-                oddsHtml += `<div class="odds-grid">
+                const hLine = (m.handicap && m.handicap.line != null) ? m.handicap.line : 0;
+                const hLineText = hLine === 0 ? '0' : (hLine < 0 ? `${hLine}` : `+${hLine}`);
+
+                oddsHtml += `<div class="odds-table">
+                    <div class="odds-row-label">让0</div>
                     <div class="odds-cell ${cellClass('1x2','home_win')}" onclick="togglePick('${m.id}','1x2','home_win',${m.odds.home_win},'${m.home}胜')">
                         <div class="label">胜</div><div class="value">${m.odds.home_win.toFixed(2)}</div>
                     </div>
@@ -343,38 +397,39 @@
                     </div>
                     <div class="odds-cell ${cellClass('1x2','away_win')}" onclick="togglePick('${m.id}','1x2','away_win',${m.odds.away_win},'${m.away}胜')">
                         <div class="label">负</div><div class="value">${m.odds.away_win.toFixed(2)}</div>
-                    </div>
-                </div>`;
+                    </div>`;
 
-                if (m.handicap && m.handicap.home_win != null) {
-                    const line = m.handicap.line;
-                    const lineText = line < 0 ? `${line}` : `+${line}`;
-                    oddsHtml += `<div class="handicap-row">
-                        <div class="handicap-tag">${lineText}</div>
-                        <div class="handicap-odds">
-                            <div class="odds-cell ${cellClass('handicap','home_win')}" onclick="togglePick('${m.id}','handicap','home_win',${m.handicap.home_win},'让球胜')">
-                                <div class="label">胜</div><div class="value">${m.handicap.home_win.toFixed(2)}</div>
-                            </div>
-                            <div class="odds-cell ${cellClass('handicap','draw')}" onclick="togglePick('${m.id}','handicap','draw',${m.handicap.draw},'让球平')">
-                                <div class="label">平</div><div class="value">${m.handicap.draw.toFixed(2)}</div>
-                            </div>
-                            <div class="odds-cell ${cellClass('handicap','away_win')}" onclick="togglePick('${m.id}','handicap','away_win',${m.handicap.away_win},'让球负')">
-                                <div class="label">负</div><div class="value">${m.handicap.away_win.toFixed(2)}</div>
-                            </div>
-                        </div>
+                if (m.handicap && m.handicap.home_win != null && hLine !== 0) {
+                    oddsHtml += `
+                    <div class="odds-row-border"></div>
+                    <div class="odds-row-label">${hLineText}</div>
+                    <div class="odds-cell ${cellClass('handicap','home_win')}" onclick="togglePick('${m.id}','handicap','home_win',${m.handicap.home_win},'让球胜')">
+                        <div class="label">胜</div><div class="value">${m.handicap.home_win.toFixed(2)}</div>
+                    </div>
+                    <div class="odds-cell ${cellClass('handicap','draw')}" onclick="togglePick('${m.id}','handicap','draw',${m.handicap.draw},'让球平')">
+                        <div class="label">平</div><div class="value">${m.handicap.draw.toFixed(2)}</div>
+                    </div>
+                    <div class="odds-cell ${cellClass('handicap','away_win')}" onclick="togglePick('${m.id}','handicap','away_win',${m.handicap.away_win},'让球负')">
+                        <div class="label">负</div><div class="value">${m.handicap.away_win.toFixed(2)}</div>
                     </div>`;
                 }
+                oddsHtml += `</div>`;
             }
 
             return `<div class="match-card">
                 <div class="match-header">
                     <span class="${codeClass}">${codeText}</span>
-                    <div class="match-teams-row">
-                        <span class="home">${m.home}</span>
-                        ${centerHtml}
-                        <span class="away">${m.away}</span>
+                    <div class="match-info">
+                        <div class="match-teams-row">
+                            <span class="home">${m.home}</span>
+                            ${centerHtml}
+                            <span class="away">${m.away}</span>
+                        </div>
+                        <div class="match-meta">
+                            <span class="league-tag">${m.league || '其他'}</span>
+                            <span>${m.kickoff}</span>
+                        </div>
                     </div>
-                    <span class="match-time-badge">${m.kickoff}</span>
                 </div>
                 ${oddsHtml}
             </div>`;
