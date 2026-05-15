@@ -269,8 +269,17 @@
             let html = '';
 
             if (userRecs.length > 0) {
+                const selected = [];
+                const unselected = [];
+                userRecs.forEach((rec, idx) => {
+                    const isSelected = plans.some(p => p.combined_odds === rec.combined_odds && p.legs.length === rec.legs.length);
+                    if (isSelected) selected.push(idx);
+                    else unselected.push(idx);
+                });
+                const sortedIdxs = [...selected, ...unselected];
+
                 html += `<div class="section-title">👤 用户推荐</div>`;
-                html += userRecs.map((rec, idx) => renderRecCard(rec, idx)).join('');
+                html += sortedIdxs.map(idx => renderRecCard(userRecs[idx], idx, selected.includes(idx))).join('');
             }
 
             html += renderAiSection();
@@ -290,7 +299,7 @@
             content.innerHTML = html;
         }
 
-        function renderRecCard(rec, idx) {
+        function renderRecCard(rec, idx, isSelected) {
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const icon = tierIcons[rec.selected_tier] || '🟡';
@@ -303,9 +312,12 @@
                 </div>`
             ).join('');
 
-            return `<div class="rec-card">
+            const selectedStyle = isSelected ? 'border-left-color:#1a73e8;opacity:0.7;' : '';
+            const selectedBadge = isSelected ? '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已选</span>' : '';
+
+            return `<div class="rec-card" style="${selectedStyle}">
                 <div class="rec-header">
-                    <span class="rec-tier">${icon} ${tierName}</span>
+                    <span class="rec-tier">${icon} ${tierName}${selectedBadge}</span>
                     <span class="rec-by">by ${rec.submitted_by || '未知'}</span>
                 </div>
                 ${legsHtml}

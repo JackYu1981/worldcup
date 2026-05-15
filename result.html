@@ -310,6 +310,12 @@
                     return evaluateLegs(data, matches);
                 });
 
+                allResults.sort((a, b) => {
+                    const ta = a.submitted_at || a.date || '';
+                    const tb = b.submitted_at || b.date || '';
+                    return tb.localeCompare(ta);
+                });
+
                 renderAllPlans();
             } catch (e) {
                 document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
