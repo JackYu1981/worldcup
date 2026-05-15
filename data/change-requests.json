@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "当前方案要点也没有同步到真正的当前方案的要点，每次推新代码都需要同步总结一次，这个需求和claude code当前session的记忆有关，更新到记忆文件",
       "time": "2026-05-15T05:43:47.439Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.4",
+      "resolution": "当前方案要点已同步到v2.3/v2.4实际功能",
       "replies": []
     },
     {
@@ -17,9 +17,9 @@
       "type": "bug",
       "text": "修订页面的时间戳还是有问题，时区没有转换到当前用户的时区，注意是所有人的回复的时间戳不仅仅是当前用户自己的",
       "time": "2026-05-15T05:39:55.904Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.4",
+      "resolution": "formatTime兼容所有格式，正确转换所有用户时区",
       "replies": []
     },
     {
@@ -28,9 +28,9 @@
       "type": "bug",
       "text": "现在还是demo数据，抓取的数据还是没读到，下一版需要过去两天到未来两天的500网真实数据做测试，不用全部比赛每天随便选10场",
       "time": "2026-05-15T05:36:56.591Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.4",
+      "resolution": "赛程页动态日期+从KV API加载500.com真实数据",
       "replies": []
     },
     {
@@ -39,9 +39,9 @@
       "type": "improvement",
       "text": "如果500.com的数据读进来，可以把之前模拟的世界杯数据清除，并把之前的测试数据以及看板一并清除，以方便进行uat",
       "time": "2026-05-14 21:43",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.4",
+      "resolution": "已清除所有demo数据，UAT环境就绪",
       "replies": []
     },
     {
@@ -61,9 +61,9 @@
       "type": "bug",
       "text": "比赛结果页面，并没有高亮显示正确结果所对应的赔率",
       "time": "2026-05-14 21:37",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.4",
+      "resolution": "赛果页自动比对比分，命中赔率红色高亮+比分显示",
       "replies": []
     },
     {
@@ -297,6 +297,12 @@
       "version": "v2.3",
       "date": "2026-05-15T23:30:00+08:00",
       "summary": "500.com数据抓取、复制编号bug修复、Admin删除/编辑功能",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v2.4",
+      "date": "2026-05-15T13:20:00+08:00",
+      "summary": "修复时区/数据加载/赛果高亮，清除demo数据，Worker多日抓取",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
