@@ -139,6 +139,25 @@
             font-size: 11px;
             color: #888;
         }
+        .author-select {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .author-btn {
+            padding: 6px 14px;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            background: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .author-btn.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
         .comment-input-row {
             display: flex;
             gap: 8px;
@@ -257,7 +276,7 @@
     </div>
 
     <div class="version-badge">
-        当前版本 <span>v2.0 draft</span> · 更新于 <span id="updateTime">2026-05-15</span>
+        当前版本 <span>v2.1</span> · 更新于 <span id="updateTime">2026-05-15</span>
     </div>
 
     <div class="section">
@@ -266,9 +285,24 @@
         <ul>
             <li><span class="tag tag-changed">变更</span>投注方式：仅三串一，每日100元一注</li>
             <li><span class="tag tag-new">新增</span>三档推荐：保守(5-10x)、进取(10-20x)、激进(20x+)</li>
-            <li><span class="tag tag-new">新增</span>让球胜平负赔率支持</li>
+            <li><span class="tag tag-new">新增</span>每档3个备选方案（结合胜平负+让球胜平负）</li>
+            <li><span class="tag tag-new">新增</span>自定义组合功能（赛程页选赔率 → 自动归类）</li>
+            <li><span class="tag tag-new">新增</span>让球胜平负：竞彩整数盘口（让0/1/2球）</li>
             <li><span class="tag tag-new">新增</span>AI概率分析展示（隐含概率 vs AI修正概率）</li>
+            <li><span class="tag tag-changed">变更</span>评论区支持身份切换（Brian/Jack）</li>
             <li><span class="tag tag-removed">移除</span>复式投注（不再拆散资金）</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>✅ 已采纳的反馈 (v2.1)</h2>
+        <ul>
+            <li>✓ AI推荐卡片用浅色底 — 已实现白底卡片</li>
+            <li>✓ 每档3个备选三串一 — 已扩展数据结构和页面</li>
+            <li>✓ 自定义组合功能 — 赛程页可点选赔率，满3场自动计算并归类</li>
+            <li>✓ 让球改为竞彩整数盘口 — 所有数据已改为让0/1/2球</li>
+            <li>✓ 赛程页只展示近3天 — 日期滚动条限制范围</li>
+            <li>✓ 评论区区分身份 — 新增 Brian/Jack 切换按钮</li>
         </ul>
     </div>
 
@@ -358,11 +392,10 @@ D日  11:00   Jack: "结算 06-15"
     <div class="section">
         <h2>❓ 待讨论</h2>
         <ul>
-            <li>AI推荐卡片的配色方案？深色 or 浅色底？</li>
-            <li>每档只推荐一个三串一，还是每档给2-3个备选？</li>
-            <li>是否需要"自定义组合"功能（从AI推荐的legs中自由搭配）？</li>
-            <li>赛程页的详细程度？小组积分要不要做？</li>
-            <li>测试阶段用500彩票竞彩数据，需要哪些联赛的比赛？</li>
+            <li>自定义组合：当前仅支持当日赛事，是否需要跨日组合？</li>
+            <li>500彩票数据源接入细节：编码001-004，抓取频率？</li>
+            <li>推荐页备选方案的排列方式：默认展开第一个还是全部折叠？</li>
+            <li>是否需要方案对比功能（对比两个备选的概率差异）？</li>
         </ul>
     </div>
 
@@ -375,6 +408,10 @@ D日  11:00   Jack: "结算 06-15"
         <div class="comment-header">
             <span>💬 提建议</span>
             <span class="comment-count" id="commentCount">0条反馈</span>
+        </div>
+        <div class="author-select">
+            <button class="author-btn active" data-author="Brian" onclick="setAuthor('Brian')">Brian</button>
+            <button class="author-btn" data-author="Jack" onclick="setAuthor('Jack')">Jack</button>
         </div>
         <div class="comment-input-row">
             <textarea class="comment-input" id="commentInput" placeholder="输入修改建议..."></textarea>
@@ -389,6 +426,20 @@ D日  11:00   Jack: "结算 06-15"
         const COMMENTS_FILE = 'data/design-comments.json';
 
         let comments = [];
+        let currentAuthor = localStorage.getItem('designAuthor') || 'Brian';
+
+        function setAuthor(name) {
+            currentAuthor = name;
+            localStorage.setItem('designAuthor', name);
+            document.querySelectorAll('.author-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.author === name);
+            });
+        }
+
+        // init author buttons
+        document.querySelectorAll('.author-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.author === currentAuthor);
+        });
 
         async function loadComments() {
             try {
@@ -443,7 +494,7 @@ D日  11:00   Jack: "结算 06-15"
 
             const newComment = {
                 id: Date.now(),
-                author: 'Brian',
+                author: currentAuthor,
                 text: text,
                 time: timeStr,
                 resolved: false
