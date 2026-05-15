@@ -79,7 +79,13 @@
         .plan-card {
             background: white; border-radius: 10px; padding: 14px;
             margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            border-left: 3px solid #1a73e8;
+            border-left: 3px solid #1a73e8; position: relative; overflow: hidden;
+        }
+        .plan-card .plan-watermark {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-20deg);
+            font-size: 36px; font-weight: 900; color: rgba(26,115,232,0.08);
+            white-space: nowrap; pointer-events: none; z-index: 0;
         }
         .plan-card .plan-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
@@ -183,6 +189,7 @@
     <div class="toast" id="toast"></div>
 
     <script src="auth.js"></script>
+    <script src="pull-refresh.js"></script>
     <script>
         const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
         const PICKS_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
@@ -330,16 +337,19 @@
             ).join('');
 
             return `<div class="plan-card">
-                <div class="plan-header">
+                <div class="plan-watermark">${plan.passphrase || ''}</div>
+                <div class="plan-header" style="position:relative;z-index:1;">
                     <span class="plan-title">${icon} ${tierName} · 方案</span>
                     <span class="plan-passphrase">口令：${plan.passphrase}</span>
                 </div>
+                <div style="position:relative;z-index:1;">
                 ${legsHtml}
                 <div class="plan-summary">
                     <span>×${plan.combined_odds.toFixed(2)} → ¥${Math.round(plan.combined_odds * plan.stake)}</span>
                     <span>by ${plan.submitted_by || '未知'}</span>
                 </div>
                 <button class="plan-copy-btn" onclick="copyLegs(${JSON.stringify(plan.legs).replace(/"/g,'&quot;')})">📋 复制竞彩格式</button>
+                </div>
             </div>`;
         }
 
