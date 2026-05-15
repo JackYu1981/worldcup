@@ -409,7 +409,7 @@
                 pickedSelections = {};
                 if (picksResp && picksResp.ok) {
                     const picksData = await picksResp.json();
-                    (picksData.picks || []).forEach(p => {
+                    (picksData.picks || []).filter(p => p.source === 'plan').forEach(p => {
                         (p.legs || []).forEach(l => {
                             const key = `${l.match_id}|${l.market}|${l.pick}`;
                             pickedSelections[key] = true;
