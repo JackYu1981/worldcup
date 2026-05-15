@@ -444,6 +444,18 @@
       "date": "2026-05-15T22:50:00+08:00",
       "summary": "复式投注笛卡尔积组合（不再相乘所有赔率），取消3串1限制，看板日历修复+登录信息统一header",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.4",
+      "date": "2026-05-16T01:00:00+08:00",
+      "summary": "跨时区日期修复（UTC+8锚定），购彩期次模型对齐500.com，Combo栏固定网格+完整对阵信息，服务端/api/picks加速",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.5",
+      "date": "2026-05-16T08:10:00+08:00",
+      "summary": "修复500.com赔率映射反转（spf=让球/nspf=非让球），胜平负与让球胜平负赔率恢复正确",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
 }
