@@ -80,7 +80,7 @@
         }
         .match-left-info {
             display: flex; flex-direction: column; gap: 3px;
-            grid-column: 1;
+            grid-column: 1; align-items: center;
         }
         .match-code {
             font-size: 11px; font-weight: 400; color: #333;
@@ -88,7 +88,8 @@
         .match-code.finished { color: #999; }
         .league-tag {
             font-size: 10px; padding: 1px 6px; border-radius: 3px;
-            font-weight: 500; color: white; display: inline-block; align-self: flex-start;
+            font-weight: 500; color: white; display: inline-block;
+            white-space: nowrap;
         }
         .match-center {
             grid-column: 2 / 5;
@@ -116,7 +117,7 @@
         }
 
         .odds-table {
-            display: grid; grid-template-columns: 70px 1fr 1fr 1fr;
+            display: grid; grid-template-columns: 35px 1fr 1fr 1fr;
             border-top: 1px solid #f5f5f5;
         }
         .odds-row-label {
