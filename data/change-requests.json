@@ -17,9 +17,9 @@
       "type": "bug",
       "text": "同一场比赛选择多个赔率，不应该把他们相乘，而是用他们去跟别的比赛拼",
       "time": "2026-05-15T14:41:06.910Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.3",
+      "resolution": "复式投注改为笛卡尔积组合：同场多选生成多注，每注各取一个选项与其他场次组合",
       "replies": []
     },
     {
@@ -28,9 +28,9 @@
       "type": "improvement",
       "text": "当前交互流程下可以不用限制必须生成3串1的推荐了",
       "time": "2026-05-15T14:36:35.247Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.3",
+      "resolution": "最低选择要求改为2场比赛，不再强制3串1",
       "replies": []
     },
     {
@@ -415,6 +415,12 @@
       "version": "v3.2",
       "date": "2026-05-15T22:30:00+08:00",
       "summary": "交互流程重构：推荐→选取→方案三阶段，复式投注支持，日期分组+截止时间，全站UI统一+下拉刷新",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.3",
+      "date": "2026-05-15T22:50:00+08:00",
+      "summary": "复式投注笛卡尔积组合（不再相乘所有赔率），取消3串1限制，看板日历修复+登录信息统一header",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]

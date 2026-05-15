@@ -534,6 +534,30 @@
             updateComboBar();
         }
 
+        function getComboInfo() {
+            const keys = Object.keys(combo);
+            const byMatch = {};
+            keys.forEach(k => {
+                const c = combo[k];
+                if (!byMatch[c.matchId]) byMatch[c.matchId] = [];
+                byMatch[c.matchId].push(c);
+            });
+            const matchCount = Object.keys(byMatch).length;
+            const groups = Object.values(byMatch);
+            const comboCount = groups.reduce((acc, g) => acc * g.length, 1);
+            let minOdds = Infinity, maxOdds = 0;
+            function cartesian(groups, idx, currentOdds) {
+                if (idx === groups.length) {
+                    if (currentOdds < minOdds) minOdds = currentOdds;
+                    if (currentOdds > maxOdds) maxOdds = currentOdds;
+                    return;
+                }
+                groups[idx].forEach(pick => cartesian(groups, idx + 1, currentOdds * pick.odds));
+            }
+            cartesian(groups, 0, 1);
+            return { matchCount, comboCount, minOdds, maxOdds, byMatch, keys };
+        }
+
         function updateComboBar() {
             const bar = document.getElementById('comboBar');
             const keys = Object.keys(combo);
@@ -543,21 +567,20 @@
             }
             bar.classList.add('visible');
 
-            const byMatch = {};
-            keys.forEach(k => {
-                const c = combo[k];
-                if (!byMatch[c.matchId]) byMatch[c.matchId] = [];
-                byMatch[c.matchId].push(c);
-            });
-            const matchCount = Object.keys(byMatch).length;
-            const pickCount = keys.length;
+            const info = getComboInfo();
 
-            const totalOdds = keys.reduce((acc, k) => acc * combo[k].odds, 1);
-            const returnVal = Math.round(totalOdds * 100);
+            let oddsText, returnText;
+            if (info.comboCount === 1) {
+                oddsText = `×${info.maxOdds.toFixed(2)}`;
+                returnText = `投¥100得¥${Math.round(info.maxOdds * 100).toLocaleString()}`;
+            } else {
+                oddsText = `${info.comboCount}注`;
+                returnText = `¥${Math.round(info.minOdds * 100).toLocaleString()}~¥${Math.round(info.maxOdds * 100).toLocaleString()}`;
+            }
 
-            document.getElementById('comboCount').textContent = `${matchCount}场${pickCount > matchCount ? '(复式'+pickCount+'选)' : ''}`;
-            document.getElementById('comboOdds').textContent = `×${totalOdds.toFixed(2)}`;
-            document.getElementById('comboReturn').textContent = `投¥100得¥${returnVal.toLocaleString()}`;
+            document.getElementById('comboCount').textContent = `${info.matchCount}场${info.comboCount > 1 ? '(复式'+info.comboCount+'注)' : ''}`;
+            document.getElementById('comboOdds').textContent = oddsText;
+            document.getElementById('comboReturn').textContent = returnText;
 
             const legsHtml = keys.map(k => {
                 const c = combo[k];
@@ -581,27 +604,33 @@
                 byMatch[c.matchId].push(c);
             });
             const matchCount = Object.keys(byMatch).length;
-            if (matchCount < 3) {
-                showToast('请至少选择3场比赛');
+            if (matchCount < 2) {
+                showToast('请至少选择2场比赛');
                 return;
             }
             openConfirm();
         }
 
         function openConfirm() {
-            const keys = Object.keys(combo);
-            const totalOdds = keys.reduce((acc, k) => acc * combo[k].odds, 1);
-            const returnVal = Math.round(totalOdds * 100);
+            const info = getComboInfo();
 
             let tierLabel, tierClass;
-            if (totalOdds < 10) { tierLabel = '保守型'; tierClass = 'conservative'; }
-            else if (totalOdds < 20) { tierLabel = '进取型'; tierClass = 'progressive'; }
+            if (info.maxOdds < 10) { tierLabel = '保守型'; tierClass = 'conservative'; }
+            else if (info.maxOdds < 20) { tierLabel = '进取型'; tierClass = 'progressive'; }
             else { tierLabel = '激进型'; tierClass = 'aggressive'; }
 
-            const legsText = keys.map(k => `${combo[k].code} ${combo[k].match_desc} · ${combo[k].desc} @${combo[k].odds.toFixed(2)}`).join('<br>');
+            const legsText = info.keys.map(k => `${combo[k].code} ${combo[k].match_desc} · ${combo[k].desc} @${combo[k].odds.toFixed(2)}`).join('<br>');
+
+            let returnSummary;
+            if (info.comboCount === 1) {
+                returnSummary = `<strong>综合赔率 ×${info.maxOdds.toFixed(2)}</strong> · 投¥100得 <strong>¥${Math.round(info.maxOdds * 100).toLocaleString()}</strong>`;
+            } else {
+                returnSummary = `<strong>${info.matchCount}串1 × ${info.comboCount}注</strong> · 投¥100得 <strong>¥${Math.round(info.minOdds * 100).toLocaleString()}~¥${Math.round(info.maxOdds * 100).toLocaleString()}</strong>`;
+            }
+
             document.getElementById('confirmSummary').innerHTML = `
                 ${legsText}<br>
-                <strong>综合赔率 ×${totalOdds.toFixed(2)}</strong> · 投¥100得 <strong>¥${returnVal.toLocaleString()}</strong>
+                ${returnSummary}
                 <div class="tier-badge ${tierClass}">${tierLabel}</div>`;
             document.getElementById('confirmOverlay').classList.add('visible');
         }
@@ -615,11 +644,10 @@
             btn.disabled = true;
             btn.textContent = '提交中...';
 
-            const keys = Object.keys(combo);
-            const totalOdds = keys.reduce((acc, k) => acc * combo[k].odds, 1);
+            const info = getComboInfo();
             let tierName;
-            if (totalOdds < 10) tierName = 'conservative';
-            else if (totalOdds < 20) tierName = 'progressive';
+            if (info.maxOdds < 10) tierName = 'conservative';
+            else if (info.maxOdds < 20) tierName = 'progressive';
             else tierName = 'aggressive';
 
             const payload = {
@@ -628,8 +656,10 @@
                 selected_tier: tierName,
                 source: 'recommendation',
                 stake: 100,
-                combined_odds: parseFloat(totalOdds.toFixed(2)),
-                legs: keys.map(k => ({
+                combo_count: info.comboCount,
+                combined_odds: parseFloat(info.maxOdds.toFixed(2)),
+                odds_range: info.comboCount > 1 ? [parseFloat(info.minOdds.toFixed(2)), parseFloat(info.maxOdds.toFixed(2))] : null,
+                legs: info.keys.map(k => ({
                     match_id: combo[k].matchId,
                     match_desc: combo[k].match_desc,
                     code: combo[k].code,
