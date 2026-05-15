@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778857929334,
+      "author": "brian",
+      "type": "bug",
+      "text": "比赛日期不对，周六里面是周日的比赛，周日里面是周一的",
+      "time": "2026-05-15T15:12:09.334Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778856716472,
       "author": "brian",
       "type": "bug",
