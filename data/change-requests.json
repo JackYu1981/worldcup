@@ -1,11 +1,11 @@
 {
   "requests": [
     {
-      "id": 1778855992784,
+      "id": 1778856066910,
       "author": "brian",
       "type": "bug",
-      "text": "比赛缺失，周六比赛缺了017-020",
-      "time": "2026-05-15T14:39:52.784Z",
+      "text": "同一场比赛选择多个赔率，不应该把他们相乘，而是用他们去跟别的比赛拼",
+      "time": "2026-05-15T14:41:06.910Z",
       "status": "pending",
       "resolved_in": null,
       "resolution": null,
