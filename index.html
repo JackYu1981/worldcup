@@ -177,7 +177,10 @@
         async function loadMatches(date) {
             const list = document.getElementById('matchList');
             try {
-                const resp = await fetch(`${BASE_URL}/data/matches/${date}.json`);
+                let resp = await fetch(`/api/matches?date=${date}`);
+                if (!resp.ok) {
+                    resp = await fetch(`/data/matches/${date}.json`);
+                }
                 if (!resp.ok) throw new Error('no data');
                 const data = await resp.json();
                 matches = data.matches;

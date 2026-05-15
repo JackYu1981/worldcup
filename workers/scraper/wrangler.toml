@@ -1,0 +1,10 @@
+name = "worldcup-scraper"
+main = "index.js"
+compatibility_date = "2024-09-01"
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[kv_namespaces]]
+binding = "MATCH_DATA"
+id = "278f1209ffd84662bd51921370a2fbe9"
