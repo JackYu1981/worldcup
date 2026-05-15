@@ -1,19 +1,16 @@
 {
-  "versions": [
-    {
-      "version": "v2.0",
-      "date": "2026-05-14",
-      "summary": "初版：AI三档推荐 + 赛程页 + 看板",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v2.1",
-      "date": "2026-05-15",
-      "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    }
-  ],
   "requests": [
+    {
+      "id": 1778810502648,
+      "author": "brian",
+      "type": "feature",
+      "text": "把赛果页面，最后结果相对应的赔率也高亮成红色，比如西班牙主场让一球，结果是西班牙2-1获胜，那么高亮的就是主胜和让球平",
+      "time": "2026-05-14 20:01",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
     {
       "id": 1715700001,
       "author": "brian",
@@ -24,7 +21,11 @@
       "resolved_in": "v2.1",
       "resolution": "已实现白底卡片",
       "replies": [
-        {"author": "jack", "text": "好的，改成白底配蓝色边框", "time": "2026-05-14 22:30"}
+        {
+          "author": "jack",
+          "text": "好的，改成白底配蓝色边框",
+          "time": "2026-05-14 22:30"
+        }
       ]
     },
     {
@@ -37,7 +38,11 @@
       "resolved_in": "v2.1",
       "resolution": "已扩展数据结构，每档3个备选方案",
       "replies": [
-        {"author": "jack", "text": "可以，每档出3个option让你挑", "time": "2026-05-14 22:35"}
+        {
+          "author": "jack",
+          "text": "可以，每档出3个option让你挑",
+          "time": "2026-05-14 22:35"
+        }
       ]
     },
     {
@@ -50,7 +55,11 @@
       "resolved_in": "v2.1",
       "resolution": "赛程页新增赔率点选，满3场自动计算并归类",
       "replies": [
-        {"author": "jack", "text": "加在赛程页，点赔率格子选中，选3场自动弹出确认", "time": "2026-05-14 22:40"}
+        {
+          "author": "jack",
+          "text": "加在赛程页，点赔率格子选中，选3场自动弹出确认",
+          "time": "2026-05-14 22:40"
+        }
       ]
     },
     {
@@ -63,7 +72,11 @@
       "resolved_in": "v2.1",
       "resolution": "所有数据已改为竞彩整数盘口（让0/1/2球）",
       "replies": [
-        {"author": "jack", "text": "对，需要从500.com抓竞彩格式的数据", "time": "2026-05-14 23:00"}
+        {
+          "author": "jack",
+          "text": "对，需要从500.com抓竞彩格式的数据",
+          "time": "2026-05-14 23:00"
+        }
       ]
     },
     {
@@ -87,8 +100,26 @@
       "resolved_in": "v2.1",
       "resolution": "新增简单登录机制，后台创建账号，session保持",
       "replies": [
-        {"author": "jack", "text": "已部署，jack/brian两个账号", "time": "2026-05-15 21:30"}
+        {
+          "author": "jack",
+          "text": "已部署，jack/brian两个账号",
+          "time": "2026-05-15 21:30"
+        }
       ]
+    }
+  ],
+  "versions": [
+    {
+      "version": "v2.0",
+      "date": "2026-05-14",
+      "summary": "初版：AI三档推荐 + 赛程页 + 看板",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v2.1",
+      "date": "2026-05-15",
+      "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
 }
