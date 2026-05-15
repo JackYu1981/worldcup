@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "胜平负的赔率和让球胜平负的赔率反了",
       "time": "2026-05-15T16:01:48.447Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.5",
+      "resolution": "500.com数据源spf/nspf字段映射修正：spf=让球胜平负，nspf=非让球胜平负",
       "replies": []
     },
     {
