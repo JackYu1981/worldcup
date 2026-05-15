@@ -158,8 +158,10 @@
         .combo-legs { font-size: 11px; color: #555; margin-bottom: 8px; }
         .combo-match { border-bottom: 1px solid #f0f0f0; padding: 6px 0; }
         .combo-match:last-child { border-bottom: none; }
-        .combo-match-info { font-size: 11px; color: #666; margin-bottom: 4px; }
-        .combo-match-info .match-teams { font-weight: 600; color: #333; font-size: 12px; }
+        .combo-match-info { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+        .combo-match-info .match-code { font-size: 11px; color: #999; }
+        .combo-match-info .match-teams { font-weight: 600; color: #333; font-size: 13px; }
+        .combo-match-info .match-time { font-size: 10px; color: #999; }
         .combo-match-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px; }
         .combo-match-row .pick-slot { text-align: center; min-height: 20px; }
         .combo-match-row .pick-tag {
@@ -535,7 +537,10 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                combo[key] = { matchId, market, pick, odds, desc, match_desc: `${m.home}vs${m.away}`, code: m.code || '000' };
+                const matchDate = m.date || currentDate;
+                const dt = new Date(matchDate + 'T00:00:00+08:00');
+                const weekday = WEEKDAY_PREFIX[dt.getDay()];
+                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', weekday, kickoff: m.kickoff || '' };
             }
             renderMatches();
             updateComboBar();
@@ -615,7 +620,8 @@
 
                 return `<div class="combo-match">
                     <div class="combo-match-info">
-                        <span class="match-teams">${first.code} ${first.match_desc}</span>
+                        <span class="match-code">${first.weekday}${first.code}</span>
+                        <span class="match-teams">${first.home} <span class="match-time">${first.kickoff}</span> ${first.away}</span>
                     </div>
                     ${row1x2}${rowHandicap}
                 </div>`;
