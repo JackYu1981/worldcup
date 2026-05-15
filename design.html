@@ -384,10 +384,13 @@
     <div class="section">
         <h2>📋 当前方案要点</h2>
         <ul>
+            <li><span class="tag tag-changed">架构</span>数据适配器模式：lib/schema.js 定义规范字段 + lib/adapters/ 实现数据源解耦</li>
+            <li><span class="tag tag-new">新增</span>schema校验层：normalizeMatch() 归一化 + validateMatch() 格式校验</li>
+            <li><span class="tag tag-new">新增</span>适配器注册机制：新增数据源只需实现 BaseAdapter 接口并注册</li>
+            <li><span class="tag tag-changed">变更</span>项目模块化：ESM (import/export)，Worker与脚本共享lib/</li>
             <li><span class="tag tag-changed">变更</span>投注方式：仅三串一，每日100元一注</li>
             <li><span class="tag tag-new">新增</span>三档推荐：保守(5-10x)、进取(10-20x)、激进(20x+)，每档3个备选</li>
-            <li><span class="tag tag-new">新增</span>自定义组合：赛程页点选赔率，满3场自动归类</li>
-            <li><span class="tag tag-new">新增</span>500.com竞彩数据自动抓取（每小时更新赔率，赛后更新比分）</li>
+            <li><span class="tag tag-new">新增</span>500.com竞彩数据自动抓取（每小时Cron更新赔率，赛后更新比分）</li>
             <li><span class="tag tag-changed">变更</span>盘口数据：竞彩整数盘口（让0/1/2球），非亚盘</li>
             <li><span class="tag tag-new">新增</span>竞彩格式一键复制，方便彩票站下单</li>
             <li><span class="tag tag-new">新增</span>赛果自动对比，命中赔率红色高亮</li>

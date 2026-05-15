@@ -304,6 +304,12 @@
       "date": "2026-05-15T13:20:00+08:00",
       "summary": "修复时区/数据加载/赛果高亮，清除demo数据，Worker多日抓取",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.0",
+      "date": "2026-05-15T18:20:00+08:00",
+      "summary": "里程碑：数据适配器架构（schema + adapter模式），解耦数据源与业务逻辑，支持多数据源扩展，ESM模块化",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
 }
