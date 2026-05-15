@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778852827859,
+      "author": "brian",
+      "type": "bug",
+      "text": "比赛列表里，要根据日期把比赛放到一起。周五只有五场比赛，对应001-005，剩下的比赛是周六的",
+      "time": "2026-05-15T13:47:07.859Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778846710145,
       "author": "jack",
       "type": "improvement",
