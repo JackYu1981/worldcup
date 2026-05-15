@@ -60,34 +60,13 @@
             padding-bottom: 8px;
             border-bottom: 1px solid #f0f0f0;
         }
-        .section h3 {
-            font-size: 13px;
-            color: #555;
-            margin: 10px 0 6px;
-            font-weight: 600;
-        }
         .section p, .section li {
             font-size: 13px;
             line-height: 1.7;
             color: #555;
         }
-        .section ul {
-            padding-left: 18px;
-            margin: 6px 0;
-        }
+        .section ul { padding-left: 18px; margin: 6px 0; }
         .section li { margin-bottom: 4px; }
-        .flow-diagram {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 12px;
-            font-size: 12px;
-            line-height: 1.8;
-            font-family: 'Menlo', 'Courier New', monospace;
-            overflow-x: auto;
-            white-space: pre;
-            color: #333;
-        }
-        .highlight { color: #c62828; font-weight: 600; }
         .tag {
             display: inline-block;
             padding: 2px 8px;
@@ -99,21 +78,78 @@
         .tag-new { background: #e8f5e9; color: #2e7d32; }
         .tag-changed { background: #fff3e0; color: #e65100; }
         .tag-removed { background: #ffebee; color: #c62828; }
-        .tier-card {
+        .status-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .status-pending { background: #fff3e0; color: #e65100; }
+        .status-adopted { background: #e8f5e9; color: #2e7d32; }
+        .status-rejected { background: #ffebee; color: #c62828; }
+        .cr-item {
             border: 1px solid #eee;
             border-radius: 8px;
-            padding: 10px 12px;
-            margin: 6px 0;
+            padding: 12px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
         }
-        .tier-card.conservative { border-left: 4px solid #4caf50; }
-        .tier-card.progressive { border-left: 4px solid #ff9800; }
-        .tier-card.aggressive { border-left: 4px solid #f44336; }
-        .tier-label {
+        .cr-item.pending { border-left: 3px solid #ff9800; }
+        .cr-item.adopted { border-left: 3px solid #4caf50; }
+        .cr-item.rejected { border-left: 3px solid #f44336; opacity: 0.7; }
+        .cr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .cr-author {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        .cr-time {
+            font-size: 11px;
+            color: #aaa;
+        }
+        .cr-text {
+            font-size: 13px;
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }
+        .cr-resolution {
+            font-size: 12px;
+            color: #666;
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 6px 8px;
+            margin-top: 6px;
+        }
+        .cr-resolution .version-ref {
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        .version-group {
+            margin-bottom: 16px;
+        }
+        .version-group-header {
             font-size: 13px;
             font-weight: 600;
-            margin-bottom: 4px;
+            color: #333;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .tier-desc { font-size: 12px; color: #666; }
+        .version-group-header .count {
+            font-size: 11px;
+            color: #888;
+            font-weight: 400;
+        }
         .comment-section {
             position: fixed;
             bottom: 0;
@@ -167,26 +203,6 @@
             white-space: nowrap;
         }
         .comment-btn:active { background: #1557b0; }
-        .comment-list {
-            margin-top: 12px;
-        }
-        .comment-item {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-        }
-        .comment-item .meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 4px;
-        }
-        .comment-item .meta .author { font-weight: 600; color: #1a73e8; }
-        .comment-item .text { font-size: 13px; color: #333; line-height: 1.5; }
-        .comment-item.resolved { opacity: 0.5; }
-        .comment-item.resolved .text { text-decoration: line-through; }
         .toast {
             position: fixed;
             top: 50%;
@@ -200,49 +216,122 @@
             display: none;
             z-index: 1000;
         }
-        .mockup-card {
-            background: #1a1a2e;
-            border-radius: 10px;
-            padding: 14px;
-            margin: 8px 0;
-            color: white;
-        }
-        .mockup-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .mockup-tier {
-            font-size: 14px;
-            font-weight: 600;
-        }
-        .mockup-odds {
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            color: #999;
             font-size: 13px;
-            color: #ffd54f;
-            font-weight: 600;
         }
-        .mockup-leg {
-            padding: 6px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            font-size: 12px;
+        .filter-tabs {
             display: flex;
-            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
         }
-        .mockup-leg:last-child { border-bottom: none; }
-        .mockup-prob {
+        .filter-tab {
+            padding: 4px 10px;
+            border-radius: 12px;
             font-size: 11px;
-            color: #81c784;
-            margin-top: 2px;
+            border: 1px solid #e0e0e0;
+            background: white;
+            cursor: pointer;
+            color: #666;
         }
-        .mockup-analysis {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255,255,255,0.15);
+        .filter-tab.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        .cr-replies {
+            margin-top: 8px;
+            padding-left: 12px;
+            border-left: 2px solid #e0e0e0;
+        }
+        .cr-reply {
+            padding: 6px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .cr-reply:last-child { border-bottom: none; }
+        .cr-reply .reply-meta {
             font-size: 11px;
+            color: #888;
+            margin-bottom: 2px;
+        }
+        .cr-reply .reply-meta .reply-author {
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        .cr-reply .reply-text {
+            font-size: 12px;
+            color: #444;
+            line-height: 1.4;
+        }
+        .reply-btn {
+            font-size: 11px;
+            color: #1a73e8;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 0;
+            margin-top: 4px;
+        }
+        .reply-btn:hover { text-decoration: underline; }
+        .reply-form {
+            display: none;
+            margin-top: 6px;
+            padding-left: 12px;
+            border-left: 2px solid #1a73e8;
+        }
+        .reply-form.visible { display: flex; gap: 6px; }
+        .reply-input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+        }
+        .reply-input:focus { border-color: #1a73e8; }
+        .reply-submit {
+            padding: 6px 12px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .type-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .type-feature { background: #e3f2fd; color: #1565c0; }
+        .type-bug { background: #ffebee; color: #c62828; }
+        .type-improvement { background: #f3e5f5; color: #6a1b9a; }
+        .type-selector {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .type-option {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            border: 1px solid #e0e0e0;
+            background: white;
+            cursor: pointer;
+            color: #666;
+        }
+        .type-option.active { border-color: #1a73e8; background: #e8f0fe; color: #1a73e8; }
+        .cr-id {
+            font-size: 10px;
             color: #aaa;
+            font-family: monospace;
         }
-        .mockup-analysis .ev { color: #81c784; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -262,138 +351,47 @@
     </div>
 
     <div class="section">
-        <h2>📋 方案概述</h2>
-        <p><strong>核心变化：</strong>从「用户手动选择 → AI计算组合」变为「AI主动推荐三档方案 → 用户挑选一注」</p>
+        <h2>📋 当前方案要点</h2>
         <ul>
             <li><span class="tag tag-changed">变更</span>投注方式：仅三串一，每日100元一注</li>
             <li><span class="tag tag-new">新增</span>三档推荐：保守(5-10x)、进取(10-20x)、激进(20x+)</li>
             <li><span class="tag tag-new">新增</span>每档3个备选方案（结合胜平负+让球胜平负）</li>
             <li><span class="tag tag-new">新增</span>自定义组合功能（赛程页选赔率 → 自动归类）</li>
             <li><span class="tag tag-new">新增</span>让球胜平负：竞彩整数盘口（让0/1/2球）</li>
-            <li><span class="tag tag-new">新增</span>AI概率分析展示（隐含概率 vs AI修正概率）</li>
-            <li><span class="tag tag-changed">变更</span>评论区支持身份切换（Brian/Jack）</li>
+            <li><span class="tag tag-new">新增</span>登录系统（Jack/Brian账号隔离）</li>
             <li><span class="tag tag-removed">移除</span>复式投注（不再拆散资金）</li>
         </ul>
     </div>
 
     <div class="section">
-        <h2>✅ 已采纳的反馈 (v2.1)</h2>
-        <ul>
-            <li>✓ AI推荐卡片用浅色底 — 已实现白底卡片</li>
-            <li>✓ 每档3个备选三串一 — 已扩展数据结构和页面</li>
-            <li>✓ 自定义组合功能 — 赛程页可点选赔率，满3场自动计算并归类</li>
-            <li>✓ 让球改为竞彩整数盘口 — 所有数据已改为让0/1/2球</li>
-            <li>✓ 赛程页只展示近3天 — 日期滚动条限制范围</li>
-            <li>✓ 评论区区分身份 — 新增 Brian/Jack 切换按钮</li>
-        </ul>
+        <h2>📦 版本历史</h2>
+        <div id="versionHistory"></div>
     </div>
 
     <div class="section">
-        <h2>⏰ 每日流程（北京时间）</h2>
-        <div class="flow-diagram">D-1日 22:00  Jack触发 "出方案 06-15"
-         ↓      Claude生成三档推荐 → push
-D-1日 22:00  Jack发微信链接给Brian
-~24:00       Brian(东部10:00-12:00)
-         ↓      微信讨论选哪档
-D日  00:00   确认一注 → 前端提交口令
-~01:00       竞彩APP手动下单
-         ↓
-D日  02:00   比赛陆续开始
-~11:00       (睡觉💤)
-         ↓
-D日  11:00   Jack: "结算 06-15"
-             更新结果+看板</div>
-        <p style="margin-top:8px; font-size:12px; color:#888;">
-            💡 Jack晚22点 = Brian早10点，双方最佳沟通窗口
-        </p>
-    </div>
-
-    <div class="section">
-        <h2>🤖 AI推荐页 - 效果预览</h2>
-        <p style="margin-bottom:8px;">每日生成三档方案，展示AI概率优势：</p>
-
-        <div class="mockup-card">
-            <div class="mockup-header">
-                <span class="mockup-tier">🟡 进取型</span>
-                <span class="mockup-odds">×14.82 → ¥1,482</span>
-            </div>
-            <div class="mockup-leg">
-                <span>① 巴西vs德国 · 巴西让球胜 @1.85</span>
-            </div>
-            <div class="mockup-prob">庄家54% → AI修正62% · 价值+8%↑</div>
-            <div class="mockup-leg">
-                <span>② 英格兰vs伊朗 · 英格兰胜 @1.30</span>
-            </div>
-            <div class="mockup-prob">庄家77% → AI修正82% · 价值+5%↑</div>
-            <div class="mockup-leg">
-                <span>③ 荷兰vs塞内加尔 · 荷兰胜 @2.20</span>
-            </div>
-            <div class="mockup-prob">庄家45% → AI修正51% · 价值+6%↑</div>
-            <div class="mockup-analysis">
-                三串一命中率: 庄家19% → AI修正26% · <span class="ev">EV +0.85 ✓</span> · Kelly: 全额
-            </div>
+        <h2>📝 Change Requests</h2>
+        <div class="filter-tabs" id="filterTabs">
+            <span class="filter-tab active" onclick="setFilter('all')">全部</span>
+            <span class="filter-tab" onclick="setFilter('pending')">待处理</span>
+            <span class="filter-tab" onclick="setFilter('adopted')">已采纳</span>
+            <span class="filter-tab" onclick="setFilter('rejected')">已拒绝</span>
         </div>
-
-        <div style="font-size:12px; color:#888; margin-top:6px;">
-            ▲ 深色卡片为AI推荐样式草案，最终配色待定
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>📊 三档分类</h2>
-        <div class="tier-card conservative">
-            <div class="tier-label">🟢 保守型 · 5-10倍</div>
-            <div class="tier-desc">两场强队让球胜 + 一场中赔，命中率约10-15%</div>
-        </div>
-        <div class="tier-card progressive">
-            <div class="tier-label">🟡 进取型 · 10-20倍</div>
-            <div class="tier-desc">混合胜平负+让球，平衡配置，命中率约5-10%</div>
-        </div>
-        <div class="tier-card aggressive">
-            <div class="tier-label">🔴 激进型 · 20倍+</div>
-            <div class="tier-desc">包含冷门/高赔平局，博大奖，命中率约2-5%</div>
-        </div>
-        <h3>策略切换规则</h3>
-        <ul>
-            <li>初始：进取型</li>
-            <li>连续3天未中 → 转保守型</li>
-            <li>中奖后 → 酌情可选激进型</li>
-        </ul>
-    </div>
-
-    <div class="section">
-        <h2>📱 页面结构</h2>
-        <ul>
-            <li><strong>赛程页</strong> — 世界杯日历+比分+赔率（替代当前选择页）</li>
-            <li><strong>推荐页</strong> — AI三档方案 + 概率分析 + 确认按钮 <span class="tag tag-new">新</span></li>
-            <li><strong>方案页</strong> — 已确认投注记录（保留当前样式）</li>
-            <li><strong>看板页</strong> — 收益曲线 + 日历（保留当前样式）</li>
-        </ul>
-    </div>
-
-    <div class="section">
-        <h2>❓ 待讨论</h2>
-        <ul>
-            <li>自定义组合：当前仅支持当日赛事，是否需要跨日组合？</li>
-            <li>500彩票数据源接入细节：编码001-004，抓取频率？</li>
-            <li>推荐页备选方案的排列方式：默认展开第一个还是全部折叠？</li>
-            <li>是否需要方案对比功能（对比两个备选的概率差异）？</li>
-        </ul>
-    </div>
-
-    <div class="section">
-        <h2>💬 修订记录</h2>
-        <div class="comment-list" id="commentList"></div>
+        <div id="crList"></div>
     </div>
 
     <div class="comment-section">
         <div class="comment-header">
             <span>💬 提建议</span>
-            <span class="comment-count" id="commentCount">0条反馈</span>
+            <span class="comment-count" id="commentCount">0条</span>
+        </div>
+        <div class="type-selector" id="typeSelector">
+            <span class="type-option active" onclick="selectType(this,'feature')">功能</span>
+            <span class="type-option" onclick="selectType(this,'improvement')">改进</span>
+            <span class="type-option" onclick="selectType(this,'bug')">Bug</span>
         </div>
         <div class="comment-input-row">
             <textarea class="comment-input" id="commentInput" placeholder="输入修改建议..."></textarea>
-            <button class="comment-btn" onclick="submitComment()">发送</button>
+            <button class="comment-btn" onclick="submitCR()">发送</button>
         </div>
     </div>
 
@@ -402,86 +400,249 @@ D日  11:00   Jack: "结算 06-15"
     <script src="auth.js"></script>
     <script>
         const GITHUB_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents';
-        const COMMENTS_FILE = 'data/design-comments.json';
+        const CR_FILE = 'data/change-requests.json';
 
-        let comments = [];
+        let requests = [];
+        let versions = [];
+        let currentFilter = 'all';
+        let selectedType = 'feature';
 
         AUTH.requireLogin(function(user) {
             AUTH.renderUserBadge('userBadge');
-            loadComments();
+            loadCRs();
         });
 
-        async function loadComments() {
+        async function loadCRs() {
             try {
-                const resp = await fetch(`${GITHUB_API}/${COMMENTS_FILE}`);
+                const resp = await fetch(`${GITHUB_API}/${CR_FILE}`);
                 if (resp.status === 404) {
-                    comments = [];
-                    renderComments();
+                    requests = [];
+                    versions = [];
+                    renderCRs();
+                    renderVersionHistory();
                     return;
                 }
                 const file = await resp.json();
                 const binary = atob(file.content);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                const content = JSON.parse(new TextDecoder().decode(bytes));
-                comments = content.comments || [];
-                renderComments();
+                const data = JSON.parse(new TextDecoder().decode(bytes));
+                requests = data.requests || [];
+                versions = data.versions || [];
+                renderCRs();
+                renderVersionHistory();
             } catch (e) {
-                comments = [];
-                renderComments();
+                requests = [];
+                versions = [];
+                renderCRs();
+                renderVersionHistory();
             }
         }
 
-        function renderComments() {
-            const list = document.getElementById('commentList');
-            document.getElementById('commentCount').textContent = `${comments.length}条反馈`;
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderCRs();
+        }
 
-            if (comments.length === 0) {
-                list.innerHTML = '<p style="color:#999; font-size:12px; text-align:center; padding:12px;">暂无反馈，等待Brian的建议...</p>';
+        function renderCRs() {
+            const list = document.getElementById('crList');
+            const count = document.getElementById('commentCount');
+
+            const pendingCount = requests.filter(r => r.status === 'pending').length;
+            count.textContent = `${requests.length}条（${pendingCount}待处理）`;
+
+            let filtered = requests;
+            if (currentFilter !== 'all') {
+                filtered = requests.filter(r => r.status === currentFilter);
+            }
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="empty-state">暂无记录</div>';
                 return;
             }
 
-            list.innerHTML = comments.map((c, i) => {
-                const resolved = c.resolved ? 'resolved' : '';
-                const resolvedTag = c.resolved ? ' <span style="font-size:10px;color:#4caf50;">✓ 已处理</span>' : '';
-                return `<div class="comment-item ${resolved}">
-                    <div class="meta">
-                        <span><span class="author">${c.author || '匿名'}</span>${resolvedTag}</span>
-                        <span>${c.time || ''}</span>
-                    </div>
-                    <div class="text">${c.text}</div>
-                </div>`;
-            }).join('');
+            const pending = filtered.filter(r => r.status === 'pending');
+            const byVersion = {};
+            filtered.filter(r => r.status !== 'pending').forEach(r => {
+                const v = r.resolved_in || '未分类';
+                if (!byVersion[v]) byVersion[v] = [];
+                byVersion[v].push(r);
+            });
+
+            let html = '';
+
+            if (pending.length > 0 && (currentFilter === 'all' || currentFilter === 'pending')) {
+                html += `<div class="version-group">
+                    <div class="version-group-header">
+                        <span>⏳ 待处理</span>
+                        <span class="count">${pending.length}条</span>
+                    </div>`;
+                html += pending.map(r => renderCRItem(r)).join('');
+                html += '</div>';
+            }
+
+            const versions = Object.keys(byVersion).sort().reverse();
+            versions.forEach(v => {
+                if (currentFilter === 'pending') return;
+                const items = byVersion[v];
+                html += `<div class="version-group">
+                    <div class="version-group-header">
+                        <span>📦 ${v}</span>
+                        <span class="count">${items.length}条</span>
+                    </div>`;
+                html += items.map(r => renderCRItem(r)).join('');
+                html += '</div>';
+            });
+
+            list.innerHTML = html;
         }
 
-        async function submitComment() {
+        function renderCRItem(r) {
+            const statusLabels = {
+                pending: '待处理',
+                adopted: '已采纳',
+                rejected: '已拒绝'
+            };
+            const typeLabels = {
+                feature: '功能',
+                improvement: '改进',
+                bug: 'Bug'
+            };
+            const statusTag = `<span class="status-tag status-${r.status}">${statusLabels[r.status]}</span>`;
+            const typeTag = r.type ? `<span class="type-tag type-${r.type}">${typeLabels[r.type] || r.type}</span>` : '';
+            const crId = `<span class="cr-id">#${String(r.id).slice(-4)}</span>`;
+
+            let resolution = '';
+            if (r.resolution) {
+                const vRef = r.resolved_in ? `<span class="version-ref">${r.resolved_in}</span> · ` : '';
+                resolution = `<div class="cr-resolution">${vRef}${r.resolution}</div>`;
+            }
+
+            let repliesHtml = '';
+            if (r.replies && r.replies.length > 0) {
+                repliesHtml = `<div class="cr-replies">` +
+                    r.replies.map(reply => `<div class="cr-reply">
+                        <div class="reply-meta"><span class="reply-author">${reply.author}</span> · ${reply.time}</div>
+                        <div class="reply-text">${reply.text}</div>
+                    </div>`).join('') + `</div>`;
+            }
+
+            return `<div class="cr-item ${r.status}">
+                <div class="cr-header">
+                    <span>${crId} ${typeTag}<span class="cr-author">${r.author}</span> ${statusTag}</span>
+                    <span class="cr-time">${r.time}</span>
+                </div>
+                <div class="cr-text">${r.text}</div>
+                ${resolution}
+                ${repliesHtml}
+                <button class="reply-btn" onclick="toggleReply(${r.id})">回复</button>
+                <div class="reply-form" id="replyForm-${r.id}">
+                    <input class="reply-input" id="replyInput-${r.id}" placeholder="回复..." onkeydown="if(event.key==='Enter')submitReply(${r.id})">
+                    <button class="reply-submit" onclick="submitReply(${r.id})">发送</button>
+                </div>
+            </div>`;
+        }
+
+        function toggleReply(crId) {
+            const form = document.getElementById(`replyForm-${crId}`);
+            form.classList.toggle('visible');
+            if (form.classList.contains('visible')) {
+                document.getElementById(`replyInput-${crId}`).focus();
+            }
+        }
+
+        async function submitReply(crId) {
+            const input = document.getElementById(`replyInput-${crId}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+            const cr = requests.find(r => r.id === crId);
+            if (!cr) return;
+
+            if (!cr.replies) cr.replies = [];
+            cr.replies.push({
+                author: AUTH.getUser().username,
+                text: text,
+                time: timeStr
+            });
+
+            renderCRs();
+            showToast('✅ 回复已发送');
+            await saveCRs(`Reply by ${AUTH.getUser().username} on CR#${crId}`);
+        }
+
+        async function submitCR() {
             const input = document.getElementById('commentInput');
             const text = input.value.trim();
             if (!text) return;
 
             const now = new Date();
-            const timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+            const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-            const newComment = {
+            const newCR = {
                 id: Date.now(),
                 author: AUTH.getUser().username,
+                type: selectedType,
                 text: text,
                 time: timeStr,
-                resolved: false
+                status: 'pending',
+                resolved_in: null,
+                resolution: null,
+                replies: []
             };
 
-            comments.push(newComment);
-            renderComments();
+            requests.unshift(newCR);
+            renderCRs();
             input.value = '';
             showToast('✅ 建议已提交！');
 
+            await saveCRs(`CR by ${newCR.author}: ${text.slice(0, 40)}`);
+        }
+
+        function selectType(el, type) {
+            selectedType = type;
+            document.querySelectorAll('.type-option').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function renderVersionHistory() {
+            const container = document.getElementById('versionHistory');
+            if (versions.length === 0) {
+                container.innerHTML = '<div class="empty-state">暂无版本记录</div>';
+                return;
+            }
+            container.innerHTML = versions.slice().reverse().map(v => {
+                const adoptedCount = requests.filter(r => r.resolved_in === v.version && r.status === 'adopted').length;
+                const docLink = v.doc_url
+                    ? `<a href="${v.doc_url}" style="font-size:11px;color:#1a73e8;text-decoration:none;" target="_blank">📄 查看设计文档</a>`
+                    : '';
+                return `<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:13px;font-weight:600;">${v.version}</span>
+                        <span style="font-size:11px;color:#888;">${v.date}</span>
+                    </div>
+                    <div style="font-size:12px;color:#555;margin-top:4px;">${v.summary}</div>
+                    <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:11px;color:#888;">采纳${adoptedCount}条建议</span>
+                        ${docLink}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function saveCRs(commitMsg) {
             try {
-                const payload = { comments: comments };
+                const payload = { requests: requests, versions: versions };
                 const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
 
                 let sha = null;
                 try {
-                    const existing = await fetch(`${GITHUB_API}/${COMMENTS_FILE}`);
+                    const existing = await fetch(`${GITHUB_API}/${CR_FILE}`);
                     if (existing.ok) {
                         const data = await existing.json();
                         sha = data.sha;
@@ -489,8 +650,9 @@ D日  11:00   Jack: "结算 06-15"
                 } catch(e) {}
 
                 const body = {
-                    message: `design feedback: ${text.slice(0, 50)}`,
-                    content: content
+                    message: commitMsg,
+                    content: content,
+                    filename: CR_FILE
                 };
                 if (sha) body.sha = sha;
 
@@ -500,7 +662,7 @@ D日  11:00   Jack: "结算 06-15"
                     body: JSON.stringify(body)
                 });
             } catch(e) {
-                console.log('Comment saved locally, push failed:', e);
+                console.log('CR save failed:', e);
             }
         }
 

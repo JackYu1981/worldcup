@@ -1,0 +1,94 @@
+{
+  "versions": [
+    {
+      "version": "v2.0",
+      "date": "2026-05-14",
+      "summary": "初版：AI三档推荐 + 赛程页 + 看板",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v2.1",
+      "date": "2026-05-15",
+      "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    }
+  ],
+  "requests": [
+    {
+      "id": 1715700001,
+      "author": "brian",
+      "type": "improvement",
+      "text": "AI推荐卡片用浅色底，深色看不清",
+      "time": "2026-05-14 10:00",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "已实现白底卡片",
+      "replies": [
+        {"author": "jack", "text": "好的，改成白底配蓝色边框", "time": "2026-05-14 22:30"}
+      ]
+    },
+    {
+      "id": 1715700002,
+      "author": "brian",
+      "type": "feature",
+      "text": "每档只有一个三串一太少了，能不能每档3个备选？",
+      "time": "2026-05-14 10:15",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "已扩展数据结构，每档3个备选方案",
+      "replies": [
+        {"author": "jack", "text": "可以，每档出3个option让你挑", "time": "2026-05-14 22:35"}
+      ]
+    },
+    {
+      "id": 1715700003,
+      "author": "brian",
+      "type": "feature",
+      "text": "想自己组合赔率，像在500.com上试算一样",
+      "time": "2026-05-14 10:30",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "赛程页新增赔率点选，满3场自动计算并归类",
+      "replies": [
+        {"author": "jack", "text": "加在赛程页，点赔率格子选中，选3场自动弹出确认", "time": "2026-05-14 22:40"}
+      ]
+    },
+    {
+      "id": 1715700004,
+      "author": "brian",
+      "type": "bug",
+      "text": "让球数据还是亚盘的，竞彩里面是让0/1/2这种整数盘口",
+      "time": "2026-05-14 11:00",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "所有数据已改为竞彩整数盘口（让0/1/2球）",
+      "replies": [
+        {"author": "jack", "text": "对，需要从500.com抓竞彩格式的数据", "time": "2026-05-14 23:00"}
+      ]
+    },
+    {
+      "id": 1715700005,
+      "author": "brian",
+      "type": "improvement",
+      "text": "赛程页信息太多了，只展示近几天就好",
+      "time": "2026-05-14 11:10",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "日期滚动条限制为近3天范围",
+      "replies": []
+    },
+    {
+      "id": 1715700006,
+      "author": "jack",
+      "type": "feature",
+      "text": "评论区身份切换太业余，改成登录系统",
+      "time": "2026-05-15 20:00",
+      "status": "adopted",
+      "resolved_in": "v2.1",
+      "resolution": "新增简单登录机制，后台创建账号，session保持",
+      "replies": [
+        {"author": "jack", "text": "已部署，jack/brian两个账号", "time": "2026-05-15 21:30"}
+      ]
+    }
+  ]
+}
