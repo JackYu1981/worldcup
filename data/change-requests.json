@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778853955689,
+      "author": "brian",
+      "type": "bug",
+      "text": "赛程中banner显示的比赛数量与列表中的数量不一致",
+      "time": "2026-05-15T14:05:55.689Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778853054962,
       "author": "brian",
       "type": "bug",
