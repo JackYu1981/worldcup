@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778816253265,
+      "author": "brian",
+      "type": "bug",
+      "text": "比赛结果页面，并没有高亮显示正确结果所对应的赔率",
+      "time": "2026-05-14 21:37",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778814251558,
       "author": "jack",
       "type": "feature",
