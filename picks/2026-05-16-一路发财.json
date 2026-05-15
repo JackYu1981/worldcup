@@ -1,57 +1,19 @@
 {
   "date": "2026-05-16",
   "passphrase": "一路发财",
-  "submitted_at": "2026-05-15T17:01:11.885Z",
-  "selected_tier": "aggressive",
+  "submitted_at": "2026-05-16T01:05:00+08:00",
+  "selected_tier": "progressive",
   "source": "plan",
-  "stake": 100,
-  "combined_odds": 40.73,
+  "stake": 8,
+  "combo_count": 4,
+  "combined_odds": 15.73,
+  "odds_range": [6.51, 15.73],
   "legs": [
-    {
-      "match_id": "f1234975",
-      "match_desc": "布赖代合作vs利雅得",
-      "code": "003",
-      "market": "1x2",
-      "pick": "draw",
-      "pick_desc": "平",
-      "odds": 4.1
-    },
-    {
-      "match_id": "f1411377",
-      "match_desc": "圣埃蒂安vs罗德兹",
-      "code": "004",
-      "market": "1x2",
-      "pick": "home_win",
-      "pick_desc": "圣埃蒂安胜",
-      "odds": 1.65
-    },
-    {
-      "match_id": "f1411377",
-      "match_desc": "圣埃蒂安vs罗德兹",
-      "code": "004",
-      "market": "handicap",
-      "pick": "draw",
-      "pick_desc": "让球平",
-      "odds": 3.3
-    },
-    {
-      "match_id": "f1234975",
-      "match_desc": "布赖代合作vs利雅得",
-      "code": "003",
-      "market": "handicap",
-      "pick": "home_win",
-      "pick_desc": "让球胜",
-      "odds": 2.64
-    },
-    {
-      "match_id": "f1202507",
-      "match_desc": "维拉vs利物浦",
-      "code": "005",
-      "market": "1x2",
-      "pick": "draw",
-      "pick_desc": "平",
-      "odds": 3.01
-    }
+    {"match_id": "f1411370", "match_desc": "勒沃库森vs汉堡", "code": "011", "market": "handicap", "pick": "home_win", "pick_desc": "让球胜", "odds": 2.33},
+    {"match_id": "f1411370", "match_desc": "勒沃库森vs汉堡", "code": "011", "market": "handicap", "pick": "draw", "pick_desc": "让球平", "odds": 4.25},
+    {"match_id": "f1411383", "match_desc": "切尔西vs曼城", "code": "020", "market": "1x2", "pick": "away_win", "pick_desc": "曼城胜", "odds": 1.57},
+    {"match_id": "f1411383", "match_desc": "切尔西vs曼城", "code": "020", "market": "handicap", "pick": "home_win", "pick_desc": "让球胜", "odds": 2.08},
+    {"match_id": "f1411378", "match_desc": "不来梅vs多特蒙德", "code": "017", "market": "1x2", "pick": "away_win", "pick_desc": "多特蒙德胜", "odds": 1.78}
   ],
   "submitted_by": "jack"
 }
