@@ -1,0 +1,118 @@
+{
+  "date": "2026-05-15",
+  "source": "500.com",
+  "fetched_at": "2026-05-15T02:53:40.346Z",
+  "match_count": 5,
+  "matches": [
+    {
+      "id": "f1409581",
+      "code": "001",
+      "home": "阿德莱德",
+      "away": "奥克兰FC",
+      "date": "2026-05-15",
+      "kickoff": "17:35",
+      "process_date": "2026-05-15",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 4.5,
+        "draw": 3.95,
+        "away_win": 1.53
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 2.15,
+        "draw": 3.28,
+        "away_win": 2.78
+      }
+    },
+    {
+      "id": "f1234977",
+      "code": "002",
+      "home": "达马克",
+      "away": "迈季迈阿宽广",
+      "date": "2026-05-16",
+      "kickoff": "00:15",
+      "process_date": "2026-05-15",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 3.25,
+        "draw": 3.35,
+        "away_win": 1.92
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 1.68,
+        "draw": 3.38,
+        "away_win": 4.2
+      }
+    },
+    {
+      "id": "f1234975",
+      "code": "003",
+      "home": "布赖代合作",
+      "away": "利雅得",
+      "date": "2026-05-16",
+      "kickoff": "02:00",
+      "process_date": "2026-05-15",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 2.54,
+        "draw": 3.4,
+        "away_win": 2.27
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 1.48,
+        "draw": 4.05,
+        "away_win": 4.85
+      }
+    },
+    {
+      "id": "f1411377",
+      "code": "004",
+      "home": "圣埃蒂安",
+      "away": "罗德兹",
+      "date": "2026-05-16",
+      "kickoff": "02:30",
+      "process_date": "2026-05-15",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 2.9,
+        "draw": 3.45,
+        "away_win": 2.02
+      },
+      "handicap": {
+        "line": -1,
+        "home_win": 1.61,
+        "draw": 3.6,
+        "away_win": 4.35
+      }
+    },
+    {
+      "id": "f1202507",
+      "code": "005",
+      "home": "维拉",
+      "away": "利物浦",
+      "date": "2026-05-16",
+      "kickoff": "03:00",
+      "process_date": "2026-05-15",
+      "status": "scheduled",
+      "score": null,
+      "odds": {
+        "home_win": 1.55,
+        "draw": 3.9,
+        "away_win": 4.4
+      },
+      "handicap": {
+        "line": 1,
+        "home_win": 2.7,
+        "draw": 3.4,
+        "away_win": 2.15
+      }
+    }
+  ]
+}

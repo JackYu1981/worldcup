@@ -6,9 +6,9 @@
       "type": "feature",
       "text": "增加修订页面的admin角色的删除功能，admin用户在回复旁边多一个删除的选项，用来整理重复的comment，类似的还有编辑功能，对于自己本人的comment加入edit按钮",
       "time": "2026-05-15 10:44",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.3",
+      "resolution": "Admin可删除任意CR/回复，用户可编辑自己的CR",
       "replies": []
     },
     {
@@ -17,9 +17,9 @@
       "type": "bug",
       "text": "复制竞彩格式功能，复制时候比赛是001 002 003，粘贴的时候变成了012 013 014",
       "time": "2026-05-14 20:38",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.3",
+      "resolution": "修复：直接使用match.code字段，不再通过mapping转换",
       "replies": []
     },
     {
@@ -28,9 +28,9 @@
       "type": "feature",
       "text": "接入500.com竞彩数据源，自动抓取胜平负+让球赔率，替代手工录入",
       "time": "2026-05-15 22:00",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.3",
+      "resolution": "500.com抓取脚本完成，输出格式兼容前端，待接入自动调度",
       "replies": [
         {
           "author": "jack",
@@ -214,6 +214,12 @@
       "version": "v2.2",
       "date": "2026-05-15",
       "summary": "用户方案展示到推荐页、竞彩格式一键复制、赛果赔率红色高亮",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v2.3",
+      "date": "2026-05-15",
+      "summary": "500.com数据抓取、复制编号bug修复、Admin删除/编辑功能",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]

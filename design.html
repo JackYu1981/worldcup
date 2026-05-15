@@ -266,16 +266,6 @@
             color: #444;
             line-height: 1.4;
         }
-        .reply-btn {
-            font-size: 11px;
-            color: #1a73e8;
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px 0;
-            margin-top: 4px;
-        }
-        .reply-btn:hover { text-decoration: underline; }
         .reply-form {
             display: none;
             margin-top: 6px;
@@ -331,6 +321,45 @@
             font-size: 10px;
             color: #aaa;
             font-family: monospace;
+        }
+        .cr-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .cr-actions button {
+            font-size: 11px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 0;
+        }
+        .btn-reply { color: #1a73e8; }
+        .btn-edit { color: #ff9800; }
+        .btn-delete { color: #f44336; }
+        .btn-reply:hover, .btn-edit:hover, .btn-delete:hover { text-decoration: underline; }
+        .edit-form {
+            display: none;
+            margin-top: 6px;
+        }
+        .edit-form.visible { display: flex; gap: 6px; }
+        .edit-input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+        }
+        .edit-input:focus { border-color: #ff9800; }
+        .edit-submit {
+            padding: 6px 12px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -522,22 +551,41 @@
 
             let repliesHtml = '';
             if (r.replies && r.replies.length > 0) {
+                const user = AUTH.getUser();
+                const isAdmin = user && user.role === 'admin';
                 repliesHtml = `<div class="cr-replies">` +
-                    r.replies.map(reply => `<div class="cr-reply">
-                        <div class="reply-meta"><span class="reply-author">${reply.author}</span> · ${reply.time}</div>
+                    r.replies.map((reply, idx) => {
+                        const deleteBtn = isAdmin ? `<button class="btn-delete" onclick="event.stopPropagation();deleteReply(${r.id},${idx})">删除</button>` : '';
+                        return `<div class="cr-reply">
+                        <div class="reply-meta"><span class="reply-author">${reply.author}</span> · ${reply.time} ${deleteBtn}</div>
                         <div class="reply-text">${reply.text}</div>
-                    </div>`).join('') + `</div>`;
+                    </div>`;
+                    }).join('') + `</div>`;
             }
+
+            const user = AUTH.getUser();
+            const isAdmin = user && user.role === 'admin';
+            const isOwner = user && user.username === r.author;
+            const editBtn = isOwner ? `<button class="btn-edit" onclick="toggleEdit(${r.id})">编辑</button>` : '';
+            const deleteBtn = isAdmin ? `<button class="btn-delete" onclick="deleteCR(${r.id})">删除</button>` : '';
 
             return `<div class="cr-item ${r.status}">
                 <div class="cr-header">
                     <span>${crId} ${typeTag}<span class="cr-author">${r.author}</span> ${statusTag}</span>
                     <span class="cr-time">${r.time}</span>
                 </div>
-                <div class="cr-text">${r.text}</div>
+                <div class="cr-text" id="crText-${r.id}">${r.text}</div>
+                <div class="edit-form" id="editForm-${r.id}">
+                    <input class="edit-input" id="editInput-${r.id}" value="${r.text.replace(/"/g,'&quot;')}" onkeydown="if(event.key==='Enter')saveEdit(${r.id})">
+                    <button class="edit-submit" onclick="saveEdit(${r.id})">保存</button>
+                </div>
                 ${resolution}
                 ${repliesHtml}
-                <button class="reply-btn" onclick="toggleReply(${r.id})">回复</button>
+                <div class="cr-actions">
+                    <button class="btn-reply" onclick="toggleReply(${r.id})">回复</button>
+                    ${editBtn}
+                    ${deleteBtn}
+                </div>
                 <div class="reply-form" id="replyForm-${r.id}">
                     <input class="reply-input" id="replyInput-${r.id}" placeholder="回复..." onkeydown="if(event.key==='Enter')submitReply(${r.id})">
                     <button class="reply-submit" onclick="submitReply(${r.id})">发送</button>
@@ -574,6 +622,45 @@
             renderCRs();
             showToast('✅ 回复已发送');
             await saveCRs(`Reply by ${AUTH.getUser().username} on CR#${crId}`);
+        }
+
+        async function deleteCR(crId) {
+            if (!confirm('确定删除此条目？')) return;
+            requests = requests.filter(r => r.id !== crId);
+            renderCRs();
+            showToast('已删除');
+            await saveCRs(`Delete CR#${crId}`);
+        }
+
+        async function deleteReply(crId, replyIdx) {
+            if (!confirm('确定删除此回复？')) return;
+            const cr = requests.find(r => r.id === crId);
+            if (!cr || !cr.replies) return;
+            cr.replies.splice(replyIdx, 1);
+            renderCRs();
+            showToast('已删除回复');
+            await saveCRs(`Delete reply on CR#${crId}`);
+        }
+
+        function toggleEdit(crId) {
+            const form = document.getElementById(`editForm-${crId}`);
+            form.classList.toggle('visible');
+            if (form.classList.contains('visible')) {
+                document.getElementById(`editInput-${crId}`).focus();
+            }
+        }
+
+        async function saveEdit(crId) {
+            const input = document.getElementById(`editInput-${crId}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const cr = requests.find(r => r.id === crId);
+            if (!cr) return;
+            cr.text = text;
+            renderCRs();
+            showToast('已保存编辑');
+            await saveCRs(`Edit CR#${crId} by ${AUTH.getUser().username}`);
         }
 
         async function submitCR() {

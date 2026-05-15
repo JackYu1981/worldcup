@@ -74,12 +74,12 @@ function parseMatches(html) {
     const handicap = parseInt(rangqiu) || 0;
 
     matches.push({
-      match_id: `f${fixtureId}`,
+      id: `f${fixtureId}`,
       code: code,
-      home_team: homeName,
-      away_team: awayName,
+      home: homeName,
+      away: awayName,
       date: matchDate,
-      time: matchTime,
+      kickoff: matchTime,
       process_date: processDate,
       status: 'scheduled',
       score: null,
@@ -151,7 +151,7 @@ async function main() {
   matches.forEach(m => {
     const hc = Math.abs(m.handicap.line);
     const hcDir = m.handicap.line > 0 ? `客让${hc}` : m.handicap.line < 0 ? `主让${hc}` : '平手';
-    console.log(`  ${m.code} ${m.home_team} vs ${m.away_team} (${m.date} ${m.time})`);
+    console.log(`  ${m.code} ${m.home} vs ${m.away} (${m.date} ${m.kickoff})`);
     console.log(`       胜平负: ${m.odds.home_win} / ${m.odds.draw} / ${m.odds.away_win}`);
     console.log(`       ${hcDir}: ${m.handicap.home_win} / ${m.handicap.draw} / ${m.handicap.away_win}`);
   });
