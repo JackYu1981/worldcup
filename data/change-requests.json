@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778860908447,
+      "author": "brian",
+      "type": "bug",
+      "text": "胜平负的赔率和让球胜平负的赔率反了",
+      "time": "2026-05-15T16:01:48.447Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778857929334,
       "author": "brian",
       "type": "bug",
