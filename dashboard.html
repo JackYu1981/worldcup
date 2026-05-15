@@ -344,11 +344,15 @@
 
         function renderCalendar() {
             const cal = document.getElementById('calendar');
-            // June 2026: June 1 is Monday
-            const daysInMonth = 30;
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            cal.innerHTML = `<div style="grid-column:1/-1;text-align:center;font-weight:600;padding:8px 0;">${year}年${month+1}月</div>`;
 
             for (let i = 1; i <= daysInMonth; i++) {
-                const dateStr = `2026-06-${String(i).padStart(2, '0')}`;
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2, '0')}`;
                 const plans = dailyMap[dateStr];
                 const div = document.createElement('div');
                 div.className = 'day';

@@ -187,28 +187,116 @@
 
     <script>
         const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
+        const PICKS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
 
         let allResults = [];
+        let matchDataCache = {};
+
+        async function fetchMatchData(date) {
+            if (matchDataCache[date]) return matchDataCache[date];
+            try {
+                const resp = await fetch(`/api/matches?date=${date}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    matchDataCache[date] = data.matches || [];
+                    return matchDataCache[date];
+                }
+            } catch(e) {}
+            matchDataCache[date] = [];
+            return [];
+        }
+
+        function determineResult(match) {
+            if (!match.score) return null;
+            const parts = match.score.split('-');
+            const home = parseInt(parts[0]), away = parseInt(parts[1]);
+            const diff = home - away;
+            const handicapLine = match.handicap ? match.handicap.line : 0;
+            const adjustedDiff = diff + handicapLine;
+            return {
+                '1x2': diff > 0 ? 'home_win' : diff === 0 ? 'draw' : 'away_win',
+                'handicap': adjustedDiff > 0 ? 'home_win' : adjustedDiff === 0 ? 'draw' : 'away_win',
+                score: match.score
+            };
+        }
+
+        function evaluateLegs(data, matchesByDate) {
+            const matches = matchesByDate || [];
+            if (!data.legs && data.combinations) {
+                data.combinations.forEach(c => {
+                    let allCorrect = true, anyEvaluated = false;
+                    c.legs.forEach(l => {
+                        const m = matches.find(x => x.id === l.match_id);
+                        if (m && m.score) {
+                            const result = determineResult(m);
+                            const market = l.market || '1x2';
+                            l.correct = result[market] === l.pick;
+                            l.actual_score = result.score;
+                            anyEvaluated = true;
+                            if (!l.correct) allCorrect = false;
+                        }
+                    });
+                    if (anyEvaluated) c.hit = allCorrect;
+                });
+            } else if (data.legs) {
+                let allCorrect = true, anyEvaluated = false;
+                data.legs.forEach(l => {
+                    const m = matches.find(x => x.id === l.match_id);
+                    if (m && m.score) {
+                        const result = determineResult(m);
+                        const market = l.market || '1x2';
+                        l.correct = result[market] === l.pick;
+                        l.actual_score = result.score;
+                        anyEvaluated = true;
+                        if (!l.correct) allCorrect = false;
+                    }
+                });
+                if (anyEvaluated) {
+                    if (!data.combinations) {
+                        data.combinations = [{ legs: data.legs, combined_odds: data.combined_odds || 1, stake: data.stake || 100, potential_return: Math.round((data.combined_odds || 1) * (data.stake || 100)), hit: allCorrect }];
+                    }
+                }
+            }
+            return data;
+        }
 
         async function loadAllResults() {
             try {
-                const resp = await fetch(RESULTS_INDEX_URL);
-                const files = await resp.json();
-                const resultFiles = files
-                    .filter(f => f.name.endsWith('.json'))
-                    .sort((a, b) => a.name.localeCompare(b.name));
+                const [resultsResp, picksResp] = await Promise.all([
+                    fetch(RESULTS_INDEX_URL).catch(() => null),
+                    fetch(PICKS_INDEX_URL).catch(() => null)
+                ]);
 
-                if (resultFiles.length === 0) {
+                let allFiles = [];
+                if (resultsResp && resultsResp.ok) {
+                    const files = await resultsResp.json();
+                    allFiles = allFiles.concat(files.filter(f => f.name.endsWith('.json')));
+                }
+                if (picksResp && picksResp.ok) {
+                    const files = await picksResp.json();
+                    allFiles = allFiles.concat(files.filter(f => f.name.endsWith('.json')));
+                }
+
+                allFiles.sort((a, b) => b.name.localeCompare(a.name));
+
+                if (allFiles.length === 0) {
                     document.getElementById('content').innerHTML = '<div class="empty-state"><p>暂无投注方案</p></div>';
                     return;
                 }
 
-                const results = await Promise.all(resultFiles.map(async f => {
+                const results = await Promise.all(allFiles.map(async f => {
                     const r = await fetch(f.download_url);
                     return r.json();
                 }));
 
-                allResults = results;
+                const dates = [...new Set(results.map(r => r.date).filter(Boolean))];
+                await Promise.all(dates.map(d => fetchMatchData(d)));
+
+                allResults = results.map(data => {
+                    const matches = matchDataCache[data.date] || [];
+                    return evaluateLegs(data, matches);
+                });
+
                 renderAllPlans();
             } catch (e) {
                 document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
@@ -223,14 +311,18 @@
             const content = document.getElementById('content');
 
             const html = allResults.map((data, idx) => {
+                if (!data.combinations || data.combinations.length === 0) {
+                    return '';
+                }
                 const combosHtml = data.combinations.map((c, i) => {
                     const legsHtml = c.legs.map(l => {
                         let icon = '';
                         if (l.correct === true) icon = ' ✓';
                         else if (l.correct === false) icon = ' ✗';
                         const legClass = l.correct === true ? 'leg-correct' : l.correct === false ? 'leg-wrong' : '';
+                        const scoreInfo = l.actual_score ? ` (${l.actual_score})` : '';
                         return `<div class="leg-item ${legClass}">
-                            <span>${l.match_desc} · ${l.pick_desc}${icon}</span>
+                            <span>${l.match_desc} · ${l.pick_desc}${scoreInfo}${icon}</span>
                             <span class="odds-val">@${l.odds.toFixed(2)}</span>
                         </div>`;
                     }).join('');
