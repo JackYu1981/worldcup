@@ -110,6 +110,29 @@
             color: #333; cursor: pointer;
         }
 
+        .user-group {
+            margin-bottom: 8px; border-radius: 10px; overflow: hidden;
+            background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .user-group-header {
+            padding: 12px 14px; display: flex; justify-content: space-between;
+            align-items: center; cursor: pointer; background: #fafafa;
+            border-bottom: 1px solid #eee;
+        }
+        .user-group-header:active { background: #f0f0f0; }
+        .user-group-name { font-size: 13px; font-weight: 600; color: #333; }
+        .user-group-arrow {
+            font-size: 12px; color: #999; transition: transform 0.2s;
+        }
+        .user-group.expanded .user-group-arrow { transform: rotate(180deg); }
+        .user-group-body {
+            max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+            padding: 0 10px;
+        }
+        .user-group.expanded .user-group-body {
+            max-height: 5000px; padding: 10px;
+        }
+
         .ai-section {
             background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
             border-radius: 10px; padding: 14px; margin-bottom: 10px;
@@ -268,25 +291,37 @@
             const content = document.getElementById('content');
             let html = '';
 
-            if (userRecs.length > 0) {
-                const selected = [];
-                const unselected = [];
-                userRecs.forEach((rec, idx) => {
-                    const isSelected = plans.some(p => p.combined_odds === rec.combined_odds && p.legs.length === rec.legs.length);
-                    if (isSelected) selected.push(idx);
-                    else unselected.push(idx);
-                });
-                const sortedIdxs = [...selected, ...unselected];
-
-                html += `<div class="section-title">👤 用户推荐</div>`;
-                html += sortedIdxs.map(idx => renderRecCard(userRecs[idx], idx, selected.includes(idx))).join('');
+            if (plans.length > 0) {
+                html += `<div class="section-title">📋 已确认方案</div>`;
+                html += plans.map(p => renderPlanCard(p)).join('');
             }
 
             html += renderAiSection();
 
-            if (plans.length > 0) {
-                html += `<div class="section-title" style="margin-top:16px;">📋 已确认方案</div>`;
-                html += plans.map(p => renderPlanCard(p)).join('');
+            if (userRecs.length > 0) {
+                const byUser = {};
+                userRecs.forEach((rec, idx) => {
+                    const user = rec.submitted_by || '未知';
+                    if (!byUser[user]) byUser[user] = [];
+                    byUser[user].push(idx);
+                });
+
+                html += `<div class="section-title" style="margin-top:16px;">👤 用户推荐</div>`;
+                Object.keys(byUser).forEach(user => {
+                    const idxs = byUser[user];
+                    html += `<div class="user-group">
+                        <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
+                            <span class="user-group-name">${user} (${idxs.length})</span>
+                            <span class="user-group-arrow">▼</span>
+                        </div>
+                        <div class="user-group-body">
+                            ${idxs.map(idx => {
+                                const isSelected = plans.some(p => p.combined_odds === userRecs[idx].combined_odds && p.legs.length === userRecs[idx].legs.length);
+                                return renderRecCard(userRecs[idx], idx, isSelected);
+                            }).join('')}
+                        </div>
+                    </div>`;
+                });
             }
 
             if (!userRecs.length && !plans.length) {
