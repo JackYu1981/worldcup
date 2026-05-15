@@ -155,10 +155,16 @@
         .combo-info .left { font-size: 13px; color: #333; }
         .combo-info .left strong { color: #e65100; }
         .combo-info .right { font-size: 11px; color: #888; }
-        .combo-legs { font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.6; }
-        .combo-legs .leg-tag {
-            display: inline-block; background: #e3f2fd; color: #1565c0;
-            padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; font-size: 10px;
+        .combo-legs { font-size: 11px; color: #555; margin-bottom: 8px; }
+        .combo-match { border-bottom: 1px solid #f0f0f0; padding: 6px 0; }
+        .combo-match:last-child { border-bottom: none; }
+        .combo-match-info { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 4px; }
+        .combo-match-info .match-teams { font-weight: 600; color: #333; font-size: 12px; }
+        .combo-match-info .match-meta { font-size: 10px; color: #999; }
+        .combo-match-picks { display: flex; gap: 6px; flex-wrap: wrap; }
+        .combo-match-picks .pick-tag {
+            display: inline-block; background: #e74c3c; color: white;
+            padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600;
         }
         .combo-btns { display: flex; gap: 8px; }
         .combo-btns button {
@@ -578,9 +584,20 @@
                 document.getElementById('comboReturn').textContent = `预计奖 ¥${(info.minOdds * 2).toFixed(2)}~${(info.maxOdds * 2).toFixed(2)}`;
             }
 
-            const legsHtml = keys.map(k => {
-                const c = combo[k];
-                return `<span class="leg-tag">${c.code} ${c.match_desc} · ${c.desc} @${c.odds.toFixed(2)}</span>`;
+            const matchIds = Object.keys(info.byMatch);
+            const legsHtml = matchIds.map(mid => {
+                const picks = info.byMatch[mid];
+                const first = picks[0];
+                const picksHtml = picks.map(p => {
+                    const marketLabel = p.market === 'handicap' ? '让球' : '';
+                    return `<span class="pick-tag">${marketLabel}${p.desc} @${p.odds.toFixed(2)}</span>`;
+                }).join('');
+                return `<div class="combo-match">
+                    <div class="combo-match-info">
+                        <span class="match-teams">${first.code} ${first.match_desc}</span>
+                    </div>
+                    <div class="combo-match-picks">${picksHtml}</div>
+                </div>`;
             }).join('');
             document.getElementById('comboLegs').innerHTML = legsHtml;
         }
