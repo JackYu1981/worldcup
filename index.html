@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
     <title>赛程 - 世界杯投注助手</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -10,46 +12,111 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f5f5f5;
             color: #333;
-            padding: 16px;
-            padding-bottom: 160px;
+            padding: 0 0 160px 0;
         }
-        h1 { font-size: 20px; text-align: center; padding: 12px 0; }
-        .nav-tabs { display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .nav-tab { padding: 8px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
+        .header {
+            background: white;
+            padding: 12px 16px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .subtitle { font-size: 11px; color: #999; margin-top: 2px; }
+        .nav-tabs {
+            display: flex; justify-content: center; gap: 12px;
+            padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
+            flex-wrap: wrap;
+        }
+        .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
         .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
-        .date-scroll { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
-        .date-scroll::-webkit-scrollbar { display: none; }
-        .date-chip { padding: 8px 14px; border-radius: 18px; background: white; border: 1px solid #e0e0e0; font-size: 12px; white-space: nowrap; cursor: pointer; flex-shrink: 0; transition: all 0.2s; }
-        .date-chip.active { background: #1a73e8; color: white; border-color: #1a73e8; }
-        .date-chip .day { font-weight: 600; }
-        .date-chip .weekday { font-size: 10px; opacity: 0.7; margin-top: 1px; }
-        .stage-label { font-size: 12px; color: #888; padding: 6px 0; margin-bottom: 6px; border-bottom: 1px solid #eee; font-weight: 500; }
-        .match-card { background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-        .match-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .match-time { font-size: 12px; color: #888; }
-        .match-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-        .match-status.finished { background: #e8f5e9; color: #2e7d32; }
-        .match-status.live { background: #ffebee; color: #c62828; animation: pulse 1.5s infinite; }
-        .match-status.scheduled { background: #e3f2fd; color: #1565c0; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
-        .match-teams { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
-        .team { flex: 1; text-align: center; font-size: 15px; font-weight: 600; }
-        .team.winner { color: #c62828; }
-        .score-display { font-size: 22px; font-weight: 700; color: #333; min-width: 60px; text-align: center; }
-        .score-display.pending { font-size: 14px; color: #aaa; font-weight: 400; }
-        .odds-section { border-top: 1px solid #f5f5f5; padding-top: 10px; }
-        .odds-label { font-size: 10px; color: #aaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .odds-row { display: flex; gap: 6px; margin-bottom: 6px; }
-        .odds-cell {
-            flex: 1; text-align: center; padding: 8px 4px;
-            background: #f8f9fa; border-radius: 6px; font-size: 11px;
-            cursor: pointer; border: 2px solid transparent; transition: all 0.15s;
+
+        .date-tabs {
+            display: flex; overflow-x: auto; background: white;
+            border-bottom: 1px solid #eee; padding: 0;
+            -webkit-overflow-scrolling: touch;
         }
-        .odds-cell.selected { border-color: #1a73e8; background: #e8f0fe; }
-        .odds-cell:active { transform: scale(0.95); }
-        .odds-cell .type { color: #888; font-size: 10px; }
-        .odds-cell .val { font-weight: 600; color: #333; margin-top: 1px; }
-        .handicap-line { font-size: 10px; color: #c62828; text-align: center; margin: 2px 0 4px; font-weight: 500; }
+        .date-tabs::-webkit-scrollbar { display: none; }
+        .date-tab {
+            flex: 1; min-width: 80px; padding: 12px 8px; text-align: center;
+            font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent;
+            white-space: nowrap; transition: all 0.2s;
+        }
+        .date-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; background: #fff8f8; }
+        .date-tab .day { font-weight: 600; font-size: 13px; }
+        .date-tab .weekday { font-size: 10px; margin-top: 2px; }
+
+        .period-header {
+            padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .period-header .period-info { font-size: 13px; font-weight: 600; color: #333; }
+        .period-header .period-info .match-count { color: #e74c3c; }
+        .period-header .period-meta { font-size: 11px; color: #999; }
+
+        .match-list { padding: 0 12px 12px; }
+
+        .match-card {
+            background: white; border-radius: 8px; margin-top: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        .match-header {
+            display: flex; align-items: center; padding: 10px 12px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .match-code {
+            background: #4caf50; color: white; font-size: 11px; font-weight: 600;
+            padding: 2px 8px; border-radius: 3px; margin-right: 10px;
+        }
+        .match-code.finished { background: #999; }
+        .match-teams-row {
+            flex: 1; display: flex; justify-content: space-between; align-items: center;
+            font-size: 14px; font-weight: 500;
+        }
+        .match-teams-row .home { text-align: left; }
+        .match-teams-row .away { text-align: right; }
+        .match-teams-row .vs {
+            font-size: 12px; color: #aaa; padding: 0 8px;
+        }
+        .match-teams-row .score {
+            font-size: 16px; font-weight: 700; color: #e74c3c; padding: 0 8px;
+        }
+        .match-time-badge {
+            font-size: 11px; color: #999; margin-left: 8px; white-space: nowrap;
+        }
+
+        .odds-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 0;
+        }
+        .odds-grid-row {
+            display: contents;
+        }
+        .odds-cell {
+            text-align: center; padding: 10px 4px; cursor: pointer;
+            border-right: 1px solid #f5f5f5; border-bottom: 1px solid #f5f5f5;
+            transition: background 0.15s;
+        }
+        .odds-cell:nth-child(3n) { border-right: none; }
+        .odds-cell:active { background: #f0f0f0; }
+        .odds-cell.selected { background: #e8f0fe; }
+        .odds-cell .label { font-size: 10px; color: #999; }
+        .odds-cell .value { font-size: 14px; font-weight: 600; color: #333; margin-top: 2px; }
+        .odds-cell .value.red { color: #e74c3c; }
+
+        .handicap-row {
+            display: flex; align-items: center; padding: 0;
+            background: #fafafa;
+        }
+        .handicap-tag {
+            font-size: 11px; color: #4caf50; font-weight: 600;
+            padding: 10px 12px; border-right: 1px solid #f0f0f0;
+            min-width: 50px; text-align: center;
+        }
+        .handicap-odds {
+            flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr;
+        }
+        .handicap-odds .odds-cell { background: #fafafa; border-bottom: none; }
+        .handicap-odds .odds-cell.selected { background: #e8f0fe; }
+
         .empty-state { text-align: center; color: #999; padding: 60px 20px; font-size: 14px; }
 
         .combo-bar {
@@ -74,8 +141,8 @@
             font-size: 13px; font-weight: 600; cursor: pointer;
         }
         .btn-clear { background: #f5f5f5; color: #666; }
-        .btn-generate { background: #1a73e8; color: white; }
-        .btn-generate:active { background: #1557b0; }
+        .btn-generate { background: #e74c3c; color: white; }
+        .btn-generate:active { background: #c0392b; }
 
         .confirm-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -96,7 +163,7 @@
         .confirm-modal .btns { display: flex; gap: 10px; }
         .confirm-modal .btns button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
         .confirm-modal .btn-cancel { background: #f5f5f5; color: #666; }
-        .confirm-modal .btn-submit { background: #1a73e8; color: white; }
+        .confirm-modal .btn-submit { background: #e74c3c; color: white; }
         .confirm-modal .btn-submit:disabled { background: #ccc; }
         .tier-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-top: 6px; }
         .tier-badge.conservative { background: #e8f5e9; color: #2e7d32; }
@@ -106,7 +173,10 @@
     </style>
 </head>
 <body>
-    <h1>⚽ 世界杯投注助手</h1>
+    <div class="header">
+        <h1>竞足·混合过关</h1>
+        <div class="subtitle">500彩票平台，仅提供官方信息展示</div>
+    </div>
 
     <div class="nav-tabs">
         <a class="nav-tab active" href="index.html">赛程</a>
@@ -116,8 +186,13 @@
         <a class="nav-tab" href="design.html">修订</a>
     </div>
 
-    <div class="date-scroll" id="dateScroll"></div>
-    <div id="matchList"><div class="empty-state">加载中...</div></div>
+    <div class="date-tabs" id="dateTabs"></div>
+
+    <div class="period-header" id="periodHeader">
+        <div class="period-info">加载中...</div>
+    </div>
+
+    <div class="match-list" id="matchList"></div>
 
     <div class="combo-bar" id="comboBar">
         <div class="combo-info">
@@ -147,6 +222,13 @@
 
     <script src="auth.js"></script>
     <script>
+        const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
+        const WEEKDAY_PREFIX = ['周日','周一','周二','周三','周四','周五','周六'];
+        const BASE_URL = '';
+        let currentDate = '';
+        let matches = [];
+        let combo = {};
+
         function generateDates() {
             const dates = [];
             const now = new Date();
@@ -158,35 +240,43 @@
             }
             return dates;
         }
-        const DATES = generateDates();
-        const WEEKDAYS = ['日','一','二','三','四','五','六'];
-        const BASE_URL = '';
-        let currentDate = DATES[0];
-        let matches = [];
-        let combo = {};
 
-        function renderDateScroll() {
-            const scroll = document.getElementById('dateScroll');
-            scroll.innerHTML = DATES.map(d => {
+        const DATES = generateDates();
+        currentDate = DATES[0];
+
+        function renderDateTabs() {
+            const container = document.getElementById('dateTabs');
+            container.innerHTML = DATES.map(d => {
                 const dt = new Date(d + 'T00:00:00+08:00');
                 const active = d === currentDate ? 'active' : '';
-                return `<div class="date-chip ${active}" onclick="switchDate('${d}')">
-                    <div class="day">${dt.getMonth()+1}/${dt.getDate()}</div>
-                    <div class="weekday">周${WEEKDAYS[dt.getDay()]}</div>
+                const isToday = d === DATES[0] ? ' (今天)' : '';
+                return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
+                    <div class="day">${dt.getMonth()+1}月${dt.getDate()}日${isToday}</div>
+                    <div class="weekday">周${WEEKDAY_SHORT[dt.getDay()]}</div>
                 </div>`;
             }).join('');
-            const activeEl = scroll.querySelector('.active');
-            if (activeEl) activeEl.scrollIntoView({ inline: 'center', behavior: 'smooth' });
         }
 
         function switchDate(date) {
             currentDate = date;
-            renderDateScroll();
+            renderDateTabs();
             loadMatches(date);
+        }
+
+        function updatePeriodHeader() {
+            const header = document.getElementById('periodHeader');
+            const dt = new Date(currentDate + 'T00:00:00+08:00');
+            const weekday = WEEKDAY_PREFIX[dt.getDay()];
+            const dateStr = `${currentDate}期`;
+            const count = matches ? matches.length : 0;
+            header.innerHTML = `
+                <div class="period-info">${dateStr} ${weekday} <span class="match-count">${count}场比赛</span></div>
+                <div class="period-meta">开售 11:00 截止 22:00</div>`;
         }
 
         async function loadMatches(date) {
             const list = document.getElementById('matchList');
+            list.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
                 let resp = await fetch(`/api/matches?date=${date}`);
                 if (!resp.ok) {
@@ -195,8 +285,11 @@
                 if (!resp.ok) throw new Error('no data');
                 const data = await resp.json();
                 matches = data.matches;
+                updatePeriodHeader();
                 renderMatches();
             } catch(e) {
+                matches = [];
+                updatePeriodHeader();
                 list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
             }
         }
@@ -208,45 +301,30 @@
                 return;
             }
 
-            const grouped = {};
-            matches.forEach(m => {
-                const key = m.league || '其他';
-                if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(m);
-            });
-
             let html = '';
-            for (const [league, mats] of Object.entries(grouped)) {
-                html += `<div class="stage-label">${league}</div>`;
-                mats.forEach(m => { html += renderMatchCard(m); });
-            }
+            matches.forEach(m => { html += renderMatchCard(m); });
             list.innerHTML = html;
         }
 
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
-            let statusHtml, scoreHtml, homeClass = '', awayClass = '';
+            const dt = new Date(currentDate + 'T00:00:00+08:00');
+            const prefix = WEEKDAY_PREFIX[dt.getDay()];
+            const codeText = `${prefix}${m.code || '000'}`;
+            const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
+            let centerHtml;
             if (status === 'finished' && m.score) {
-                statusHtml = `<span class="match-status finished">已结束</span>`;
                 let homeScore, awayScore;
                 if (typeof m.score === 'string') {
                     const parts = m.score.split('-');
-                    homeScore = parseInt(parts[0]);
-                    awayScore = parseInt(parts[1]);
+                    homeScore = parts[0]; awayScore = parts[1];
                 } else {
-                    homeScore = m.score.home;
-                    awayScore = m.score.away;
+                    homeScore = m.score.home; awayScore = m.score.away;
                 }
-                scoreHtml = `<div class="score-display">${homeScore} - ${awayScore}</div>`;
-                if (homeScore > awayScore) homeClass = 'winner';
-                else if (awayScore > homeScore) awayClass = 'winner';
-            } else if (status === 'live') {
-                statusHtml = `<span class="match-status live">● 进行中</span>`;
-                scoreHtml = `<div class="score-display">0 - 0</div>`;
+                centerHtml = `<span class="score">${homeScore}-${awayScore}</span>`;
             } else {
-                statusHtml = `<span class="match-status scheduled">未开始</span>`;
-                scoreHtml = `<div class="score-display pending">vs</div>`;
+                centerHtml = `<span class="vs">VS</span>`;
             }
 
             const sel = combo[m.id];
@@ -256,46 +334,47 @@
 
             let oddsHtml = '';
             if (m.odds && m.odds.home_win != null) {
-                oddsHtml += `<div class="odds-section">
-                    <div class="odds-label">胜平负</div>
-                    <div class="odds-row">
-                        <div class="odds-cell ${cellClass('1x2','home_win')}" onclick="togglePick('${m.id}','1x2','home_win',${m.odds.home_win},'${m.home}胜')">
-                            <div class="type">主胜</div><div class="val">${m.odds.home_win.toFixed(2)}</div>
-                        </div>
-                        <div class="odds-cell ${cellClass('1x2','draw')}" onclick="togglePick('${m.id}','1x2','draw',${m.odds.draw},'平')">
-                            <div class="type">平</div><div class="val">${m.odds.draw.toFixed(2)}</div>
-                        </div>
-                        <div class="odds-cell ${cellClass('1x2','away_win')}" onclick="togglePick('${m.id}','1x2','away_win',${m.odds.away_win},'${m.away}胜')">
-                            <div class="type">客胜</div><div class="val">${m.odds.away_win.toFixed(2)}</div>
-                        </div>
-                    </div>`;
+                oddsHtml += `<div class="odds-grid">
+                    <div class="odds-cell ${cellClass('1x2','home_win')}" onclick="togglePick('${m.id}','1x2','home_win',${m.odds.home_win},'${m.home}胜')">
+                        <div class="label">胜</div><div class="value">${m.odds.home_win.toFixed(2)}</div>
+                    </div>
+                    <div class="odds-cell ${cellClass('1x2','draw')}" onclick="togglePick('${m.id}','1x2','draw',${m.odds.draw},'平')">
+                        <div class="label">平</div><div class="value">${m.odds.draw.toFixed(2)}</div>
+                    </div>
+                    <div class="odds-cell ${cellClass('1x2','away_win')}" onclick="togglePick('${m.id}','1x2','away_win',${m.odds.away_win},'${m.away}胜')">
+                        <div class="label">负</div><div class="value">${m.odds.away_win.toFixed(2)}</div>
+                    </div>
+                </div>`;
+
                 if (m.handicap && m.handicap.home_win != null) {
-                    const lineText = m.handicap.line < 0 ? `主让${Math.abs(m.handicap.line)}球` : m.handicap.line > 0 ? `客让${m.handicap.line}球` : '平手盘';
-                    oddsHtml += `<div class="handicap-line">让球: ${lineText}</div>
-                    <div class="odds-row">
-                        <div class="odds-cell ${cellClass('handicap','home_win')}" onclick="togglePick('${m.id}','handicap','home_win',${m.handicap.home_win},'让球主胜')">
-                            <div class="type">主胜</div><div class="val">${m.handicap.home_win.toFixed(2)}</div>
-                        </div>
-                        <div class="odds-cell ${cellClass('handicap','draw')}" onclick="togglePick('${m.id}','handicap','draw',${m.handicap.draw},'让球平')">
-                            <div class="type">平</div><div class="val">${m.handicap.draw.toFixed(2)}</div>
-                        </div>
-                        <div class="odds-cell ${cellClass('handicap','away_win')}" onclick="togglePick('${m.id}','handicap','away_win',${m.handicap.away_win},'让球客胜')">
-                            <div class="type">客胜</div><div class="val">${m.handicap.away_win.toFixed(2)}</div>
+                    const line = m.handicap.line;
+                    const lineText = line < 0 ? `${line}` : `+${line}`;
+                    oddsHtml += `<div class="handicap-row">
+                        <div class="handicap-tag">${lineText}</div>
+                        <div class="handicap-odds">
+                            <div class="odds-cell ${cellClass('handicap','home_win')}" onclick="togglePick('${m.id}','handicap','home_win',${m.handicap.home_win},'让球胜')">
+                                <div class="label">胜</div><div class="value">${m.handicap.home_win.toFixed(2)}</div>
+                            </div>
+                            <div class="odds-cell ${cellClass('handicap','draw')}" onclick="togglePick('${m.id}','handicap','draw',${m.handicap.draw},'让球平')">
+                                <div class="label">平</div><div class="value">${m.handicap.draw.toFixed(2)}</div>
+                            </div>
+                            <div class="odds-cell ${cellClass('handicap','away_win')}" onclick="togglePick('${m.id}','handicap','away_win',${m.handicap.away_win},'让球负')">
+                                <div class="label">负</div><div class="value">${m.handicap.away_win.toFixed(2)}</div>
+                            </div>
                         </div>
                     </div>`;
                 }
-                oddsHtml += '</div>';
             }
 
             return `<div class="match-card">
-                <div class="match-top">
-                    <span class="match-time">${m.kickoff} 北京时间</span>
-                    ${statusHtml}
-                </div>
-                <div class="match-teams">
-                    <span class="team ${homeClass}">${m.home}</span>
-                    ${scoreHtml}
-                    <span class="team ${awayClass}">${m.away}</span>
+                <div class="match-header">
+                    <span class="${codeClass}">${codeText}</span>
+                    <div class="match-teams-row">
+                        <span class="home">${m.home}</span>
+                        ${centerHtml}
+                        <span class="away">${m.away}</span>
+                    </div>
+                    <span class="match-time-badge">${m.kickoff}</span>
                 </div>
                 ${oddsHtml}
             </div>`;
@@ -307,7 +386,7 @@
                 delete combo[matchId];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                combo[matchId] = { market, pick, odds, desc, match_desc: `${m.home}vs${m.away}` };
+                combo[matchId] = { market, pick, odds, desc, match_desc: `${m.home}vs${m.away}`, code: m.code || '000' };
             }
             renderMatches();
             updateComboBar();
@@ -331,7 +410,7 @@
 
             const legsHtml = keys.map(k => {
                 const c = combo[k];
-                return `<span class="leg-tag">${c.match_desc} · ${c.desc} @${c.odds.toFixed(2)}</span>`;
+                return `<span class="leg-tag">${c.code} ${c.match_desc} · ${c.desc} @${c.odds.toFixed(2)}</span>`;
             }).join('');
             document.getElementById('comboLegs').innerHTML = legsHtml;
         }
@@ -361,11 +440,11 @@
             const returnVal = Math.round(totalOdds * 100);
 
             let tierLabel, tierClass;
-            if (totalOdds < 10) { tierLabel = '🟢 保守型'; tierClass = 'conservative'; }
-            else if (totalOdds < 20) { tierLabel = '🟡 进取型'; tierClass = 'progressive'; }
-            else { tierLabel = '🔴 激进型'; tierClass = 'aggressive'; }
+            if (totalOdds < 10) { tierLabel = '保守型'; tierClass = 'conservative'; }
+            else if (totalOdds < 20) { tierLabel = '进取型'; tierClass = 'progressive'; }
+            else { tierLabel = '激进型'; tierClass = 'aggressive'; }
 
-            const legsText = keys.map(k => `${combo[k].match_desc} · ${combo[k].desc} @${combo[k].odds.toFixed(2)}`).join('<br>');
+            const legsText = keys.map(k => `${combo[k].code} ${combo[k].match_desc} · ${combo[k].desc} @${combo[k].odds.toFixed(2)}`).join('<br>');
             document.getElementById('confirmSummary').innerHTML = `
                 ${legsText}<br>
                 <strong>综合赔率 ×${totalOdds.toFixed(2)}</strong> · 投¥100得 <strong>¥${returnVal.toLocaleString()}</strong>
@@ -409,6 +488,7 @@
                 legs: keys.map(k => ({
                     match_id: k,
                     match_desc: combo[k].match_desc,
+                    code: combo[k].code,
                     market: combo[k].market,
                     pick: combo[k].pick,
                     pick_desc: combo[k].desc,
@@ -426,23 +506,20 @@
                 if (result.success) {
                     closeConfirm();
                     copyPickText(payload.legs);
-                    showToast(`✅ 自定义方案已提交！已复制竞彩格式`);
+                    showToast('方案已提交！已复制竞彩格式');
                     clearCombo();
                 } else {
-                    showToast(`❌ 提交失败：${result.error}`);
+                    showToast(`提交失败：${result.error}`);
                 }
             } catch(e) {
-                showToast(`❌ 网络错误：${e.message}`);
+                showToast(`网络错误：${e.message}`);
             }
             btn.disabled = false;
             btn.textContent = '确认提交';
         }
 
         function copyPickText(legs) {
-            const lines = legs.map((l, i) => {
-                const code = String(i+1).padStart(3, '0');
-                return `${code} ${l.match_desc} ${l.pick_desc}`;
-            });
+            const lines = legs.map(l => `${l.code} ${l.match_desc} ${l.pick_desc}`);
             navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
         }
 
@@ -454,7 +531,7 @@
         }
 
         AUTH.requireLogin(function(user) {
-            renderDateScroll();
+            renderDateTabs();
             loadMatches(currentDate);
         });
     </script>
