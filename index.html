@@ -402,7 +402,8 @@
                 const result = await resp.json();
                 if (result.success) {
                     closeConfirm();
-                    showToast(`✅ 自定义方案已提交！口令：${passphrase}`);
+                    copyPickText(payload.legs);
+                    showToast(`✅ 自定义方案已提交！已复制竞彩格式`);
                     clearCombo();
                 } else {
                     showToast(`❌ 提交失败：${result.error}`);
@@ -412,6 +413,14 @@
             }
             btn.disabled = false;
             btn.textContent = '确认提交';
+        }
+
+        function copyPickText(legs) {
+            const lines = legs.map((l, i) => {
+                const code = String(i+1).padStart(3, '0');
+                return `${code} ${l.match_desc} ${l.pick_desc}`;
+            });
+            navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
         }
 
         function showToast(msg) {

@@ -134,7 +134,22 @@
             color: #333;
         }
         .potential-return { color: #2e7d32; font-weight: 600; }
+        .copy-btn {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+            text-align: center;
+        }
+        .copy-btn:active { background: #e0e0e0; }
         .leg-correct { color: #2e7d32; }
+        .leg-correct .odds-val { color: #c62828; font-weight: 700; }
         .leg-wrong { color: #999; text-decoration: line-through; }
         .combo-hit {
             background: #ffebee;
@@ -216,7 +231,7 @@
                         const legClass = l.correct === true ? 'leg-correct' : l.correct === false ? 'leg-wrong' : '';
                         return `<div class="leg-item ${legClass}">
                             <span>${l.match_desc} · ${l.pick_desc}${icon}</span>
-                            <span>@${l.odds.toFixed(2)}</span>
+                            <span class="odds-val">@${l.odds.toFixed(2)}</span>
                         </div>`;
                     }).join('');
                     const hitLabel = c.hit === true ? ' ✓ 命中' : c.hit === false ? ' ✗' : '';
@@ -231,6 +246,7 @@
                             <span>投注 ¥${c.stake}</span>
                             <span class="potential-return">${c.hit ? '中奖' : '可得'} ¥${c.potential_return.toLocaleString()}</span>
                         </div>
+                        <button class="copy-btn" onclick="event.stopPropagation();copyCombo(${idx},${i})">📋 复制竞彩格式</button>
                     </div>`;
                 }).join('');
 
@@ -260,6 +276,19 @@
             }).join('');
 
             content.innerHTML = html;
+        }
+
+        function copyCombo(resultIdx, comboIdx) {
+            const combo = allResults[resultIdx].combinations[comboIdx];
+            const lines = combo.legs.map((l, i) => {
+                const code = String(i+1).padStart(3, '0');
+                return `${code} ${l.match_desc} ${l.pick_desc}`;
+            });
+            navigator.clipboard.writeText(lines.join('\n')).then(() => {
+                const btn = event.target;
+                btn.textContent = '✅ 已复制';
+                setTimeout(() => btn.textContent = '📋 复制竞彩格式', 1500);
+            }).catch(() => {});
         }
 
         loadAllResults();
