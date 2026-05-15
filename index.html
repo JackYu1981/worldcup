@@ -158,14 +158,15 @@
         .combo-legs { font-size: 11px; color: #555; margin-bottom: 8px; }
         .combo-match { border-bottom: 1px solid #f0f0f0; padding: 6px 0; }
         .combo-match:last-child { border-bottom: none; }
-        .combo-match-info { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 4px; }
+        .combo-match-info { font-size: 11px; color: #666; margin-bottom: 4px; }
         .combo-match-info .match-teams { font-weight: 600; color: #333; font-size: 12px; }
-        .combo-match-info .match-meta { font-size: 10px; color: #999; }
-        .combo-match-picks { display: flex; gap: 6px; flex-wrap: wrap; }
-        .combo-match-picks .pick-tag {
+        .combo-match-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px; }
+        .combo-match-row .pick-slot { text-align: center; min-height: 20px; }
+        .combo-match-row .pick-tag {
             display: inline-block; background: #e74c3c; color: white;
             padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600;
         }
+        .combo-match-row .pick-empty { }
         .combo-btns { display: flex; gap: 8px; }
         .combo-btns button {
             flex: 1; padding: 10px; border: none; border-radius: 8px;
@@ -588,15 +589,35 @@
             const legsHtml = matchIds.map(mid => {
                 const picks = info.byMatch[mid];
                 const first = picks[0];
-                const picksHtml = picks.map(p => {
-                    const marketLabel = p.market === 'handicap' ? '让球' : '';
-                    return `<span class="pick-tag">${marketLabel}${p.desc} @${p.odds.toFixed(2)}</span>`;
-                }).join('');
+
+                const grid = { '1x2': {home_win: null, draw: null, away_win: null}, handicap: {home_win: null, draw: null, away_win: null} };
+                picks.forEach(p => {
+                    const market = p.market || '1x2';
+                    if (grid[market]) grid[market][p.pick] = p;
+                });
+
+                function renderRow(market, label) {
+                    const row = grid[market];
+                    const hasAny = Object.values(row).some(v => v !== null);
+                    if (!hasAny) return '';
+                    const prefix = label ? `<span style="font-size:9px;color:#999;position:absolute;left:0;top:-1px;">${label}</span>` : '';
+                    const cells = ['home_win', 'draw', 'away_win'].map(pos => {
+                        if (row[pos]) {
+                            return `<div class="pick-slot"><span class="pick-tag">${row[pos].desc} @${row[pos].odds.toFixed(2)}</span></div>`;
+                        }
+                        return `<div class="pick-slot pick-empty"></div>`;
+                    }).join('');
+                    return `<div class="combo-match-row" style="position:relative;">${prefix}${cells}</div>`;
+                }
+
+                const row1x2 = renderRow('1x2', '');
+                const rowHandicap = renderRow('handicap', '让');
+
                 return `<div class="combo-match">
                     <div class="combo-match-info">
                         <span class="match-teams">${first.code} ${first.match_desc}</span>
                     </div>
-                    <div class="combo-match-picks">${picksHtml}</div>
+                    ${row1x2}${rowHandicap}
                 </div>`;
             }).join('');
             document.getElementById('comboLegs').innerHTML = legsHtml;
