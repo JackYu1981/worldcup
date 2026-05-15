@@ -16,10 +16,10 @@
         "away_win": 4.80
       },
       "handicap": {
-        "line": -0.5,
-        "home_win": 2.30,
+        "line": -1,
+        "home_win": 3.30,
         "draw": 3.15,
-        "away_win": 2.90
+        "away_win": 2.00
       }
     },
     {
