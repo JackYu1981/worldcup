@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778811201934,
+      "author": "brian",
+      "type": "feature",
+      "text": "当我单机选择此方案的时候，帮我生成如下格式 001 丹麦对法国 主胜\n002 德国对科特迪瓦 让球胜\n004 日本对南非 客胜\n并且直接到剪切板，我便可以粘贴给彩票站下单",
+      "time": "2026-05-14 20:13",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778810565016,
       "author": "brian",
       "type": "bug",
