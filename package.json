@@ -1,0 +1,26 @@
+{
+  "name": "worldcup",
+  "version": "1.0.0",
+  "description": "基于概率的世界杯复式投注策略系统，利用多数据源赔率分析辅助每日投注决策。",
+  "main": "auth.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackYu1981/worldcup.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JackYu1981/worldcup/issues"
+  },
+  "homepage": "https://github.com/JackYu1981/worldcup#readme",
+  "dependencies": {
+    "iconv-lite": "^0.7.2"
+  }
+}
