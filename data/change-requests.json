@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "也就是说一场比赛只有一个赔率能参与结果的计算，多选的赔率出多个结果",
       "time": "2026-05-15T14:51:56.472Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.3",
+      "resolution": "已实现：每注组合中每场比赛只取一个赔率，多选产生多注结果（笛卡尔积）",
       "replies": []
     },
     {
