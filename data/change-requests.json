@@ -92,7 +92,13 @@
       "status": "adopted",
       "resolved_in": null,
       "resolution": null,
-      "replies": []
+      "replies": [
+        {
+          "author": "brian",
+          "text": "这个并没有高亮显示最后结果对应的赔率",
+          "time": "2026-05-14 20:46"
+        }
+      ]
     },
     {
       "id": 1715700001,
