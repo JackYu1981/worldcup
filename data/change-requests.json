@@ -1,6 +1,28 @@
 {
   "requests": [
     {
+      "id": 1778810565016,
+      "author": "brian",
+      "type": "bug",
+      "text": "自定义选择投注之后，并没有添加我的选择到推荐页面",
+      "time": "2026-05-14 20:02",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
+      "id": 1778810539581,
+      "author": "brian",
+      "type": "improvement",
+      "text": "自定义选择投注之后，并没有添加我的选择到推荐页面",
+      "time": "2026-05-14 20:02",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778810502648,
       "author": "brian",
       "type": "feature",
