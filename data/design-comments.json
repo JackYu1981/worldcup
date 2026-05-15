@@ -55,6 +55,13 @@
       "text": "每个人的反馈都显示成brian吗？我们是不是要引入一个登陆机制来区分brian，jack，和claude的动作———本条建议来自jack",
       "time": "5/15 9:09",
       "resolved": false
+    },
+    {
+      "id": 1778809578751,
+      "author": "jack",
+      "text": "test",
+      "time": "5/15 9:46",
+      "resolved": false
     }
   ]
 }
