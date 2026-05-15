@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778813098350,
+      "author": "jack",
+      "type": "feature",
+      "text": "增加修订页面的admin角色的删除功能，admin用户在回复旁边多一个删除的选项，用来整理重复的comment，类似的还有编辑功能，对于自己本人的comment加入edit按钮",
+      "time": "2026-05-15 10:44",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778812703485,
       "author": "brian",
       "type": "bug",
