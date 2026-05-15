@@ -28,9 +28,9 @@
       "type": "feature",
       "text": "当我单机选择此方案的时候，帮我生成如下格式 001 丹麦对法国 主胜\n002 德国对科特迪瓦 让球胜\n004 日本对南非 客胜\n并且直接到剪切板，我便可以粘贴给彩票站下单",
       "time": "2026-05-14 20:13",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.2",
+      "resolution": "选方案提交后自动复制竞彩格式到剪贴板，已提交的方案也有复制按钮",
       "replies": []
     },
     {
@@ -39,9 +39,9 @@
       "type": "bug",
       "text": "自定义选择投注之后，并没有添加我的选择到推荐页面",
       "time": "2026-05-14 20:02",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.2",
+      "resolution": "推荐页新增「已提交方案」区域，展示当日所有用户自选和AI推荐方案",
       "replies": []
     },
     {
@@ -50,9 +50,9 @@
       "type": "improvement",
       "text": "自定义选择投注之后，并没有添加我的选择到推荐页面",
       "time": "2026-05-14 20:02",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v2.2",
+      "resolution": "推荐页新增「已提交方案」区域，展示当日所有用户自选和AI推荐方案",
       "replies": [
         {
           "author": "jack",
@@ -67,7 +67,9 @@
       "type": "feature",
       "text": "把赛果页面，最后结果相对应的赔率也高亮成红色，比如西班牙主场让一球，结果是西班牙2-1获胜，那么高亮的就是主胜和让球平",
       "time": "2026-05-14 20:01",
-      "status": "pending",
+      "status": "adopted",
+      "resolved_in": "v2.2",
+      "resolution": "命中leg的赔率已高亮红色显示",
       "resolved_in": null,
       "resolution": null,
       "replies": []
@@ -180,6 +182,12 @@
       "version": "v2.1",
       "date": "2026-05-15",
       "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v2.2",
+      "date": "2026-05-15",
+      "summary": "用户方案展示到推荐页、竞彩格式一键复制、赛果赔率红色高亮",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]
