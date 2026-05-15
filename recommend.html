@@ -426,8 +426,10 @@
     <script>
         const DATES = ['2026-06-12', '2026-06-13', '2026-06-14', '2026-06-15', '2026-06-16'];
         const BASE_URL = '';
+        const PICKS_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
         let currentDate = '2026-06-15';
         let recommendation = null;
+        let userPicks = [];
         let selectedTier = null;
         let selectedOptionId = null;
 
@@ -480,14 +482,85 @@
 
         async function loadRecommendation(date) {
             const content = document.getElementById('content');
+            userPicks = [];
             try {
                 const resp = await fetch(`${BASE_URL}/recommendations/${date}.json`);
                 if (!resp.ok) throw new Error('no data');
                 recommendation = await resp.json();
-                renderRecommendation();
             } catch(e) {
-                content.innerHTML = '<div class="empty-state"><p>该日期暂无AI推荐</p><p style="margin-top:8px;font-size:12px;">请等待出方案指令生成</p></div>';
+                recommendation = null;
             }
+            await loadUserPicks(date);
+            renderAll();
+        }
+
+        async function loadUserPicks(date) {
+            try {
+                const resp = await fetch(PICKS_API);
+                if (!resp.ok) return;
+                const files = await resp.json();
+                const dayFiles = files.filter(f => f.name.startsWith(date));
+                const picks = await Promise.all(dayFiles.map(async f => {
+                    const r = await fetch(f.download_url);
+                    return r.json();
+                }));
+                userPicks = picks;
+            } catch(e) {
+                userPicks = [];
+            }
+        }
+
+        function renderAll() {
+            const content = document.getElementById('content');
+            let html = '';
+
+            if (recommendation) {
+                html += renderRecommendation();
+            }
+
+            if (userPicks.length > 0) {
+                html += renderUserPicks();
+            }
+
+            if (!html) {
+                html = '<div class="empty-state"><p>该日期暂无AI推荐</p><p style="margin-top:8px;font-size:12px;">请等待出方案指令生成</p></div>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        function renderUserPicks() {
+            const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
+            const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
+
+            return `<div style="margin-top:16px;">
+                <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:10px;padding:8px 0;border-bottom:1px solid #eee;">
+                    👤 已提交方案
+                </div>
+                ${userPicks.map(pick => {
+                    const icon = tierIcons[pick.selected_tier] || '🟡';
+                    const tierName = tierNames[pick.selected_tier] || pick.selected_tier;
+                    const source = pick.source === 'custom' ? '自选' : 'AI推荐';
+                    const legsHtml = pick.legs.map((l, i) =>
+                        `<div style="padding:6px 0;border-bottom:1px solid #f5f5f5;font-size:12px;display:flex;justify-content:space-between;">
+                            <span>${String(i+1).padStart(3,'0')} ${l.match_desc} · ${l.pick_desc}</span>
+                            <span style="color:#e65100;font-weight:600;">@${l.odds.toFixed(2)}</span>
+                        </div>`
+                    ).join('');
+                    return `<div style="background:white;border-radius:10px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:3px solid ${pick.source==='custom'?'#9c27b0':'#1a73e8'};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <span style="font-size:13px;font-weight:600;">${icon} ${tierName} · ${source}</span>
+                            <span style="font-size:11px;color:#888;">by ${pick.submitted_by || '未知'}</span>
+                        </div>
+                        ${legsHtml}
+                        <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:12px;color:#666;">
+                            <span>×${pick.combined_odds.toFixed(2)} → ¥${Math.round(pick.combined_odds * pick.stake)}</span>
+                            <span>口令：${pick.passphrase}</span>
+                        </div>
+                        <button onclick="copyPickText(${JSON.stringify(pick.legs).replace(/"/g,'&quot;')}, '${pick.date}')" style="margin-top:8px;width:100%;padding:8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;color:#333;cursor:pointer;">📋 复制竞彩格式</button>
+                    </div>`;
+                }).join('')}
+            </div>`;
         }
 
         function renderLegs(legs) {
@@ -557,11 +630,10 @@
         }
 
         function renderRecommendation() {
-            const content = document.getElementById('content');
             const tiers = ['conservative', 'progressive', 'aggressive'];
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
 
-            content.innerHTML = tiers.map(tier => {
+            return tiers.map(tier => {
                 const data = recommendation.recommendations[tier];
                 if (!data) return '';
 
@@ -607,7 +679,7 @@
         function selectOption(tier, optionId) {
             selectedTier = tier;
             selectedOptionId = optionId;
-            renderRecommendation();
+            renderAll();
             openConfirm();
         }
 
@@ -669,7 +741,8 @@
                 const result = await resp.json();
                 if (result.success) {
                     closeConfirm();
-                    showToast(`✅ 提交成功！口令：${passphrase}`);
+                    copyPickText(payload.legs, payload.date);
+                    showToast(`✅ 提交成功！已复制竞彩格式`);
                 } else {
                     showToast(`❌ 提交失败：${result.error}`);
                 }
@@ -679,6 +752,16 @@
 
             btn.disabled = false;
             btn.textContent = '确认提交';
+        }
+
+        function copyPickText(legs, date) {
+            const matchCodes = {'m001':'001','m002':'002','m003':'003','m004':'004','m005':'005','m006':'006','m007':'007','m008':'008','m009':'009','m010':'010','m011':'011','m012':'012','m013':'013','m014':'014','m015':'015'};
+            const lines = legs.map((l, i) => {
+                const code = matchCodes[l.match_id] || String(i+1).padStart(3, '0');
+                return `${code} ${l.match_desc} ${l.pick_desc}`;
+            });
+            const text = lines.join('\n');
+            navigator.clipboard.writeText(text).catch(() => {});
         }
 
         function showToast(msg) {
