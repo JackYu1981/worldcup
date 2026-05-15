@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1778846710145,
+      "author": "jack",
+      "type": "improvement",
+      "text": "看起来赛程的外观还是要进一步完善，我把500网的赛程页面的截图保存在项目工作区目录了，下一版你自己根据截图仿照完善一下。日期选择按照每一期展开，比赛序号如001，002，003这些细节你都学习一下",
+      "time": "2026-05-15T12:05:10.145Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778823827439,
       "author": "jack",
       "type": "bug",
