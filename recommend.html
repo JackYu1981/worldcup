@@ -424,10 +424,21 @@
 
     <script src="auth.js"></script>
     <script>
-        const DATES = ['2026-06-12', '2026-06-13', '2026-06-14', '2026-06-15', '2026-06-16'];
+        function generateDates() {
+            const dates = [];
+            const now = new Date();
+            const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            for (let i = -2; i <= 2; i++) {
+                const d = new Date(beijing);
+                d.setDate(d.getDate() + i);
+                dates.push(d.toISOString().slice(0, 10));
+            }
+            return dates;
+        }
+        const DATES = generateDates();
         const BASE_URL = '';
         const PICKS_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents/picks';
-        let currentDate = '2026-06-15';
+        let currentDate = DATES[2];
         let recommendation = null;
         let userPicks = [];
         let selectedTier = null;

@@ -210,14 +210,14 @@
 
             const grouped = {};
             matches.forEach(m => {
-                const key = `${m.stage} · ${m.group}组`;
+                const key = m.league || '其他';
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(m);
             });
 
             let html = '';
-            for (const [stage, mats] of Object.entries(grouped)) {
-                html += `<div class="stage-label">${stage}</div>`;
+            for (const [league, mats] of Object.entries(grouped)) {
+                html += `<div class="stage-label">${league}</div>`;
                 mats.forEach(m => { html += renderMatchCard(m); });
             }
             list.innerHTML = html;
@@ -229,12 +229,21 @@
 
             if (status === 'finished' && m.score) {
                 statusHtml = `<span class="match-status finished">已结束</span>`;
-                scoreHtml = `<div class="score-display">${m.score.home} - ${m.score.away}</div>`;
-                if (m.score.home > m.score.away) homeClass = 'winner';
-                else if (m.score.away > m.score.home) awayClass = 'winner';
+                let homeScore, awayScore;
+                if (typeof m.score === 'string') {
+                    const parts = m.score.split('-');
+                    homeScore = parseInt(parts[0]);
+                    awayScore = parseInt(parts[1]);
+                } else {
+                    homeScore = m.score.home;
+                    awayScore = m.score.away;
+                }
+                scoreHtml = `<div class="score-display">${homeScore} - ${awayScore}</div>`;
+                if (homeScore > awayScore) homeClass = 'winner';
+                else if (awayScore > homeScore) awayClass = 'winner';
             } else if (status === 'live') {
                 statusHtml = `<span class="match-status live">● 进行中</span>`;
-                scoreHtml = `<div class="score-display">${m.score ? m.score.home+' - '+m.score.away : '0 - 0'}</div>`;
+                scoreHtml = `<div class="score-display">0 - 0</div>`;
             } else {
                 statusHtml = `<span class="match-status scheduled">未开始</span>`;
                 scoreHtml = `<div class="score-display pending">vs</div>`;
@@ -246,7 +255,7 @@
             }
 
             let oddsHtml = '';
-            if (m.odds) {
+            if (m.odds && m.odds.home_win != null) {
                 oddsHtml += `<div class="odds-section">
                     <div class="odds-label">胜平负</div>
                     <div class="odds-row">
@@ -260,7 +269,7 @@
                             <div class="type">客胜</div><div class="val">${m.odds.away_win.toFixed(2)}</div>
                         </div>
                     </div>`;
-                if (m.handicap) {
+                if (m.handicap && m.handicap.home_win != null) {
                     const lineText = m.handicap.line < 0 ? `主让${Math.abs(m.handicap.line)}球` : m.handicap.line > 0 ? `客让${m.handicap.line}球` : '平手盘';
                     oddsHtml += `<div class="handicap-line">让球: ${lineText}</div>
                     <div class="odds-row">
