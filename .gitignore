@@ -19,9 +19,8 @@ venv/
 .vscode/
 *.swp
 
-# OS
-.DS_Store
-Thumbs.db
+# Wrangler local state
+.wrangler/
 
 # Data
 *.db
