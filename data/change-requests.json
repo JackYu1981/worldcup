@@ -6,9 +6,9 @@
       "type": "bug",
       "text": "已经勾选过方案的比赛的赔率被highlight显示了",
       "time": "2026-05-15T19:14:01.480Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v3.6",
+      "resolution": "赛程页取消方案picks配色，改为所有已结束比赛统一红色高亮结果对应赔率",
       "replies": []
     },
     {
