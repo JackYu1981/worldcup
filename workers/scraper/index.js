@@ -2,9 +2,9 @@
  * Cloudflare Worker: 竞彩数据定时抓取
  *
  * Cron: 每小时执行一次
- * - 抓取当天在售比赛赔率（含已完场比赛的比分）
- * - 抓取前2天的页面获取比赛结果
- * - 数据写入 KV (MATCH_DATA)，含结果的数据永久保存
+ * 1. 抓取赛程：获取当期和前2期的竞彩页面，保存所有比赛（不按实际日期过滤）
+ *    - 已有数据只合并新增比赛，不覆盖已有场次
+ * 2. 抓取结果：对已存储但未完场的比赛，从页面获取比分并更新
  */
 
 import { getAdapter } from '../../lib/adapters/index.js';
@@ -36,10 +36,11 @@ export default {
 
     for (const date of datesToFetch) {
       try {
-        const existing = await env.MATCH_DATA.get(`matches:${date}`, 'json');
-        const allFinished = existing && existing.matches &&
-          existing.matches.length > 0 &&
-          existing.matches.every(m => m.status === 'finished');
+        const kvKey = `matches:${date}`;
+        const existing = await env.MATCH_DATA.get(kvKey, 'json');
+        const existingMatches = existing ? (existing.matches || []) : [];
+        const allFinished = existingMatches.length > 0 &&
+          existingMatches.every(m => m.status === 'finished');
 
         if (allFinished) {
           console.log(`[Cron] ${date} all finished, skipping`);
@@ -53,22 +54,38 @@ export default {
           continue;
         }
 
-        const matches = adapter.parseMatches(html);
-        if (matches.length === 0) {
-          console.log(`[Cron] ${date} no matches`);
+        const parsed = adapter.parseMatches(html);
+        if (parsed.length === 0) {
+          console.log(`[Cron] ${date} no matches parsed`);
           continue;
         }
 
-        const dateMatches = matches.filter(m => m.date === date);
-        if (dateMatches.length === 0) continue;
+        // Merge: keep all existing matches, add new ones, update results for existing
+        const mergedMap = {};
+        existingMatches.forEach(m => { mergedMap[m.id] = m; });
 
-        const envelope = createEnvelope(date, adapter.name, dateMatches);
-        const nowAllFinished = dateMatches.every(m => m.status === 'finished');
+        parsed.forEach(m => {
+          if (mergedMap[m.id]) {
+            // Update score/status if the match now has results
+            if (m.status === 'finished' && m.score) {
+              mergedMap[m.id].status = 'finished';
+              mergedMap[m.id].score = m.score;
+            }
+          } else {
+            // New match — add it (belongs to this betting period)
+            mergedMap[m.id] = m;
+          }
+        });
 
-        await env.MATCH_DATA.put(`matches:${date}`, JSON.stringify(envelope),
+        const mergedMatches = Object.values(mergedMap);
+        const envelope = createEnvelope(date, adapter.name, mergedMatches);
+        const nowAllFinished = mergedMatches.length > 0 &&
+          mergedMatches.every(m => m.status === 'finished');
+
+        await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope),
           nowAllFinished ? {} : { expirationTtl: 86400 * 30 }
         );
-        console.log(`[Cron] Saved ${dateMatches.length} matches for ${date} (${nowAllFinished ? 'final' : 'pending'})`);
+        console.log(`[Cron] ${date}: ${mergedMatches.length} matches (${existingMatches.length} existing + ${mergedMatches.length - existingMatches.length} new, ${nowAllFinished ? 'all finished' : 'pending'})`);
       } catch (e) {
         console.error(`[Cron] Error for ${date}: ${e.message}`);
       }

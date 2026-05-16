@@ -138,9 +138,7 @@
         .odds-cell:last-child { border-right: none; }
         .odds-cell:active { background: #f0f0f0; }
         .odds-cell.selected { background: #e8f0fe; }
-        .odds-cell.picked { background: #e3f2fd; border: 1px solid #90caf9; }
-        .odds-cell.picked-hit { background: #ffebee; border: 1px solid #ef9a9a; }
-        .odds-cell.picked-miss { background: #e8f5e9; border: 1px solid #a5d6a7; }
+        .odds-cell.result-hit { background: #ffebee; border: 1px solid #ef9a9a; color: #c62828; font-weight: 600; }
         .odds-cell .label { font-size: 10px; color: #999; }
         .odds-cell .value { font-size: 14px; font-weight: 600; color: #333; margin-top: 1px; }
         .odds-row-border { grid-column: 1 / -1; height: 1px; background: #f5f5f5; }
@@ -392,36 +390,19 @@
             renderMatches();
         }
 
-        let pickedSelections = {};
-
         async function loadMatches(date) {
             const list = document.getElementById('matchList');
             list.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
-                const [matchResp, picksResp] = await Promise.all([
-                    fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`)),
-                    fetch(`/api/picks?date=${date}`).catch(() => null)
-                ]);
+                const matchResp = await fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`));
                 if (!matchResp.ok) throw new Error('no data');
                 const data = await matchResp.json();
                 matches = data.matches;
-
-                pickedSelections = {};
-                if (picksResp && picksResp.ok) {
-                    const picksData = await picksResp.json();
-                    (picksData.picks || []).filter(p => p.source === 'plan').forEach(p => {
-                        (p.legs || []).forEach(l => {
-                            const key = `${l.match_id}|${l.market}|${l.pick}`;
-                            pickedSelections[key] = true;
-                        });
-                    });
-                }
 
                 updatePeriodHeader();
                 renderMatches();
             } catch(e) {
                 matches = [];
-                pickedSelections = {};
                 updatePeriodHeader();
                 list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
             }
@@ -527,14 +508,9 @@
             const sel = combo;
             function cellClass(market, pick) {
                 let cls = sel[`${m.id}|${market}|${pick}`] ? 'selected' : '';
-                const pickKey = `${m.id}|${market}|${pick}`;
-                if (pickedSelections[pickKey]) {
-                    if (status === 'finished' && m.score) {
-                        const result = getMatchResult(m, market);
-                        cls += result === pick ? ' picked-hit' : ' picked-miss';
-                    } else {
-                        cls += ' picked';
-                    }
+                if (status === 'finished' && m.score) {
+                    const result = getMatchResult(m, market);
+                    if (result === pick) cls += ' result-hit';
                 }
                 return cls;
             }

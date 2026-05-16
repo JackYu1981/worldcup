@@ -311,11 +311,11 @@
                 }
                 if (picksResp && picksResp.ok) {
                     const data = await picksResp.json();
-                    const planPicks = (data.picks || []).filter(p => p.source === 'plan' || p.source === 'custom');
+                    const planPicks = (data.picks || []).filter(p => p.source === 'plan');
                     allData = allData.concat(planPicks);
                 }
 
-                const planResults = allData.filter(r => r.source === 'plan' || r.source === 'custom' || r.combinations || (!r.source));
+                const planResults = allData.filter(r => r.source === 'plan' || r.combinations || (!r.source));
 
                 const dates = [...new Set(planResults.map(r => r.date).filter(Boolean))];
                 await Promise.all(dates.map(d => fetchMatchData(d)));

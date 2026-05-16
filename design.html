@@ -375,13 +375,12 @@
     </div>
 
     <div class="section">
-        <h2>📋 v3.5 发布摘要</h2>
+        <h2>📋 v3.6 发布摘要</h2>
         <ul>
-            <li><strong>赔率映射修正</strong>：修复500.com数据源spf/nspf字段反转问题，胜平负与让球胜平负赔率现已正确显示</li>
-            <li><strong>服务端picks接口</strong>：新增/api/picks接口代理GitHub请求，推荐页和方案页加载速度大幅提升</li>
-            <li><strong>购彩期次模型</strong>：日期tab改为购彩日期而非比赛日期，匹配500.com竞彩销售模式</li>
-            <li><strong>跨时区日期修复</strong>：所有日期/星期计算锚定UTC+8，不再依赖浏览器本地时区</li>
-            <li><strong>Combo栏增强</strong>：选项按胜/平/负固定网格排列，显示完整对阵信息含日期和时间</li>
+            <li><strong>赛程结果高亮</strong>：所有已结束比赛自动红色高亮结果对应赔率（胜平负+让球），不再依赖方案数据</li>
+            <li><strong>预备方案流程</strong>：网页提交改为"预备方案"(pending_plan)，需AI在Claude Code中确认后转为正式方案(plan)才在方案页显示</li>
+            <li><strong>Scraper按期存储</strong>：不再按比赛实际日期过滤，按竞彩期存储全量比赛，合并策略避免数据丢失</li>
+            <li><strong>05-16期数据补全</strong>：KV已存储完整41场比赛（跨3天），包含德甲9场、英超足总杯等</li>
         </ul>
     </div>
 

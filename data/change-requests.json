@@ -189,8 +189,8 @@
       "text": "比赛结果页面，并没有高亮显示正确结果所对应的赔率",
       "time": "2026-05-14 21:37",
       "status": "adopted",
-      "resolved_in": "v2.4",
-      "resolution": "赛果页自动比对比分，命中赔率红色高亮+比分显示",
+      "resolved_in": "v3.6",
+      "resolution": "赛程页所有已结束比赛红色高亮结果对应赔率，通过比分自动计算胜平负和让球结果",
       "replies": []
     },
     {
@@ -294,8 +294,8 @@
       "text": "把赛果页面，最后结果相对应的赔率也高亮成红色，比如西班牙主场让一球，结果是西班牙2-1获胜，那么高亮的就是主胜和让球平",
       "time": "2026-05-14 20:01",
       "status": "adopted",
-      "resolved_in": null,
-      "resolution": null,
+      "resolved_in": "v3.6",
+      "resolution": "赛程页所有已结束比赛自动红色高亮结果对应赔率（胜平负+让球），不再依赖方案数据",
       "replies": [
         {
           "author": "brian",
@@ -466,6 +466,12 @@
       "version": "v3.5",
       "date": "2026-05-16T00:15:00+08:00",
       "summary": "修复500.com赔率映射反转（spf=让球/nspf=非让球），胜平负与让球胜平负赔率恢复正确",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v3.6",
+      "date": "2026-05-16T10:30:00+08:00",
+      "summary": "赛程结果高亮重构（所有已结束比赛红色标注结果赔率），预备方案流程（pending_plan→AI确认→plan），Scraper按竞彩期存储全量比赛不再过滤日期",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     }
   ]

@@ -208,12 +208,12 @@
 
     <div class="confirm-overlay" id="confirmOverlay">
         <div class="confirm-modal">
-            <h3>生成方案</h3>
+            <h3>提交预备方案</h3>
             <div class="summary" id="confirmSummary"></div>
             <input class="confirm-input" id="passphraseInput" placeholder="输入口令（如：一路发财）">
             <div class="confirm-btns">
                 <button class="btn-cancel" onclick="closeConfirm()">取消</button>
-                <button class="btn-submit" id="submitBtn" onclick="submitPlan()" disabled>生成方案</button>
+                <button class="btn-submit" id="submitBtn" onclick="submitPlan()" disabled>提交预备方案</button>
             </div>
         </div>
     </div>
@@ -251,6 +251,7 @@
         let currentDate = todayStr;
         let userRecs = [];
         let plans = [];
+        let pendingPlans = [];
         let selectedRec = null;
 
         AUTH.requireLogin(function(user) {
@@ -286,6 +287,7 @@
             content.innerHTML = '<div class="empty-state">加载中...</div>';
             userRecs = [];
             plans = [];
+            pendingPlans = [];
 
             try {
                 const resp = await fetch(`/api/picks?date=${date}`);
@@ -294,6 +296,7 @@
                     const allPicks = data.picks || [];
                     userRecs = allPicks.filter(p => p.source === 'recommendation');
                     plans = allPicks.filter(p => p.source === 'plan');
+                    pendingPlans = allPicks.filter(p => p.source === 'pending_plan');
                 }
             } catch(e) {}
 
@@ -307,6 +310,11 @@
             if (plans.length > 0) {
                 html += `<div class="section-title">📋 已确认方案</div>`;
                 html += plans.map(p => renderPlanCard(p)).join('');
+            }
+
+            if (pendingPlans.length > 0) {
+                html += `<div class="section-title" style="color:#666">⏳ 预备方案（等待AI确认）</div>`;
+                html += pendingPlans.map(p => renderPendingCard(p)).join('');
             }
 
             html += renderAiSection();
@@ -329,15 +337,18 @@
                         </div>
                         <div class="user-group-body">
                             ${idxs.map(idx => {
-                                const isSelected = plans.some(p => p.combined_odds === userRecs[idx].combined_odds && p.legs.length === userRecs[idx].legs.length);
-                                return renderRecCard(userRecs[idx], idx, isSelected);
+                                const rec = userRecs[idx];
+                                const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
+                                const isPlan = plans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
+                                const isPending = pendingPlans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
+                                return renderRecCard(rec, idx, isPlan ? 'plan' : isPending ? 'pending' : null);
                             }).join('')}
                         </div>
                     </div>`;
                 });
             }
 
-            if (!userRecs.length && !plans.length) {
+            if (!userRecs.length && !plans.length && !pendingPlans.length) {
                 html += `<div class="empty-state">
                     <p>该日期暂无推荐</p>
                     <p style="margin-top:8px;font-size:12px;">前往赛程页选择比赛生成推荐</p>
@@ -383,7 +394,7 @@
             return `${info.matchCount}串1 · ${info.comboCount}注${totalStake}元 → ¥${Math.round(info.minOdds * 2)}~¥${Math.round(info.maxOdds * 2)}`;
         }
 
-        function renderRecCard(rec, idx, isSelected) {
+        function renderRecCard(rec, idx, status) {
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const icon = tierIcons[rec.selected_tier] || '🟡';
@@ -396,8 +407,14 @@
                 </div>`
             ).join('');
 
-            const selectedStyle = isSelected ? 'border-left-color:#1a73e8;opacity:0.7;' : '';
-            const selectedBadge = isSelected ? '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已选</span>' : '';
+            let selectedStyle = '', selectedBadge = '';
+            if (status === 'plan') {
+                selectedStyle = 'border-left-color:#1a73e8;opacity:0.7;';
+                selectedBadge = '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已确认</span>';
+            } else if (status === 'pending') {
+                selectedStyle = 'border-left-color:#ff9800;opacity:0.8;';
+                selectedBadge = '<span style="font-size:10px;background:#fff3e0;color:#e65100;padding:2px 6px;border-radius:3px;margin-left:6px;">待AI确认</span>';
+            }
 
             const oddsSummary = formatOddsSummary(rec);
 
@@ -411,7 +428,7 @@
                     <span>${oddsSummary}</span>
                 </div>
                 <div class="rec-actions">
-                    <button class="btn-select-rec" onclick="selectRec(${idx})">选择此推荐 → 生成方案</button>
+                    <button class="btn-select-rec" onclick="selectRec(${idx})"${status ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
                     <button class="btn-copy-rec" onclick="copyRec(${idx})">📋</button>
                 </div>
             </div>`;
@@ -454,6 +471,32 @@
             </div>`;
         }
 
+        function renderPendingCard(plan) {
+            const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
+            const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
+            const icon = tierIcons[plan.selected_tier] || '🟡';
+            const tierName = tierNames[plan.selected_tier] || plan.selected_tier;
+
+            const legsHtml = plan.legs.map(l =>
+                `<div class="plan-leg">
+                    <span>${l.code || '000'} ${l.match_desc} · ${l.pick_desc}</span>
+                    <span style="color:#999;font-weight:600;">@${l.odds.toFixed(2)}</span>
+                </div>`
+            ).join('');
+
+            return `<div class="plan-card" style="opacity:0.7;border:1px dashed #ccc;">
+                <div class="plan-header">
+                    <span class="plan-title" style="color:#666;">${icon} ${tierName} · 预备方案</span>
+                    <span class="plan-passphrase" style="color:#999;">口令：${plan.passphrase}</span>
+                </div>
+                ${legsHtml}
+                <div class="plan-summary" style="color:#999;">
+                    <span>${formatOddsSummary(plan)}</span>
+                    <span>⏳ 等待AI确认</span>
+                </div>
+            </div>`;
+        }
+
         function selectRec(idx) {
             selectedRec = userRecs[idx];
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
@@ -485,14 +528,14 @@
 
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.textContent = '生成中...';
+            btn.textContent = '提交中...';
 
             const payload = {
                 date: currentDate,
                 passphrase: passphrase,
                 submitted_at: new Date().toISOString(),
                 selected_tier: selectedRec.selected_tier,
-                source: 'plan',
+                source: 'pending_plan',
                 stake: 100,
                 combined_odds: selectedRec.combined_odds,
                 legs: selectedRec.legs
@@ -508,7 +551,7 @@
                 if (result.success) {
                     closeConfirm();
                     copyLegs(payload.legs);
-                    showToast('方案已生成！已复制竞彩格式');
+                    showToast('预备方案已提交！请在Claude Code中用口令生成正式方案');
                     loadData(currentDate);
                 } else {
                     showToast(`失败：${result.error}`);
@@ -517,7 +560,7 @@
                 showToast(`网络错误：${e.message}`);
             }
             btn.disabled = false;
-            btn.textContent = '生成方案';
+            btn.textContent = '提交预备方案';
         }
 
         function copyRec(idx) {
