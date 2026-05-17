@@ -1,0 +1,70 @@
+{
+  "date": "2026-05-17",
+  "submitted_at": "2026-05-17T03:04:55.957Z",
+  "selected_tier": "conservative",
+  "source": "recommendation",
+  "stake": 100,
+  "combo_count": 8,
+  "combined_odds": 6.16,
+  "odds_range": [
+    5.36,
+    6.16
+  ],
+  "legs": [
+    {
+      "match_id": "f1202961",
+      "match_desc": "海伦芬vs阿贾克斯",
+      "code": "周日012",
+      "market": "handicap",
+      "pick": "home_win",
+      "pick_desc": "让球胜",
+      "odds": 1.75
+    },
+    {
+      "match_id": "f1223072",
+      "match_desc": "达姆施塔vs帕德博恩",
+      "code": "周日013",
+      "market": "handicap",
+      "pick": "home_win",
+      "pick_desc": "让球胜",
+      "odds": 1.83
+    },
+    {
+      "match_id": "f1202961",
+      "match_desc": "海伦芬vs阿贾克斯",
+      "code": "周日012",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "阿贾克斯胜",
+      "odds": 1.81
+    },
+    {
+      "match_id": "f1202734",
+      "match_desc": "狼队vs富勒姆",
+      "code": "周日014",
+      "market": "handicap",
+      "pick": "home_win",
+      "pick_desc": "让球胜",
+      "odds": 1.86
+    },
+    {
+      "match_id": "f1223072",
+      "match_desc": "达姆施塔vs帕德博恩",
+      "code": "周日013",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "帕德博恩胜",
+      "odds": 1.76
+    },
+    {
+      "match_id": "f1202734",
+      "match_desc": "狼队vs富勒姆",
+      "code": "周日014",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "富勒姆胜",
+      "odds": 1.74
+    }
+  ],
+  "submitted_by": "jack"
+}
