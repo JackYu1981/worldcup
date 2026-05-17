@@ -1,0 +1,57 @@
+{
+  "date": "2026-05-17",
+  "passphrase": "发财测试2",
+  "submitted_at": "2026-05-17T02:56:10.380Z",
+  "selected_tier": "aggressive",
+  "source": "pending_plan",
+  "stake": 100,
+  "combined_odds": 20.14,
+  "legs": [
+    {
+      "match_id": "f1373152",
+      "match_desc": "全北现代vs金泉尚武",
+      "code": "周日002",
+      "market": "1x2",
+      "pick": "home_win",
+      "pick_desc": "全北现代胜",
+      "odds": 1.78
+    },
+    {
+      "match_id": "f1366430",
+      "match_desc": "川崎前锋vs町田泽维",
+      "code": "周日003",
+      "market": "1x2",
+      "pick": "draw",
+      "pick_desc": "平",
+      "odds": 3.28
+    },
+    {
+      "match_id": "f1366430",
+      "match_desc": "川崎前锋vs町田泽维",
+      "code": "周日003",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "町田泽维胜",
+      "odds": 2.29
+    },
+    {
+      "match_id": "f1373116",
+      "match_desc": "富川FCvs浦项制铁",
+      "code": "周日004",
+      "market": "1x2",
+      "pick": "draw",
+      "pick_desc": "平",
+      "odds": 2.7
+    },
+    {
+      "match_id": "f1373116",
+      "match_desc": "富川FCvs浦项制铁",
+      "code": "周日004",
+      "market": "1x2",
+      "pick": "home_win",
+      "pick_desc": "富川FC胜",
+      "odds": 3.45
+    }
+  ],
+  "submitted_by": "jack"
+}
