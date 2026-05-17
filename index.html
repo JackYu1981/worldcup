@@ -489,9 +489,7 @@
 
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
-            const matchDay = m.date ? new Date(m.date + 'T00:00:00+08:00').getDay() : getBeijingDay(currentDate);
-            const prefix = WEEKDAY_PREFIX[matchDay];
-            const codeText = `${prefix}${m.code || '000'}`;
+            const codeText = m.code || '000';
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
             const kickoff = formatKickoff(m.date, m.kickoff);
@@ -577,8 +575,7 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                const weekday = WEEKDAY_PREFIX[m.date ? new Date(m.date + 'T00:00:00+08:00').getDay() : getBeijingDay(currentDate)];
-                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', weekday, kickoff: m.kickoff || '', matchDate: m.date || currentDate };
+                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', kickoff: m.kickoff || '', matchDate: m.date || currentDate };
             }
             renderMatches();
             updateComboBar();
@@ -660,7 +657,7 @@
 
                 return `<div class="combo-match">
                     <div class="combo-match-info">
-                        <span class="match-code">${first.weekday}${first.code}</span>
+                        <span class="match-code">${first.code}</span>
                         <span class="match-teams">${first.home} <span class="match-time">${kickoff.date}<br>${kickoff.time}</span> ${first.away}</span>
                     </div>
                     ${row1x2}${rowHandicap}
