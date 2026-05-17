@@ -473,6 +473,7 @@
     <script>
         const GITHUB_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents';
         const CR_FILE = 'data/change-requests.json';
+        const VERSIONS_FILE = 'data/versions.json';
 
         const USER_TIMEZONES = {
             jack: 'Asia/Shanghai',
@@ -514,41 +515,51 @@
         AUTH.requireLogin(function(user) {
             AUTH.renderUserBadge('userBadge');
             loadCRs();
+            loadVersions();
             loadLogs();
             initPullRefresh({
-                onRefresh: () => Promise.all([loadCRs(), loadLogs()])
+                onRefresh: () => Promise.all([loadCRs(), loadVersions(), loadLogs()])
             });
         });
 
         async function loadCRs() {
             try {
                 const resp = await fetch(`${GITHUB_API}/${CR_FILE}`);
-                if (resp.status === 404) {
+                if (resp.ok) {
+                    const file = await resp.json();
+                    const binary = atob(file.content);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const data = JSON.parse(new TextDecoder().decode(bytes));
+                    requests = data.requests || [];
+                } else {
                     requests = [];
-                    versions = [];
-                    renderCRs();
-                    renderVersionHistory();
-                    renderReleaseNotes();
-                    return;
                 }
-                const file = await resp.json();
-                const binary = atob(file.content);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                const data = JSON.parse(new TextDecoder().decode(bytes));
-                requests = data.requests || [];
-                versions = data.versions || [];
-                renderCRs();
-                renderVersionHistory();
-                renderReleaseNotes();
-                updateVersionBadge();
             } catch (e) {
                 requests = [];
-                versions = [];
-                renderCRs();
-                renderVersionHistory();
-                renderReleaseNotes();
             }
+            renderCRs();
+        }
+
+        async function loadVersions() {
+            try {
+                const resp = await fetch(`${GITHUB_API}/${VERSIONS_FILE}`);
+                if (resp.ok) {
+                    const file = await resp.json();
+                    const binary = atob(file.content);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const data = JSON.parse(new TextDecoder().decode(bytes));
+                    versions = data.versions || [];
+                } else {
+                    versions = [];
+                }
+            } catch (e) {
+                versions = [];
+            }
+            renderVersionHistory();
+            renderReleaseNotes();
+            updateVersionBadge();
         }
 
         function updateVersionBadge() {
@@ -873,7 +884,7 @@
 
         async function saveCRs(commitMsg) {
             try {
-                const payload = { requests: requests, versions: versions };
+                const payload = { requests: requests };
                 const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
 
                 let sha = null;

@@ -54,7 +54,7 @@ export async function onRequestPost(context) {
 
     // Immediately update KV cache (source of truth)
     const kv = context.env.MATCH_DATA;
-    await updateKvPicks(kv, date, body);
+    await writeToKv(kv, source, date, body);
 
     if (source === 'pending_plan') {
       await logger(kv, '方案', `预备方案提交: "${passphrase}" (${date}) by ${user.username}`);
@@ -69,14 +69,21 @@ export async function onRequestPost(context) {
   }
 }
 
-async function updateKvPicks(kv, date, newPick) {
+async function writeToKv(kv, source, date, data) {
   if (!kv) return;
   try {
-    const key = `picks:${date}`;
+    let key;
+    if (source === 'recommendation') {
+      key = `recommendations:${date}`;
+    } else if (source === 'pending_plan') {
+      key = `pending_plans:${date}`;
+    } else {
+      key = `plans:${date}`;
+    }
     const existing = await kv.get(key, 'json');
-    const picks = existing ? existing.picks : [];
-    picks.push(newPick);
-    await kv.put(key, JSON.stringify({ picks }), { expirationTtl: 86400 * 30 });
+    const items = existing ? existing.items : [];
+    items.push(data);
+    await kv.put(key, JSON.stringify({ items }), { expirationTtl: 86400 * 30 });
   } catch (e) {}
 }
 
