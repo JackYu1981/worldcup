@@ -325,7 +325,20 @@
                         data.combinations = buildCombinations(data.legs, data.stake || 100);
                     }
                     const matches = matchDataCache[data.date] || [];
-                    return evaluateLegs(data, matches);
+                    const evaluated = evaluateLegs(data, matches);
+
+                    // 自动开奖：根据比赛结果判定方案状态
+                    if (evaluated.combinations && evaluated.combinations.length > 0) {
+                        const allEvaluated = evaluated.combinations.every(c =>
+                            c.legs.every(l => l.correct === true || l.correct === false)
+                        );
+                        if (allEvaluated) {
+                            const anyHit = evaluated.combinations.some(c => c.hit === true);
+                            evaluated.status = anyHit ? 'won' : 'lost';
+                        }
+                    }
+
+                    return evaluated;
                 });
 
                 allResults.sort((a, b) => {
