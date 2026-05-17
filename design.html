@@ -379,8 +379,8 @@
         <ul>
             <li><strong>赛程结果高亮</strong>：所有已结束比赛自动红色高亮结果对应赔率（胜平负+让球），不再依赖方案数据</li>
             <li><strong>预备方案流程</strong>：网页提交改为"预备方案"(pending_plan)，需AI在Claude Code中确认后转为正式方案(plan)才在方案页显示</li>
-            <li><strong>Scraper按期存储</strong>：不再按比赛实际日期过滤，按竞彩期存储全量比赛，合并策略避免数据丢失</li>
-            <li><strong>05-16期数据补全</strong>：KV已存储完整41场比赛（跨3天），包含德甲9场、英超足总杯等</li>
+            <li><strong>Scraper定时任务</strong>：每30分钟从500.com抓取赛程，从live.500.com抓取比分，按竞彩期合并存储到KV</li>
+            <li><strong>赛程排序修复</strong>：按match日期+开赛时间排序，周几前缀取比赛自身日期</li>
         </ul>
     </div>
 
