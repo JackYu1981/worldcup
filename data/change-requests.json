@@ -243,9 +243,9 @@
       "type": "feature",
       "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求",
       "time": "2026-05-15 11:04",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v4.1",
+      "resolution": "管理页CR输入框内📎按钮，点击从相册选图上传到GitHub uploads/目录",
       "replies": []
     },
     {
