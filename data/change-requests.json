@@ -6,9 +6,9 @@
       "type": "feature",
       "text": "当前这个“提建议”输入框，应改只在展开cr区域并选择cr的时候打开，在使用其他区域的时候比如日志，版本历史不打开也不现实这个编辑框",
       "time": "2026-05-17T08:40:41.858Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v4.1",
+      "resolution": "提建议输入框已改为仅在CR区域展开时显示",
       "replies": []
     },
     {
@@ -17,9 +17,9 @@
       "type": "bug",
       "text": "清除掉推荐页面中18日周一的脏数据",
       "time": "2026-05-17T08:32:44.729Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v4.1",
+      "resolution": "已清除脏数据",
       "replies": []
     },
     {
@@ -28,9 +28,9 @@
       "type": "improvement",
       "text": "选择推荐提交生成预备方案之后刷新并跳转到渲染新生成的预备方案",
       "time": "2026-05-17T08:28:31.415Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v4.1",
+      "resolution": "提交后自动刷新并跳转到新预备方案",
       "replies": []
     },
     {
@@ -39,9 +39,9 @@
       "type": "improvement",
       "text": "推荐页面预备方案也做成可折叠式样，没有预备方案显示（0）保持风格统一",
       "time": "2026-05-17T08:23:53.540Z",
-      "status": "pending",
-      "resolved_in": null,
-      "resolution": null,
+      "status": "adopted",
+      "resolved_in": "v4.1",
+      "resolution": "预备方案已改为可折叠样式",
       "replies": []
     },
     {
