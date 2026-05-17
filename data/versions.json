@@ -77,6 +77,12 @@
       "date": "2026-05-17T12:00:00+08:00",
       "summary": "架构优化：API模块化(response.js统一响应)、KV即时写入消除CDN延迟、日志按月分片(500条热缓存+月度归档)、增量加载(日期范围查询+预缓存+滚动加载)",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
+    },
+    {
+      "version": "v4.1",
+      "date": "2026-05-17T13:30:00+08:00",
+      "summary": "数据结构分离：change-requests/versions拆分独立文件、KV按类型独立存储(recommendations/pending_plans/plans)、命名规范统一、折叠面板bug修复",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
     }
   ]
 }

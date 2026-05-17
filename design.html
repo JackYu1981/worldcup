@@ -366,12 +366,10 @@
             font-weight: 400;
         }
         .section-body {
-            transition: max-height 0.3s ease, opacity 0.2s ease;
             overflow: hidden;
         }
         .section-body.collapsed {
-            max-height: 0;
-            opacity: 0;
+            display: none;
         }
         .log-item {
             padding: 8px 0;
@@ -818,10 +816,8 @@
                 h2.classList.remove('open');
             } else {
                 body.classList.remove('collapsed');
-                body.style.maxHeight = body.scrollHeight + 'px';
                 icon.textContent = '▲';
                 h2.classList.add('open');
-                setTimeout(() => { if (!body.classList.contains('collapsed')) body.style.maxHeight = 'none'; }, 300);
             }
         }
 
