@@ -2,9 +2,8 @@
  * Cloudflare Worker: 竞彩数据定时抓取
  *
  * Cron: 每30分钟执行一次
- * 1. 抓取赛程：获取当期和前2期的竞彩页面，保存所有比赛
- *    - 已有数据只合并新增比赛，不覆盖已有场次
- * 2. 抓取结果：从live.500.com获取比分并更新已结束比赛
+ * 1. 赛程快照：只抓今天和明天的期，KV中已有则跳过（不merge，一次抓全）
+ * 2. 比分更新：对未全部完赛的期，按比赛实际日期从live.500.com精确抓取比分
  */
 
 import { getAdapter } from '../../lib/adapters/index.js';
@@ -25,6 +24,12 @@ function getBeijingDate(offsetDays = 0) {
   const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
   beijing.setDate(beijing.getDate() + offsetDays);
   return beijing.toISOString().slice(0, 10);
+}
+
+function getBeijingHour() {
+  const now = new Date();
+  const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  return beijing.getHours();
 }
 
 async function fetchScoresForDates(dates) {
@@ -48,80 +53,87 @@ async function fetchScoresForDates(dates) {
 export default {
   async scheduled(event, env, ctx) {
     const today = getBeijingDate(0);
+    const tomorrow = getBeijingDate(1);
     console.log(`[Cron] Running, Beijing date ${today}`);
 
-    const datesToFetch = [today, getBeijingDate(-1), getBeijingDate(-2)];
-
-    for (const date of datesToFetch) {
+    // --- Phase 1: 赛程快照 (今天+明天的期，不存在才抓) ---
+    for (const date of [today, tomorrow]) {
+      const kvKey = `matches:${date}`;
+      const existing = await env.MATCH_DATA.get(kvKey, 'json');
+      if (existing && existing.matches && existing.matches.length > 0) {
+        continue;
+      }
       try {
-        const kvKey = `matches:${date}`;
-        const existing = await env.MATCH_DATA.get(kvKey, 'json');
-        const existingMatches = existing ? (existing.matches || []) : [];
-        const allFinished = existingMatches.length > 0 &&
-          existingMatches.every(m => m.status === 'finished' && m.score);
-
-        if (allFinished) {
-          console.log(`[Cron] ${date} all finished with scores, skipping`);
-          continue;
-        }
-
         const url = adapter.buildMatchesUrl({ date });
         const html = await fetchHtml(url);
         if (!html || html.length < 1000) {
-          console.log(`[Cron] ${date} empty page`);
+          console.log(`[Cron] ${date} empty page, skipping`);
           continue;
         }
-
-        const parsed = adapter.parseMatches(html);
-        if (parsed.length === 0 && existingMatches.length === 0) {
+        const matches = adapter.parseMatches(html);
+        if (matches.length === 0) {
           console.log(`[Cron] ${date} no matches parsed`);
           continue;
         }
-
-        // Merge: keep all existing matches, add new ones
-        const mergedMap = {};
-        existingMatches.forEach(m => { mergedMap[m.id] = m; });
-
-        parsed.forEach(m => {
-          if (mergedMap[m.id]) {
-            if (m.status === 'finished') {
-              mergedMap[m.id].status = 'finished';
-            }
-            if (m.score) {
-              mergedMap[m.id].score = m.score;
-            }
-          } else {
-            mergedMap[m.id] = m;
-          }
-        });
-
-        // Fetch scores from live.500.com for matches that need them
-        const mergedMatches = Object.values(mergedMap);
-        const needScores = mergedMatches.some(m => m.status === 'finished' && !m.score);
-
-        if (needScores) {
-          const matchDates = [...new Set(mergedMatches.map(m => m.date).filter(Boolean))];
-          const scores = await fetchScoresForDates(matchDates);
-          let updated = 0;
-          mergedMatches.forEach(m => {
-            if (m.status === 'finished' && !m.score && scores[m.id]) {
-              m.score = scores[m.id];
-              updated++;
-            }
-          });
-          console.log(`[Cron] ${date}: updated ${updated} scores from live.500.com`);
-        }
-
-        const envelope = createEnvelope(date, adapter.name, mergedMatches);
-        const nowAllFinished = mergedMatches.length > 0 &&
-          mergedMatches.every(m => m.status === 'finished' && m.score);
-
-        await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope),
-          nowAllFinished ? {} : { expirationTtl: 86400 * 30 }
-        );
-        console.log(`[Cron] ${date}: ${mergedMatches.length} matches (${nowAllFinished ? 'all finished' : 'pending'})`);
+        const envelope = createEnvelope(date, adapter.name, matches);
+        await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope), { expirationTtl: 86400 * 30 });
+        console.log(`[Cron] ${date}: snapshot saved, ${matches.length} matches`);
       } catch (e) {
-        console.error(`[Cron] Error for ${date}: ${e.message}`);
+        console.error(`[Cron] Snapshot error for ${date}: ${e.message}`);
+      }
+    }
+
+    // --- Phase 2: 比分更新 (今天+前2天的期，有未完赛的才更新) ---
+    const scoreDates = [today, getBeijingDate(-1), getBeijingDate(-2)];
+    for (const date of scoreDates) {
+      const kvKey = `matches:${date}`;
+      const data = await env.MATCH_DATA.get(kvKey, 'json');
+      if (!data || !data.matches || data.matches.length === 0) continue;
+
+      const matches = data.matches;
+      const allDone = matches.every(m => m.status === 'finished' && m.score);
+      if (allDone) {
+        console.log(`[Cron] ${date} all done, skip scores`);
+        continue;
+      }
+
+      // 找出需要比分的比赛的实际比赛日期
+      const pendingMatches = matches.filter(m => !m.score);
+      // 判断哪些比赛已经开赛了（当前北京时间 > 比赛kickoff时间）
+      const beijingNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+      const startedWithoutScore = pendingMatches.filter(m => {
+        if (!m.date || !m.kickoff) return false;
+        const kickoffTime = new Date(`${m.date}T${m.kickoff}:00+08:00`);
+        return beijingNow > kickoffTime;
+      });
+
+      if (startedWithoutScore.length === 0) {
+        console.log(`[Cron] ${date} no started matches need scores`);
+        continue;
+      }
+
+      // 按比赛实际日期抓取比分
+      const matchDates = [...new Set(startedWithoutScore.map(m => m.date))];
+      const scores = await fetchScoresForDates(matchDates);
+
+      let updated = 0;
+      matches.forEach(m => {
+        if (!m.score && scores[m.id]) {
+          m.score = scores[m.id];
+          m.status = 'finished';
+          updated++;
+        }
+      });
+
+      if (updated > 0) {
+        const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
+        const envelope = createEnvelope(date, adapter.name, matches);
+        await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope),
+          nowAllDone ? {} : { expirationTtl: 86400 * 30 }
+        );
+        console.log(`[Cron] ${date}: updated ${updated} scores (${nowAllDone ? 'all done' : 'pending'})`);
+      } else {
+        console.log(`[Cron] ${date}: no new scores available`);
       }
     }
   },
