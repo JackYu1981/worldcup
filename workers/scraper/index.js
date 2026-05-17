@@ -123,6 +123,29 @@ async function updateScores(env) {
       }
     });
 
+    // Fallback: 从jczq页面获取live.500.com覆盖不到的比分
+    const stillMissing = matches.filter(m => !m.score && startedWithoutScore.some(s => s.id === m.id));
+    if (stillMissing.length > 0) {
+      try {
+        const url = adapter.buildMatchesUrl({ date });
+        const html = await fetchHtml(url);
+        if (html && html.length > 1000) {
+          const parsed = adapter.parseMatches(html);
+          const parsedMap = {};
+          parsed.forEach(p => { parsedMap[p.id] = p; });
+          stillMissing.forEach(m => {
+            if (parsedMap[m.id] && parsedMap[m.id].score) {
+              m.score = parsedMap[m.id].score;
+              m.status = 'finished';
+              updated++;
+            }
+          });
+        }
+      } catch (e) {
+        console.log(`[Scores] ${date}: jczq fallback failed: ${e.message}`);
+      }
+    }
+
     if (updated > 0) {
       const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
       const envelope = createEnvelope(date, adapter.name, matches);
