@@ -230,7 +230,7 @@
       "id": 1778814251558,
       "author": "jack",
       "type": "feature",
-      "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求",
+      "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求，尝试开发这个功能，直接从相册打开图片，保存到GitHub或者cloudflare的位置，后台ai可以找到对应的照片文件进行分析",
       "time": "2026-05-15 11:04",
       "status": "pending",
       "resolved_in": null,
