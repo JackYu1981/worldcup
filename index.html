@@ -397,7 +397,7 @@
 
         async function fetchMatchData(date) {
             if (matchCache[date]) return matchCache[date];
-            const resp = await fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`));
+            const resp = await fetch(`/api/matches?date=${date}`);
             if (!resp.ok) throw new Error('no data');
             const data = await resp.json();
             matchCache[date] = data;
