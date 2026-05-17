@@ -8,28 +8,9 @@
 
 import { getAdapter } from '../../lib/adapters/index.js';
 import { createEnvelope } from '../../lib/schema.js';
+import { logger } from '../../lib/logger.js';
 
 const adapter = getAdapter('500.com');
-
-async function writeLog(env, type, message) {
-  try {
-    const now = new Date().toISOString();
-    const entry = { type, message, time: now };
-    const month = now.slice(0, 7);
-
-    const recentData = await env.MATCH_DATA.get('system:logs', 'json');
-    const recent = recentData ? recentData.logs : [];
-    recent.unshift(entry);
-    if (recent.length > 500) recent.length = 500;
-    await env.MATCH_DATA.put('system:logs', JSON.stringify({ logs: recent }));
-
-    const shardKey = `system:logs:${month}`;
-    const shardData = await env.MATCH_DATA.get(shardKey, 'json');
-    const shard = shardData ? shardData.logs : [];
-    shard.unshift(entry);
-    await env.MATCH_DATA.put(shardKey, JSON.stringify({ logs: shard }), { expirationTtl: 86400 * 180 });
-  } catch (e) {}
-}
 
 async function fetchHtml(url, encoding) {
   const resp = await fetch(url, { headers: adapter.fetchHeaders });
@@ -58,10 +39,29 @@ async function fetchScoresForDates(dates) {
         Object.assign(allScores, scores);
       }
     } catch (e) {
-      console.log(`[Cron] Failed to fetch scores for ${date}: ${e.message}`);
+      console.log(`[Cron] Failed to fetch live scores for ${date}: ${e.message}`);
     }
   }
   return allScores;
+}
+
+async function fetchJczqScores(date) {
+  const results = {};
+  try {
+    const url = adapter.buildMatchesUrl({ date });
+    const html = await fetchHtml(url);
+    if (html && html.length > 1000) {
+      const parsed = adapter.parseMatches(html);
+      parsed.forEach(p => {
+        if (p.status === 'finished' && p.score) {
+          results[p.id] = p.score;
+        }
+      });
+    }
+  } catch (e) {
+    console.log(`[Cron] Failed to fetch jczq for ${date}: ${e.message}`);
+  }
+  return results;
 }
 
 async function snapshotMatches(env) {
@@ -71,7 +71,7 @@ async function snapshotMatches(env) {
   const existing = await env.MATCH_DATA.get(kvKey, 'json');
   if (existing && existing.matches && existing.matches.length > 0) {
     console.log(`[Snapshot] ${today} already exists (${existing.matches.length} matches), skipping`);
-    await writeLog(env, '赛程', `${today} 已存在(${existing.matches.length}场)，跳过`);
+    await logger(env.MATCH_DATA, '赛程', `${today} 已存在(${existing.matches.length}场)，跳过`);
     return;
   }
 
@@ -79,14 +79,14 @@ async function snapshotMatches(env) {
   const html = await fetchHtml(url);
   if (!html || html.length < 1000) {
     console.log(`[Snapshot] ${today} empty page`);
-    await writeLog(env, '赛程', `${today} 页面为空，抓取失败`);
+    await logger(env.MATCH_DATA, '赛程', `${today} 页面为空，抓取失败`);
     return;
   }
 
   const allMatches = adapter.parseMatches(html);
   if (allMatches.length === 0) {
     console.log(`[Snapshot] ${today} no matches parsed`);
-    await writeLog(env, '赛程', `${today} 解析0场，抓取失败`);
+    await logger(env.MATCH_DATA, '赛程', `${today} 解析0场，抓取失败`);
     return;
   }
 
@@ -101,14 +101,16 @@ async function snapshotMatches(env) {
   }
 
   const envelope = createEnvelope(today, adapter.name, matches);
-  await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope), { expirationTtl: 86400 * 30 });
+  await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
   console.log(`[Snapshot] ${today}: saved ${matches.length} matches (filtered from ${allMatches.length})`);
-  await writeLog(env, '赛程', `${today} 保存${matches.length}场比赛(${prefix}期)`);
+  await logger(env.MATCH_DATA, '赛程', `${today} 保存${matches.length}场比赛(${prefix}期)`);
 }
 
 async function updateScores(env) {
   const today = getBeijingDate(0);
   const periods = [today, getBeijingDate(-1), getBeijingDate(-2)];
+  let totalUpdated = 0;
+  let totalPending = 0;
 
   for (const date of periods) {
     const kvKey = `matches:${date}`;
@@ -132,55 +134,55 @@ async function updateScores(env) {
 
     if (startedWithoutScore.length === 0) {
       console.log(`[Scores] ${date} no started matches need scores`);
+      totalPending += matches.filter(m => !m.score).length;
       continue;
     }
 
-    const matchDates = [...new Set(startedWithoutScore.map(m => m.date))];
-    const scores = await fetchScoresForDates(matchDates);
-
+    const SCORE_RE = /^\d+-\d+$/;
     let updated = 0;
+
+    // Primary source: jczq page (data-isend=1) — 90分钟竞彩比分
+    const jczqScores = await fetchJczqScores(date);
     matches.forEach(m => {
-      if (!m.score && scores[m.id]) {
-        m.score = scores[m.id];
+      if (!m.score && jczqScores[m.id] && SCORE_RE.test(jczqScores[m.id])) {
+        m.score = jczqScores[m.id];
         m.status = 'finished';
         updated++;
       }
     });
 
-    // Fallback: 从jczq页面获取live.500.com覆盖不到的比分
-    const stillMissing = matches.filter(m => !m.score && startedWithoutScore.some(s => s.id === m.id));
-    if (stillMissing.length > 0) {
-      try {
-        const url = adapter.buildMatchesUrl({ date });
-        const html = await fetchHtml(url);
-        if (html && html.length > 1000) {
-          const parsed = adapter.parseMatches(html);
-          const parsedMap = {};
-          parsed.forEach(p => { parsedMap[p.id] = p; });
-          stillMissing.forEach(m => {
-            if (parsedMap[m.id] && parsedMap[m.id].score) {
-              m.score = parsedMap[m.id].score;
-              m.status = 'finished';
-              updated++;
-            }
-          });
+    // Secondary source: live.500.com (status=3/4) — 最终比分（含加时点球）
+    const matchDates = [...new Set(matches.filter(m => !m.score_ft).map(m => m.date))];
+    const liveScores = await fetchScoresForDates(matchDates);
+    matches.forEach(m => {
+      if (liveScores[m.id] && SCORE_RE.test(liveScores[m.id])) {
+        m.score_ft = liveScores[m.id];
+        // If no 90-min score yet but live shows finished, use as fallback
+        if (!m.score) {
+          m.score = liveScores[m.id];
+          m.status = 'finished';
+          updated++;
         }
-      } catch (e) {
-        console.log(`[Scores] ${date}: jczq fallback failed: ${e.message}`);
       }
-    }
+    });
 
     if (updated > 0) {
       const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
       const envelope = createEnvelope(date, adapter.name, matches);
-      await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope),
-        nowAllDone ? {} : { expirationTtl: 86400 * 30 }
-      );
+      await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
       console.log(`[Scores] ${date}: updated ${updated} (${nowAllDone ? 'all done' : 'pending'})`);
-      await writeLog(env, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
-    } else {
-      console.log(`[Scores] ${date}: no new scores available`);
+      await logger(env.MATCH_DATA, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
     }
+
+    totalUpdated += updated;
+    totalPending += matches.filter(m => !m.score).length;
+  }
+
+  if (totalUpdated === 0) {
+    const msg = totalPending > 0
+      ? `定时检查：无新结果(${totalPending}场待更新)`
+      : '定时检查：无新结果(所有比赛已完成或无进行中比赛)';
+    await logger(env.MATCH_DATA, '比分', msg);
   }
 }
 
