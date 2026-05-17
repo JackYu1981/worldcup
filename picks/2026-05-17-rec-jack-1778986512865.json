@@ -1,0 +1,31 @@
+{
+  "date": "2026-05-17",
+  "submitted_at": "2026-05-17T02:55:12.622Z",
+  "selected_tier": "conservative",
+  "source": "recommendation",
+  "stake": 100,
+  "combo_count": 1,
+  "combined_odds": 3.01,
+  "odds_range": null,
+  "legs": [
+    {
+      "match_id": "f1202734",
+      "match_desc": "狼队vs富勒姆",
+      "code": "周日014",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "富勒姆胜",
+      "odds": 1.74
+    },
+    {
+      "match_id": "f1202726",
+      "match_desc": "埃弗顿vs桑德兰",
+      "code": "周日015",
+      "market": "1x2",
+      "pick": "home_win",
+      "pick_desc": "埃弗顿胜",
+      "odds": 1.73
+    }
+  ],
+  "submitted_by": "jack"
+}
