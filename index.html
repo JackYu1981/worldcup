@@ -343,8 +343,13 @@
         }
 
         function getFilteredMatches() {
-            if (activeLeague === 'all') return matches;
-            return matches.filter(m => m.league === activeLeague);
+            const filtered = activeLeague === 'all' ? [...matches] : matches.filter(m => m.league === activeLeague);
+            filtered.sort((a, b) => {
+                const ta = (a.date || '') + (a.kickoff || '');
+                const tb = (b.date || '') + (b.kickoff || '');
+                return ta.localeCompare(tb);
+            });
+            return filtered;
         }
 
         function updatePeriodHeader() {
@@ -484,7 +489,8 @@
 
         function renderMatchCard(m) {
             const status = m.status || 'scheduled';
-            const prefix = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
+            const matchDay = m.date ? new Date(m.date + 'T00:00:00+08:00').getDay() : getBeijingDay(currentDate);
+            const prefix = WEEKDAY_PREFIX[matchDay];
             const codeText = `${prefix}${m.code || '000'}`;
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
@@ -571,7 +577,7 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                const weekday = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
+                const weekday = WEEKDAY_PREFIX[m.date ? new Date(m.date + 'T00:00:00+08:00').getDay() : getBeijingDay(currentDate)];
                 combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', weekday, kickoff: m.kickoff || '', matchDate: m.date || currentDate };
             }
             renderMatches();
