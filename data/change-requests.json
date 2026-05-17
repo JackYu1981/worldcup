@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1779006233540,
+      "author": "jack",
+      "type": "improvement",
+      "text": "推荐页面预备方案也做成可折叠式样，没有预备方案显示（0）保持风格统一",
+      "time": "2026-05-17T08:23:53.540Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1778872441480,
       "author": "brian",
       "type": "bug",
