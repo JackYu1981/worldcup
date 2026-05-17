@@ -520,11 +520,16 @@
             }
 
             let oddsHtml = '';
-            if (m.odds && m.odds.home_win != null) {
-                const hLine = (m.handicap && m.handicap.line != null) ? m.handicap.line : 0;
-                const hLineText = hLine === 0 ? '0' : (hLine < 0 ? `${hLine}` : `+${hLine}`);
+            const hasOdds = m.odds && m.odds.home_win != null;
+            const hLine = (m.handicap && m.handicap.line != null) ? m.handicap.line : 0;
+            const hasHandicap = m.handicap && m.handicap.home_win != null && hLine !== 0;
 
-                oddsHtml += `<div class="odds-table">
+            if (hasOdds || hasHandicap) {
+                const hLineText = hLine === 0 ? '0' : (hLine < 0 ? `${hLine}` : `+${hLine}`);
+                oddsHtml += `<div class="odds-table">`;
+
+                if (hasOdds) {
+                    oddsHtml += `
                     <div class="odds-row-label">0</div>
                     <div class="odds-cell ${cellClass('1x2','home_win')}" onclick="togglePick('${m.id}','1x2','home_win',${m.odds.home_win},'${m.home}胜')">
                         <div class="label">胜</div><div class="value">${m.odds.home_win.toFixed(2)}</div>
@@ -535,10 +540,11 @@
                     <div class="odds-cell ${cellClass('1x2','away_win')}" onclick="togglePick('${m.id}','1x2','away_win',${m.odds.away_win},'${m.away}胜')">
                         <div class="label">负</div><div class="value">${m.odds.away_win.toFixed(2)}</div>
                     </div>`;
+                }
 
-                if (m.handicap && m.handicap.home_win != null && hLine !== 0) {
+                if (hasHandicap) {
+                    if (hasOdds) oddsHtml += `<div class="odds-row-border"></div>`;
                     oddsHtml += `
-                    <div class="odds-row-border"></div>
                     <div class="odds-row-label">${hLineText}</div>
                     <div class="odds-cell ${cellClass('handicap','home_win')}" onclick="togglePick('${m.id}','handicap','home_win',${m.handicap.home_win},'让球胜')">
                         <div class="label">胜</div><div class="value">${m.handicap.home_win.toFixed(2)}</div>
