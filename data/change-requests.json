@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1779007241858,
+      "author": "jack",
+      "type": "feature",
+      "text": "当前这个“提建议”输入框，应改只在展开cr区域并选择cr的时候打开，在使用其他区域的时候比如日志，版本历史不打开也不现实这个编辑框",
+      "time": "2026-05-17T08:40:41.858Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1779006764729,
       "author": "jack",
       "type": "bug",
@@ -230,7 +241,7 @@
       "id": 1778814251558,
       "author": "jack",
       "type": "feature",
-      "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求，尝试开发这个功能，直接从相册打开图片，保存到GitHub或者cloudflare的位置，后台ai可以找到对应的照片文件进行分析",
+      "text": "修订页面增加上传照片功能，这样方便ai更直观理解需求",
       "time": "2026-05-15 11:04",
       "status": "pending",
       "resolved_in": null,
