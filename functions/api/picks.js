@@ -28,27 +28,30 @@ export async function onRequestGet(context) {
 
     const allPicks = [];
     for (const d of dates) {
+      let found = false;
       if (!source || source === 'recommendation') {
         const recs = await kv.get(`recommendations:${d}`, 'json');
         if (recs && recs.items) {
           allPicks.push(...recs.items);
+          found = true;
         }
       }
       if (!source || source === 'pending_plan') {
         const pending = await kv.get(`pending_plans:${d}`, 'json');
         if (pending && pending.items) {
           allPicks.push(...pending.items);
+          found = true;
         }
       }
       if (!source || source === 'plan') {
         const plans = await kv.get(`plans:${d}`, 'json');
         if (plans && plans.items) {
           allPicks.push(...plans.items);
+          found = true;
         }
       }
 
-      // Fallback: read legacy picks:{date} if new keys are empty
-      if (allPicks.length === 0) {
+      if (!found) {
         const legacy = await kv.get(`picks:${d}`, 'json');
         if (legacy && legacy.picks) {
           const filtered = source
@@ -61,7 +64,7 @@ export async function onRequestGet(context) {
 
     return json({ picks: allPicks }, 200, 30);
   } catch (e) {
-    return json({ picks: [], error: e.message }, 500);
+    return error(e.message, 500);
   }
 }
 

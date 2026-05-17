@@ -507,7 +507,11 @@
                 } else {
                     homeScore = m.score.home; awayScore = m.score.away;
                 }
-                centerHtml = `<span class="score-badge">${homeScore}-${awayScore}</span>`;
+                let ftNote = '';
+                if (m.score_ft && m.score_ft !== m.score) {
+                    ftNote = `<div style="font-size:10px;color:#999;margin-top:2px;">终 ${m.score_ft}</div>`;
+                }
+                centerHtml = `<span class="score-badge">${homeScore}-${awayScore}</span>${ftNote}`;
             } else {
                 centerHtml = `<div class="kickoff-box"><span class="kickoff-date">${kickoff.date}</span><span class="kickoff-time">${kickoff.time}</span></div>`;
             }
@@ -682,6 +686,10 @@
         }
 
         function generateCombo() {
+            if (currentDate < todayStr) {
+                showToast(`${currentDate} 竞彩已停售，无法生成推荐`);
+                return;
+            }
             const keys = Object.keys(combo);
             const byMatch = {};
             keys.forEach(k => {

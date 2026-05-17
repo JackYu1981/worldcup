@@ -1,7 +1,13 @@
 import { json, error, options } from '../lib/response.js';
 import { logger } from '../lib/logger.js';
+import { verifyToken } from '../lib/auth.js';
 
 export async function onRequestGet(context) {
+  const user = await verifyToken(context.request, context.env);
+  if (!user) {
+    return error('未登录或登录已过期', 401);
+  }
+
   const kv = context.env.MATCH_DATA;
   const url = new URL(context.request.url);
   const month = url.searchParams.get('month');
@@ -17,6 +23,11 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   try {
+    const user = await verifyToken(context.request, context.env);
+    if (!user) {
+      return error('未登录或登录已过期', 401);
+    }
+
     const body = await context.request.json();
     const { type, message } = body;
     if (!type || !message) {

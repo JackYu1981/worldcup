@@ -14,7 +14,8 @@ export async function verifyToken(request, env) {
 
     if (payload.exp && payload.exp < Date.now()) return null;
 
-    const secret = env.AUTH_SECRET || 'worldcup2026';
+    const secret = env.AUTH_SECRET;
+    if (!secret) return null;
     const expectedSig = await sign(payloadStr, secret);
 
     if (parts[1] !== expectedSig) return null;

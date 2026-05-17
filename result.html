@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>投注方案 - 世界杯投注助手</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -158,6 +159,30 @@
             padding: 60px 20px;
             font-size: 14px;
         }
+
+        .bomb-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .bomb-shake {
+            animation: bombShake 0.5s ease-out;
+        }
+        @keyframes bombShake {
+            0%, 100% { transform: translate(0,0); }
+            8% { transform: translate(-6px, 3px); }
+            16% { transform: translate(5px, -4px); }
+            24% { transform: translate(-4px, 2px); }
+            32% { transform: translate(4px, -2px); }
+            40% { transform: translate(-3px, 3px); }
+            50% { transform: translate(3px, -2px); }
+            60% { transform: translate(-2px, 1px); }
+            75% { transform: translate(1px, -1px); }
+        }
     </style>
 </head>
 <body>
@@ -191,7 +216,7 @@
         function getDateStr(daysAgo) {
             const d = new Date();
             d.setDate(d.getDate() - daysAgo);
-            return d.toISOString().slice(0, 10);
+            return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
         }
 
         async function loadInitial() {
@@ -208,23 +233,24 @@
         }
 
         async function loadMore() {
-            if (noMoreData) return;
+            if (noMoreData) return false;
             const prevFrom = getDateStr(loadedDays + 3 - 1);
             const prevTo = getDateStr(loadedDays);
             loadedDays += 3;
 
             try {
                 const resp = await fetch(`/api/plans?from=${prevFrom}&to=${prevTo}`);
-                if (!resp.ok) return;
+                if (!resp.ok) return false;
                 const data = await resp.json();
                 const older = data.plans || [];
                 if (older.length === 0) {
                     noMoreData = true;
-                    return;
+                    return false;
                 }
                 allResults = [...allResults, ...older];
                 renderAllPlans();
-            } catch (e) {}
+                return true;
+            } catch (e) { return false; }
         }
 
         async function refresh() {
@@ -234,7 +260,403 @@
         }
 
         function togglePlan(el) {
+            const isExpanding = !el.classList.contains('expanded');
             el.classList.toggle('expanded');
+            if (isExpanding && el.classList.contains('lost')) {
+                triggerBombEffect(el);
+            }
+            if (isExpanding && el.classList.contains('won')) {
+                triggerGoldCoinEffect(el);
+            }
+        }
+
+        function triggerBombEffect(cardEl) {
+            document.body.classList.add('bomb-shake');
+            setTimeout(() => document.body.classList.remove('bomb-shake'), 500);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'bomb-overlay';
+            document.body.appendChild(overlay);
+
+            const canvas = document.createElement('canvas');
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            overlay.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+            const cx = w / 2, cy = h * 0.4;
+
+            const particles = [];
+            const shockwave = { r: 0, maxR: Math.max(w, h) * 0.7, alpha: 1 };
+            let flashAlpha = 1;
+            let elapsed = 0;
+            let smokeAlpha = 0;
+
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 5;
+                const g = Math.floor(10 + Math.random() * 35);
+                particles.push({
+                    x: cx + (Math.random() - 0.5) * 40,
+                    y: cy + (Math.random() - 0.5) * 40,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1.5,
+                    size: 30 + Math.random() * 50,
+                    life: 1,
+                    decay: 0.003 + Math.random() * 0.004,
+                    color: `rgb(${g},${g},${g})`,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.05,
+                    isSmoke: true
+                });
+            }
+
+            for (let i = 0; i < 60; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 8;
+                const type = Math.random();
+                let color, size, decay;
+                if (type < 0.5) {
+                    color = `hsl(${Math.random() * 40 + 5}, 100%, ${40 + Math.random() * 30}%)`;
+                    size = 10 + Math.random() * 18;
+                    decay = 0.01 + Math.random() * 0.01;
+                } else {
+                    color = `hsl(${Math.random() * 50}, 90%, ${60 + Math.random() * 30}%)`;
+                    size = 4 + Math.random() * 8;
+                    decay = 0.015 + Math.random() * 0.015;
+                }
+                particles.push({
+                    x: cx + (Math.random() - 0.5) * 20,
+                    y: cy + (Math.random() - 0.5) * 20,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 3,
+                    size, life: 1, decay, color,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.2
+                });
+            }
+
+            for (let i = 0; i < 25; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 5 + Math.random() * 12;
+                particles.push({
+                    x: cx, y: cy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 4,
+                    size: 2 + Math.random() * 3,
+                    life: 1,
+                    decay: 0.02 + Math.random() * 0.02,
+                    color: '#fff',
+                    rotation: 0, rotSpeed: 0,
+                    isSpark: true
+                });
+            }
+
+            for (let i = 0; i < 30; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.3 + Math.random() * 1.5;
+                const g = Math.floor(40 + Math.random() * 50);
+                particles.push({
+                    x: cx + (Math.random() - 0.5) * 100,
+                    y: cy + (Math.random() - 0.5) * 60,
+                    vx: Math.cos(angle) * speed,
+                    vy: -0.3 - Math.random() * 0.8,
+                    size: 40 + Math.random() * 80,
+                    life: 0,
+                    maxLife: 0.7 + Math.random() * 0.3,
+                    decay: 0.003 + Math.random() * 0.003,
+                    color: `rgba(${g},${g},${g},1)`,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.02,
+                    isLateSmoke: true,
+                    delay: 20 + Math.floor(Math.random() * 40)
+                });
+            }
+
+            function animate() {
+                elapsed++;
+                ctx.clearRect(0, 0, w, h);
+
+                if (elapsed > 15) {
+                    smokeAlpha = Math.min(smokeAlpha + 0.02, 0.35);
+                    if (elapsed > 80) smokeAlpha = Math.max(smokeAlpha - 0.005, 0);
+                    ctx.globalAlpha = smokeAlpha;
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                if (flashAlpha > 0) {
+                    ctx.globalAlpha = flashAlpha;
+                    ctx.fillStyle = '#fff8e0';
+                    ctx.fillRect(0, 0, w, h);
+                    flashAlpha -= 0.08;
+                }
+
+                if (shockwave.r < shockwave.maxR) {
+                    shockwave.r += 10;
+                    shockwave.alpha = 1 - shockwave.r / shockwave.maxR;
+                    ctx.globalAlpha = shockwave.alpha * 0.4;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, shockwave.r, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ff6600';
+                    ctx.lineWidth = 6 * shockwave.alpha;
+                    ctx.stroke();
+                    ctx.globalAlpha = shockwave.alpha * 0.15;
+                    ctx.fillStyle = '#ff8800';
+                    ctx.fill();
+                }
+
+                let alive = false;
+                particles.forEach(p => {
+                    if (p.isLateSmoke) {
+                        if (elapsed < p.delay) return;
+                        if (p.life < p.maxLife) p.life += 0.015;
+                        else { p.life -= p.decay; }
+                        if (p.life <= 0) return;
+                        alive = true;
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.size += 0.5;
+                        p.rotation += p.rotSpeed;
+                        ctx.globalAlpha = Math.min(p.life, 0.5);
+                        ctx.save();
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rotation);
+                        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+                        grad.addColorStop(0, p.color);
+                        grad.addColorStop(1, 'rgba(50,50,50,0)');
+                        ctx.fillStyle = grad;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                        return;
+                    }
+
+                    if (p.life <= 0) return;
+                    alive = true;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += p.isSmoke ? 0.02 : 0.12;
+                    p.vx *= p.isSmoke ? 0.995 : 0.98;
+                    if (p.isSmoke) p.vy *= 0.99;
+                    p.life -= p.decay;
+                    p.rotation += p.rotSpeed;
+                    if (p.isSmoke) p.size += 0.8;
+
+                    ctx.globalAlpha = Math.max(0, p.isSmoke ? p.life * 0.6 : p.life);
+
+                    if (p.isSpark) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p.x - p.vx * 3, p.y - p.vy * 3);
+                        ctx.strokeStyle = p.color;
+                        ctx.lineWidth = p.size * p.life;
+                        ctx.stroke();
+                    } else if (p.isSmoke) {
+                        ctx.save();
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rotation);
+                        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+                        grad.addColorStop(0, p.color);
+                        grad.addColorStop(0.6, p.color);
+                        grad.addColorStop(1, 'rgba(40,40,40,0)');
+                        ctx.fillStyle = grad;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    } else {
+                        const s = p.size * (0.5 + p.life * 0.5);
+                        ctx.save();
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rotation);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, s, 0, Math.PI * 2);
+                        ctx.fillStyle = p.color;
+                        ctx.fill();
+                        if (p.life > 0.5) {
+                            ctx.globalAlpha = (p.life - 0.5) * 2;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, s * 0.4, 0, Math.PI * 2);
+                            ctx.fillStyle = '#fff';
+                            ctx.fill();
+                        }
+                        ctx.restore();
+                    }
+                });
+
+                ctx.globalAlpha = 1;
+                if (alive && elapsed < 200) {
+                    requestAnimationFrame(animate);
+                } else {
+                    overlay.remove();
+                }
+            }
+            animate();
+            setTimeout(() => overlay.remove(), 4000);
+        }
+
+        function triggerGoldCoinEffect(cardEl) {
+            const overlay = document.createElement('div');
+            overlay.className = 'bomb-overlay';
+            document.body.appendChild(overlay);
+
+            const canvas = document.createElement('canvas');
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            overlay.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+            const cx = w / 2, cy = h * 0.4;
+
+            let elapsed = 0;
+            let coinScale = 0;
+            let coinRotation = 0;
+            let coinAlpha = 0;
+            let glowSize = 0;
+            const sparkles = [];
+
+            for (let i = 0; i < 40; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 80 + Math.random() * 120;
+                sparkles.push({
+                    x: cx + Math.cos(angle) * dist,
+                    y: cy + Math.sin(angle) * dist,
+                    size: 2 + Math.random() * 4,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 2 + Math.random() * 3,
+                    alpha: 0
+                });
+            }
+
+            const miniCoins = [];
+            for (let i = 0; i < 15; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 5;
+                miniCoins.push({
+                    x: cx, y: cy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 4 - Math.random() * 3,
+                    size: 8 + Math.random() * 12,
+                    rotation: Math.random() * Math.PI,
+                    rotSpeed: 0.1 + Math.random() * 0.2,
+                    alpha: 1,
+                    delay: Math.floor(Math.random() * 20)
+                });
+            }
+
+            function drawCoin(x, y, radius, rot, alpha) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.globalAlpha = alpha;
+
+                const squeeze = Math.abs(Math.cos(rot));
+                ctx.scale(squeeze || 0.1, 1);
+
+                const grad = ctx.createLinearGradient(-radius, -radius, radius, radius);
+                grad.addColorStop(0, '#ff8c00');
+                grad.addColorStop(0.3, '#ffb833');
+                grad.addColorStop(0.5, '#ffe066');
+                grad.addColorStop(0.7, '#ffb833');
+                grad.addColorStop(1, '#cc5500');
+
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = '#aa4400';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                if (squeeze > 0.3) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(170,68,0,0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.font = `bold ${Math.floor(radius * 0.8)}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#aa4400';
+                    ctx.fillText('$', 0, 2);
+                }
+
+                ctx.restore();
+            }
+
+            function animate() {
+                elapsed++;
+                ctx.clearRect(0, 0, w, h);
+
+                if (elapsed < 30) {
+                    coinScale = Math.min(1, coinScale + 0.05);
+                    coinAlpha = Math.min(1, coinAlpha + 0.06);
+                    coinRotation += 0.3;
+                    glowSize = Math.min(120, glowSize + 5);
+                } else if (elapsed < 120) {
+                    coinRotation += 0.08;
+                    glowSize = 120 + Math.sin(elapsed * 0.1) * 15;
+                } else {
+                    coinAlpha = Math.max(0, coinAlpha - 0.03);
+                    coinScale = Math.max(0, coinScale - 0.02);
+                }
+
+                if (glowSize > 0 && coinAlpha > 0) {
+                    ctx.globalAlpha = coinAlpha * 0.3;
+                    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowSize);
+                    glow.addColorStop(0, '#ff8c00');
+                    glow.addColorStop(0.5, 'rgba(255,140,0,0.3)');
+                    glow.addColorStop(1, 'rgba(255,140,0,0)');
+                    ctx.fillStyle = glow;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, glowSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                const coinR = 85 * coinScale;
+                if (coinR > 0) drawCoin(cx, cy, coinR, coinRotation, coinAlpha);
+
+                sparkles.forEach(s => {
+                    if (elapsed < 10) return;
+                    s.alpha = Math.min(1, s.alpha + 0.05) * (elapsed > 120 ? 0.9 : 1);
+                    const twinkle = Math.sin(elapsed * 0.15 + s.phase);
+                    if (twinkle < 0) return;
+                    ctx.globalAlpha = s.alpha * twinkle * coinAlpha;
+                    ctx.fillStyle = '#ff8c00';
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.size * twinkle, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                miniCoins.forEach(mc => {
+                    if (elapsed < mc.delay + 15) return;
+                    mc.x += mc.vx;
+                    mc.y += mc.vy;
+                    mc.vy += 0.15;
+                    mc.vx *= 0.99;
+                    mc.rotation += mc.rotSpeed;
+                    mc.alpha = Math.max(0, mc.alpha - 0.012);
+                    if (mc.alpha <= 0) return;
+                    drawCoin(mc.x, mc.y, mc.size, mc.rotation, mc.alpha);
+                });
+
+                ctx.globalAlpha = 1;
+                if (elapsed < 160 && coinAlpha > 0) {
+                    requestAnimationFrame(animate);
+                } else {
+                    overlay.remove();
+                }
+            }
+            animate();
+            setTimeout(() => overlay.remove(), 3500);
         }
 
         function renderAllPlans() {

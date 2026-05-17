@@ -17,31 +17,48 @@ export async function onRequestPost(context) {
 
     const allowedFiles = ['data/design-comments.json', 'data/change-requests.json'];
     const filename = allowedFiles.includes(customFile) ? customFile : 'data/design-comments.json';
+
+    let fileSha = sha;
+    const repo = context.env.GITHUB_REPO || 'JackYu1981/worldcup';
+    const apiBase = `https://api.github.com/repos/${repo}/contents/${filename}`;
+    const ghHeaders = {
+      'Authorization': `token ${context.env.GITHUB_TOKEN}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'worldmoney-pages',
+    };
+
+    if (!fileSha) {
+      try {
+        const existing = await fetch(apiBase, { headers: ghHeaders });
+        if (existing.ok) {
+          const data = await existing.json();
+          fileSha = data.sha;
+        }
+      } catch(e) {}
+    }
+
     const ghBody = {
       message: message || `design feedback by ${user.username}`,
       content,
     };
-    if (sha) ghBody.sha = sha;
+    if (fileSha) ghBody.sha = fileSha;
 
-    const ghResp = await fetch(
-      `https://api.github.com/repos/JackYu1981/worldcup/contents/${filename}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${context.env.GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'worldmoney-pages',
-        },
-        body: JSON.stringify(ghBody),
-      }
-    );
+    const ghResp = await fetch(apiBase, {
+      method: 'PUT',
+      headers: ghHeaders,
+      body: JSON.stringify(ghBody),
+    });
 
     if (!ghResp.ok) {
       const err = await ghResp.text();
+      if (ghResp.status === 409) {
+        return error('数据冲突，请刷新后重试', 409);
+      }
       return error(`GitHub写入失败: ${err}`);
     }
 
-    return json({ success: true });
+    const result = await ghResp.json();
+    return json({ success: true, sha: result.content?.sha || null });
   } catch (e) {
     return error(e.message);
   }

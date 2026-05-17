@@ -170,10 +170,15 @@
         .comment-input-row {
             display: flex;
             gap: 8px;
+            align-items: flex-end;
+        }
+        .comment-input-wrap {
+            flex: 1;
+            position: relative;
         }
         .comment-input {
-            flex: 1;
-            padding: 10px 12px;
+            width: 100%;
+            padding: 10px 36px 10px 12px;
             border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 14px;
@@ -183,6 +188,19 @@
             max-height: 80px;
         }
         .comment-input:focus { border-color: #1a73e8; }
+        .input-camera-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0.5;
+            padding: 2px;
+        }
+        .input-camera-btn:active { opacity: 1; }
         .comment-btn {
             padding: 10px 16px;
             background: #1a73e8;
@@ -195,6 +213,14 @@
             white-space: nowrap;
         }
         .comment-btn:active { background: #1557b0; }
+        .upload-status {
+            font-size: 11px;
+            color: #999;
+            padding: 4px 0 0;
+            display: none;
+        }
+        .upload-status.success { color: #2e7d32; }
+        .upload-status.error { color: #c62828; }
         .toast {
             position: fixed;
             top: 50%;
@@ -447,7 +473,7 @@
         <div class="section-body collapsed" id="versionHistory"></div>
     </div>
 
-    <div class="comment-section">
+    <div class="comment-section" id="commentSection" style="display:none">
         <div class="comment-header">
             <span>💬 提建议</span>
             <span class="comment-count" id="commentCount">0条</span>
@@ -458,9 +484,14 @@
             <span class="type-option" onclick="selectType(this,'bug')">Bug</span>
         </div>
         <div class="comment-input-row">
-            <textarea class="comment-input" id="commentInput" placeholder="输入修改建议..."></textarea>
+            <div class="comment-input-wrap">
+                <textarea class="comment-input" id="commentInput" placeholder="输入修改建议..."></textarea>
+                <button class="input-camera-btn" onclick="document.getElementById('uploadGallery').click()" title="上传文件">📎</button>
+            </div>
             <button class="comment-btn" onclick="submitCR()">发送</button>
         </div>
+        <input type="file" id="uploadGallery" accept="image/*,.pdf,.json,.txt" style="display:none">
+        <div class="upload-status" id="uploadStatus"></div>
     </div>
     </div>
 
@@ -469,9 +500,8 @@
     <script src="auth.js"></script>
     <script src="pull-refresh.js"></script>
     <script>
-        const GITHUB_API = 'https://api.github.com/repos/JackYu1981/worldcup/contents';
         const CR_FILE = 'data/change-requests.json';
-        const VERSIONS_FILE = 'data/versions.json';
+        let crSha = null;
 
         const USER_TIMEZONES = {
             jack: 'Asia/Shanghai',
@@ -513,23 +543,25 @@
         AUTH.requireLogin(function(user) {
             AUTH.renderUserBadge('userBadge');
             loadCRs();
-            loadVersions();
             loadLogs();
             initPullRefresh({
-                onRefresh: () => Promise.all([loadCRs(), loadVersions(), loadLogs()])
+                onRefresh: () => Promise.all([loadCRs(), loadLogs()])
             });
         });
 
         async function loadCRs() {
             try {
-                const resp = await fetch(`${GITHUB_API}/${CR_FILE}`);
+                const resp = await fetch('/api/design-data', { headers: AUTH.headers() });
                 if (resp.ok) {
-                    const file = await resp.json();
-                    const binary = atob(file.content);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                    const data = JSON.parse(new TextDecoder().decode(bytes));
+                    const data = await resp.json();
                     requests = data.requests || [];
+                    crSha = data.sha || null;
+                    if (data.versions) {
+                        versions = data.versions;
+                        renderVersionHistory();
+                        renderReleaseNotes();
+                        updateVersionBadge();
+                    }
                 } else {
                     requests = [];
                 }
@@ -537,27 +569,6 @@
                 requests = [];
             }
             renderCRs();
-        }
-
-        async function loadVersions() {
-            try {
-                const resp = await fetch(`${GITHUB_API}/${VERSIONS_FILE}`);
-                if (resp.ok) {
-                    const file = await resp.json();
-                    const binary = atob(file.content);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                    const data = JSON.parse(new TextDecoder().decode(bytes));
-                    versions = data.versions || [];
-                } else {
-                    versions = [];
-                }
-            } catch (e) {
-                versions = [];
-            }
-            renderVersionHistory();
-            renderReleaseNotes();
-            updateVersionBadge();
         }
 
         function updateVersionBadge() {
@@ -819,11 +830,17 @@
                 icon.textContent = '▲';
                 h2.classList.add('open');
             }
+            const crBody = document.querySelector('#section-change-requests .section-body');
+            document.getElementById('commentSection').style.display =
+                crBody.classList.contains('collapsed') ? 'none' : '';
         }
 
         async function loadLogs() {
             try {
-                const resp = await fetch('/api/logs');
+                const headers = {};
+                const token = AUTH.getToken && AUTH.getToken();
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                const resp = await fetch('/api/logs', { headers });
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 const logs = data.logs || [];
@@ -883,27 +900,25 @@
                 const payload = { requests: requests };
                 const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
 
-                let sha = null;
-                try {
-                    const existing = await fetch(`${GITHUB_API}/${CR_FILE}`);
-                    if (existing.ok) {
-                        const data = await existing.json();
-                        sha = data.sha;
-                    }
-                } catch(e) {}
-
                 const body = {
                     message: commitMsg,
                     content: content,
-                    filename: CR_FILE
+                    filename: CR_FILE,
                 };
-                if (sha) body.sha = sha;
+                if (crSha) body.sha = crSha;
 
-                await fetch('/api/submit-comment', {
+                const resp = await fetch('/api/submit-comment', {
                     method: 'POST',
                     headers: AUTH.headers(),
                     body: JSON.stringify(body)
                 });
+                const result = await resp.json();
+                if (result.success && result.sha) {
+                    crSha = result.sha;
+                } else if (resp.status === 409) {
+                    showToast('⚠️ 数据冲突，正在刷新...');
+                    await loadCRs();
+                }
             } catch(e) {
                 console.log('CR save failed:', e);
             }
@@ -915,6 +930,49 @@
             toast.style.display = 'block';
             setTimeout(() => toast.style.display = 'none', 2000);
         }
+
+        document.getElementById('uploadGallery').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const status = document.getElementById('uploadStatus');
+            status.style.display = 'block';
+            status.className = 'upload-status';
+            status.textContent = `上传中: ${file.name}...`;
+
+            const reader = new FileReader();
+            reader.onload = async function(ev) {
+                const base64 = ev.target.result.split(',')[1];
+                const now = new Date();
+                const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const ext = file.name.split('.').pop() || 'jpg';
+                const filename = `${ts}.${ext}`;
+                try {
+                    const token = sessionStorage.getItem('auth_token');
+                    const resp = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ filename, content: base64 }),
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        status.className = 'upload-status success';
+                        status.textContent = `✅ 已上传: ${data.path}`;
+                        showToast('截图上传成功');
+                    } else {
+                        status.className = 'upload-status error';
+                        status.textContent = `❌ 失败: ${data.error || '未知错误'}`;
+                    }
+                } catch (err) {
+                    status.className = 'upload-status error';
+                    status.textContent = `❌ 网络错误: ${err.message}`;
+                }
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        });
     </script>
 </body>
 </html>

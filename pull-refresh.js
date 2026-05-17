@@ -53,21 +53,37 @@ function initPullRefresh(opts = {}) {
   // Infinite scroll: load more when near bottom
   if (onLoadMore) {
     let loadingMore = false;
+    let noMore = false;
     const loadMoreIndicator = document.createElement('div');
     loadMoreIndicator.id = 'loadMoreIndicator';
-    loadMoreIndicator.style.cssText = 'text-align:center;padding:12px;font-size:12px;color:#999;display:none;';
-    loadMoreIndicator.textContent = '加载更多...';
+    loadMoreIndicator.style.cssText = 'text-align:center;padding:16px;font-size:13px;color:#999;display:none;';
     document.body.appendChild(loadMoreIndicator);
 
     window.addEventListener('scroll', function() {
       if (loadingMore) return;
       const scrollBottom = window.innerHeight + window.scrollY;
       if (scrollBottom >= document.body.offsetHeight - 100) {
+        if (noMore) {
+          loadMoreIndicator.textContent = '没有更多数据了';
+          loadMoreIndicator.style.display = 'block';
+          setTimeout(function() { loadMoreIndicator.style.display = 'none'; }, 1500);
+          return;
+        }
         loadingMore = true;
+        loadMoreIndicator.textContent = '一大波数据正在赶来...';
         loadMoreIndicator.style.display = 'block';
-        Promise.resolve(onLoadMore()).finally(() => {
+        Promise.resolve(onLoadMore()).then(function(result) {
+          if (result === false) {
+            noMore = true;
+            loadMoreIndicator.textContent = '没有更多数据了';
+            setTimeout(function() { loadMoreIndicator.style.display = 'none'; }, 1500);
+          } else {
+            loadMoreIndicator.style.display = 'none';
+          }
           loadingMore = false;
+        }).catch(function() {
           loadMoreIndicator.style.display = 'none';
+          loadingMore = false;
         });
       }
     });

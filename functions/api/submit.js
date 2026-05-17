@@ -16,43 +16,18 @@ export async function onRequestPost(context) {
       return error('缺少日期字段', 400);
     }
 
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+    if (date < todayStr && (source === 'recommendation' || source === 'pending_plan')) {
+      return error(`${date} 竞彩已停售，无法提交`, 400);
+    }
+
+    if (source !== 'recommendation' && !passphrase) {
+      return error('方案需要口令', 400);
+    }
+
     body.submitted_by = user.username;
     body.submitted_at = new Date().toISOString();
 
-    let filename, commitMsg;
-    if (source === 'recommendation') {
-      const ts = Date.now();
-      filename = `picks/${date}-rec-${user.username}-${ts}.json`;
-      commitMsg = `recommendation: ${date} by ${user.username}`;
-    } else {
-      if (!passphrase) {
-        return error('方案需要口令', 400);
-      }
-      filename = `picks/${date}-${passphrase}.json`;
-      commitMsg = `pick: ${date} ${passphrase} by ${user.username}`;
-    }
-
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(body, null, 2))));
-
-    const ghResp = await fetch(
-      `https://api.github.com/repos/JackYu1981/worldcup/contents/${encodeURIComponent(filename)}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${context.env.GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'worldmoney-pages',
-        },
-        body: JSON.stringify({ message: commitMsg, content }),
-      }
-    );
-
-    if (!ghResp.ok) {
-      const err = await ghResp.text();
-      return error(`GitHub写入失败: ${err}`);
-    }
-
-    // Immediately update KV cache (source of truth)
     const kv = context.env.MATCH_DATA;
     await writeToKv(kv, source, date, body);
 
@@ -63,7 +38,7 @@ export async function onRequestPost(context) {
       await logger(kv, '推荐', `推荐提交: ${legsCount}场组合 (${date}) by ${user.username}`);
     }
 
-    return json({ success: true, file: filename });
+    return json({ success: true });
   } catch (e) {
     return error(e.message);
   }
@@ -83,7 +58,14 @@ async function writeToKv(kv, source, date, data) {
     const existing = await kv.get(key, 'json');
     const items = existing ? existing.items : [];
     items.push(data);
-    await kv.put(key, JSON.stringify({ items }), { expirationTtl: 86400 * 30 });
+    await kv.put(key, JSON.stringify({ items }));
+
+    if (source === 'plan') {
+      const pendingData = await kv.get('plans:pending', 'json');
+      const pending = pendingData ? pendingData.plans : [];
+      pending.push(data);
+      await kv.put('plans:pending', JSON.stringify({ plans: pending }));
+    }
   } catch (e) {}
 }
 

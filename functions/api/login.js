@@ -16,7 +16,10 @@ export async function onRequestPost(context) {
       return error('用户名或密码错误', 401);
     }
 
-    const secret = context.env.AUTH_SECRET || 'worldcup2026';
+    const secret = context.env.AUTH_SECRET;
+    if (!secret) {
+      return error('服务器配置错误: AUTH_SECRET未设置', 500);
+    }
     const payload = { username, role: user.role || 'member', exp: Date.now() + 7 * 24 * 60 * 60 * 1000 };
     const token = btoa(JSON.stringify(payload)) + '.' + await sign(JSON.stringify(payload), secret);
 

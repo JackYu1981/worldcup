@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>数据看板 - 世界杯投注助手</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -316,14 +317,21 @@
             const ctx = document.getElementById('profitChart').getContext('2d');
             const settled = allPlans
                 .filter(p => p.status === 'won' || p.status === 'lost')
-                .sort((a, b) => (a.submitted_at || a.date || '').localeCompare(b.submitted_at || b.date || ''));
+                .sort((a, b) => (a.date || a.submitted_at || '').localeCompare(b.date || b.submitted_at || ''));
+
+            const byDate = {};
+            settled.forEach(p => {
+                const d = (p.date || '').slice(0, 10);
+                if (!byDate[d]) byDate[d] = 0;
+                byDate[d] += getPlanProfit(p);
+            });
 
             let cumulative = 0;
             const labels = ['开始'];
             const data = [0];
-            settled.forEach(p => {
-                cumulative += getPlanProfit(p);
-                labels.push((p.date || '').slice(5));
+            Object.keys(byDate).sort().forEach(d => {
+                cumulative += byDate[d];
+                labels.push(d.slice(5));
                 data.push(cumulative);
             });
 
@@ -356,7 +364,7 @@
 
         let calYear, calMonth;
         (function() {
-            const now = new Date();
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
             calYear = now.getFullYear();
             calMonth = now.getMonth();
         })();

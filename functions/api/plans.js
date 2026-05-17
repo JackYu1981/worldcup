@@ -129,9 +129,9 @@ export async function onRequestGet(context) {
     const pendingData = await kv.get('plans:pending', 'json');
     let pending = pendingData ? pendingData.plans : [];
 
-    // 3. Migration fallback
-    if (!pendingData && settled.length === 0) {
-      pending = await migratePlansFromPicks(kv, context.env);
+    // 3. Migration fallback: check plans:{date} keys
+    if (pending.length === 0 && settled.length === 0) {
+      pending = await migratePlansFromKv(kv);
     }
 
     // 4. Evaluate pending plans
@@ -185,38 +185,33 @@ export async function onRequestGet(context) {
     }
 
     results.sort((a, b) => {
-      const ta = a.submitted_at || a.date || '';
-      const tb = b.submitted_at || b.date || '';
+      const da = a.date || '';
+      const db = b.date || '';
+      if (da !== db) return db.localeCompare(da);
+      const ta = a.submitted_at || '';
+      const tb = b.submitted_at || '';
       return tb.localeCompare(ta);
     });
 
     return json({ plans: results }, 200, 30);
   } catch (e) {
-    return json({ plans: [], error: e.message }, 500);
+    return error(e.message, 500);
   }
 }
 
-async function migratePlansFromPicks(kv, env) {
+async function migratePlansFromKv(kv) {
   try {
-    const ghResp = await fetch(
-      'https://api.github.com/repos/JackYu1981/worldcup/contents/picks',
-      {
-        headers: {
-          'Authorization': `token ${env.GITHUB_TOKEN}`,
-          'User-Agent': 'worldmoney-pages',
-        },
+    const plans = [];
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+    for (let i = 0; i < 10; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const data = await kv.get(`plans:${dateStr}`, 'json');
+      if (data && data.items) {
+        plans.push(...data.items.filter(p => p.source === 'plan'));
       }
-    );
-    if (!ghResp.ok) return [];
-
-    const files = await ghResp.json();
-    const jsonFiles = files.filter(f => f.name.endsWith('.json'));
-    const allPicks = await Promise.all(jsonFiles.map(async f => {
-      const r = await fetch(f.download_url);
-      return r.json();
-    }));
-
-    const plans = allPicks.filter(p => p.source === 'plan' && p.date !== '2026-05-15');
+    }
     if (plans.length > 0) {
       await kv.put('plans:pending', JSON.stringify({ plans }));
     }

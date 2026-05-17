@@ -129,11 +129,11 @@
         }
         .user-group.expanded .user-group-arrow { transform: rotate(180deg); }
         .user-group-body {
-            max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
-            padding: 0 10px;
+            display: none;
+            padding: 10px;
         }
         .user-group.expanded .user-group-body {
-            max-height: 5000px; padding: 10px;
+            display: block;
         }
 
         .ai-section {
@@ -288,7 +288,7 @@
             loadData(date);
         }
 
-        async function loadData(date) {
+        async function loadData(date, noCache) {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="empty-state">加载中...</div>';
             userRecs = [];
@@ -296,19 +296,37 @@
             pendingPlans = [];
 
             try {
-                const allPicks = await fetchPicks(date);
+                const [allPicks, plansData] = await Promise.all([
+                    fetchPicks(date, noCache),
+                    fetch(`/api/plans?from=${date}&to=${date}`).then(r => r.ok ? r.json() : { plans: [] })
+                ]);
                 userRecs = allPicks.filter(p => p.source === 'recommendation');
-                plans = allPicks.filter(p => p.source === 'plan');
-                pendingPlans = allPicks.filter(p => p.source === 'pending_plan');
+
+                const confirmedPlans = plansData.plans || [];
+                const confirmedPassphrases = new Set(confirmedPlans.map(p => p.passphrase));
+
+                plans = [...allPicks.filter(p => p.source === 'plan'), ...confirmedPlans];
+                const seen = new Set();
+                plans = plans.filter(p => {
+                    const key = p.passphrase || p.submitted_at;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+
+                pendingPlans = allPicks
+                    .filter(p => p.source === 'pending_plan')
+                    .filter(p => !confirmedPassphrases.has(p.passphrase));
             } catch(e) {}
 
             renderAll();
             prefetchAdjacentPicks(date);
         }
 
-        async function fetchPicks(date) {
-            if (picksCache[date]) return picksCache[date];
-            const resp = await fetch(`/api/picks?date=${date}`);
+        async function fetchPicks(date, noCache) {
+            if (!noCache && picksCache[date]) return picksCache[date];
+            const url = `/api/picks?date=${date}` + (noCache ? `&_t=${Date.now()}` : '');
+            const resp = await fetch(url);
             if (!resp.ok) return [];
             const data = await resp.json();
             const picks = data.picks || [];
@@ -331,46 +349,67 @@
         function renderAll() {
             const content = document.getElementById('content');
             let html = '';
+            const isExpired = currentDate < todayStr;
+
+            if (isExpired) {
+                html += `<div style="background:#fff3e0;border:1px solid #ffcc02;border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#e65100;text-align:center;">
+                    ⚠️ ${currentDate} 竞彩已停售，不可生成新推荐或提交方案
+                </div>`;
+            }
 
             if (plans.length > 0) {
-                html += `<div class="section-title">📋 已确认方案</div>`;
-                html += plans.map(p => renderPlanCard(p)).join('');
+                html += `<div class="user-group expanded">
+                    <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="user-group-name">📋 已确认方案 (${plans.length})</span>
+                        <span class="user-group-arrow">▼</span>
+                    </div>
+                    <div class="user-group-body">
+                        ${plans.map(p => renderPlanCard(p)).join('')}
+                    </div>
+                </div>`;
             }
 
             if (pendingPlans.length > 0) {
-                html += `<div class="section-title" style="color:#666">⏳ 预备方案（等待AI确认）</div>`;
-                html += pendingPlans.map(p => renderPendingCard(p)).join('');
+                html += `<div class="user-group" id="pending-plans-group">
+                    <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="user-group-name">⏳ 预备方案 (${pendingPlans.length})</span>
+                        <span class="user-group-arrow">▼</span>
+                    </div>
+                    <div class="user-group-body">
+                        ${pendingPlans.map(p => renderPendingCard(p)).join('')}
+                    </div>
+                </div>`;
+            } else {
+                html += `<div class="user-group" id="pending-plans-group">
+                    <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="user-group-name">⏳ 预备方案 (0)</span>
+                        <span class="user-group-arrow">▼</span>
+                    </div>
+                    <div class="user-group-body">
+                        <div style="padding:12px;color:#999;font-size:13px;">暂无预备方案</div>
+                    </div>
+                </div>`;
             }
 
-            html += renderAiSection();
-
             if (userRecs.length > 0) {
-                const byUser = {};
-                userRecs.forEach((rec, idx) => {
-                    const user = rec.submitted_by || '未知';
-                    if (!byUser[user]) byUser[user] = [];
-                    byUser[user].push(idx);
-                });
+                html += `<div class="user-group">
+                    <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="user-group-name">👤 用户推荐 (${userRecs.length})</span>
+                        <span class="user-group-arrow">▼</span>
+                    </div>
+                    <div class="user-group-body">
+                        ${userRecs.map((rec, idx) => {
+                            const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
+                            const isPlan = plans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
+                            const isPending = pendingPlans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
+                            return renderRecCard(rec, idx, isPlan ? 'plan' : isPending ? 'pending' : null);
+                        }).join('')}
+                    </div>
+                </div>`;
+            }
 
-                html += `<div class="section-title" style="margin-top:16px;">👤 用户推荐</div>`;
-                Object.keys(byUser).forEach(user => {
-                    const idxs = byUser[user];
-                    html += `<div class="user-group">
-                        <div class="user-group-header" onclick="this.parentElement.classList.toggle('expanded')">
-                            <span class="user-group-name">${user} (${idxs.length})</span>
-                            <span class="user-group-arrow">▼</span>
-                        </div>
-                        <div class="user-group-body">
-                            ${idxs.map(idx => {
-                                const rec = userRecs[idx];
-                                const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
-                                const isPlan = plans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
-                                const isPending = pendingPlans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
-                                return renderRecCard(rec, idx, isPlan ? 'plan' : isPending ? 'pending' : null);
-                            }).join('')}
-                        </div>
-                    </div>`;
-                });
+            if (!isExpired) {
+                html += renderAiSection();
             }
 
             if (!userRecs.length && !plans.length && !pendingPlans.length) {
@@ -407,6 +446,17 @@
             }
             cartesian(0, 1);
             return { comboCount, minOdds, maxOdds, matchCount: groups.length };
+        }
+
+        function formatTime(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            const M = String(d.getMonth() + 1).padStart(2, '0');
+            const D = String(d.getDate()).padStart(2, '0');
+            const h = String(d.getHours()).padStart(2, '0');
+            const m = String(d.getMinutes()).padStart(2, '0');
+            const s = String(d.getSeconds()).padStart(2, '0');
+            return `${M}-${D} ${h}:${m}:${s}`;
         }
 
         function formatOddsSummary(rec) {
@@ -456,7 +506,7 @@
                     <span>${oddsSummary}</span>
                 </div>
                 <div class="rec-actions">
-                    <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
+                    <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted || currentDate < todayStr ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
                     <button class="btn-copy-rec" onclick="copyRec(${idx})">📋</button>
                 </div>
             </div>`;
@@ -474,6 +524,7 @@
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const icon = tierIcons[plan.selected_tier] || '🟡';
             const tierName = tierNames[plan.selected_tier] || plan.selected_tier;
+            const timeStr = formatTime(plan.submitted_at);
 
             const legsHtml = plan.legs.map(l =>
                 `<div class="plan-leg">
@@ -492,7 +543,7 @@
                 ${legsHtml}
                 <div class="plan-summary">
                     <span>${formatOddsSummary(plan)}</span>
-                    <span>by ${plan.submitted_by || '未知'}</span>
+                    <span>by ${plan.submitted_by || '未知'} · ${timeStr}</span>
                 </div>
                 <button class="plan-copy-btn" onclick="copyLegs(${JSON.stringify(plan.legs).replace(/"/g,'&quot;')})">📋 复制竞彩格式</button>
                 </div>
@@ -504,6 +555,7 @@
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const icon = tierIcons[plan.selected_tier] || '🟡';
             const tierName = tierNames[plan.selected_tier] || plan.selected_tier;
+            const timeStr = formatTime(plan.submitted_at);
 
             const legsHtml = plan.legs.map(l =>
                 `<div class="plan-leg">
@@ -520,12 +572,16 @@
                 ${legsHtml}
                 <div class="plan-summary" style="color:#999;">
                     <span>${formatOddsSummary(plan)}</span>
-                    <span>⏳ 等待AI确认</span>
+                    <span>⏳ ${timeStr}</span>
                 </div>
             </div>`;
         }
 
         function selectRec(idx) {
+            if (currentDate < todayStr) {
+                showToast(`${currentDate} 竞彩已停售，无法提交方案`);
+                return;
+            }
             selectedRec = userRecs[idx];
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const tierName = tierNames[selectedRec.selected_tier] || selectedRec.selected_tier;
@@ -583,9 +639,13 @@
                     closeConfirm();
                     copyLegs(payload.legs);
                     showToast('预备方案已提交！请在Claude Code中用口令生成正式方案');
-                    await loadData(currentDate);
-                    const content = document.getElementById('content');
-                    content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    delete picksCache[currentDate];
+                    await loadData(currentDate, true);
+                    const ppGroup = document.getElementById('pending-plans-group');
+                    if (ppGroup) {
+                        ppGroup.classList.add('expanded');
+                        ppGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                 } else {
                     showToast(`失败：${result.error}`);
                     btn.disabled = false;
