@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1779006511415,
+      "author": "jack",
+      "type": "improvement",
+      "text": "选择推荐提交生成预备方案之后刷新并跳转到渲染新生成的预备方案",
+      "time": "2026-05-17T08:28:31.415Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1779006233540,
       "author": "jack",
       "type": "improvement",
