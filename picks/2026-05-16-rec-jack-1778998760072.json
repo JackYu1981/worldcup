@@ -1,0 +1,61 @@
+{
+  "date": "2026-05-16",
+  "submitted_at": "2026-05-17T06:19:20.072Z",
+  "selected_tier": "aggressive",
+  "source": "recommendation",
+  "stake": 100,
+  "combo_count": 4,
+  "combined_odds": 37.27,
+  "odds_range": [
+    11.58,
+    37.27
+  ],
+  "legs": [
+    {
+      "match_id": "f1366434",
+      "match_desc": "浦和红钻vs东京FC",
+      "code": "周六002",
+      "market": "1x2",
+      "pick": "draw",
+      "pick_desc": "平",
+      "odds": 2.8
+    },
+    {
+      "match_id": "f1366434",
+      "match_desc": "浦和红钻vs东京FC",
+      "code": "周六002",
+      "market": "handicap",
+      "pick": "home_win",
+      "pick_desc": "让球胜",
+      "odds": 1.45
+    },
+    {
+      "match_id": "f1373096",
+      "match_desc": "大田市民vs首尔FC",
+      "code": "周六003",
+      "market": "1x2",
+      "pick": "away_win",
+      "pick_desc": "首尔FC胜",
+      "odds": 2.13
+    },
+    {
+      "match_id": "f1373096",
+      "match_desc": "大田市民vs首尔FC",
+      "code": "周六003",
+      "market": "handicap",
+      "pick": "draw",
+      "pick_desc": "让球平",
+      "odds": 3.55
+    },
+    {
+      "match_id": "f1366436",
+      "match_desc": "横滨水手vs柏太阳神",
+      "code": "周六004",
+      "market": "handicap",
+      "pick": "draw",
+      "pick_desc": "让球平",
+      "odds": 3.75
+    }
+  ],
+  "submitted_by": "jack"
+}
