@@ -1,6 +1,17 @@
 {
   "requests": [
     {
+      "id": 1779006764729,
+      "author": "jack",
+      "type": "bug",
+      "text": "清除掉推荐页面中18日周一的脏数据",
+      "time": "2026-05-17T08:32:44.729Z",
+      "status": "pending",
+      "resolved_in": null,
+      "resolution": null,
+      "replies": []
+    },
+    {
       "id": 1779006511415,
       "author": "jack",
       "type": "improvement",
