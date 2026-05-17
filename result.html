@@ -382,7 +382,7 @@
 
                 if (elapsed > 15) {
                     smokeAlpha = Math.min(smokeAlpha + 0.02, 0.35);
-                    if (elapsed > 80) smokeAlpha = Math.max(smokeAlpha - 0.005, 0);
+                    if (elapsed > 50) smokeAlpha = Math.max(smokeAlpha - 0.008, 0);
                     ctx.globalAlpha = smokeAlpha;
                     ctx.fillStyle = '#222';
                     ctx.fillRect(0, 0, w, h);
@@ -490,14 +490,14 @@
                 });
 
                 ctx.globalAlpha = 1;
-                if (alive && elapsed < 200) {
+                if (alive && elapsed < 170) {
                     requestAnimationFrame(animate);
                 } else {
                     overlay.remove();
                 }
             }
             animate();
-            setTimeout(() => overlay.remove(), 4000);
+            setTimeout(() => overlay.remove(), 3500);
         }
 
         function triggerGoldCoinEffect(cardEl) {
