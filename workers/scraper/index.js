@@ -61,15 +61,22 @@ async function snapshotMatches(env) {
     return;
   }
 
-  const matches = adapter.parseMatches(html);
-  if (matches.length === 0) {
+  const allMatches = adapter.parseMatches(html);
+  if (allMatches.length === 0) {
     console.log(`[Snapshot] ${today} no matches parsed`);
+    return;
+  }
+
+  // 只保留比赛日期等于当期日期的场次，跨天比赛归属其实际日期那期
+  const matches = allMatches.filter(m => m.date === today);
+  if (matches.length === 0) {
+    console.log(`[Snapshot] ${today} no matches for this date (${allMatches.length} total parsed)`);
     return;
   }
 
   const envelope = createEnvelope(today, adapter.name, matches);
   await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope), { expirationTtl: 86400 * 30 });
-  console.log(`[Snapshot] ${today}: saved ${matches.length} matches`);
+  console.log(`[Snapshot] ${today}: saved ${matches.length} matches (filtered from ${allMatches.length})`);
 }
 
 async function updateScores(env) {
