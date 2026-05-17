@@ -67,15 +67,13 @@ async function snapshotMatches(env) {
     return;
   }
 
-  // 属于本期的比赛：当天的 + 次日11:00之前开赛的
-  const tomorrow = getBeijingDate(1);
-  const matches = allMatches.filter(m => {
-    if (m.date === today) return true;
-    if (m.date === tomorrow && m.kickoff && m.kickoff < '11:00') return true;
-    return false;
-  });
+  // 按code前缀(周X)过滤，只保留属于本期的比赛
+  const WEEKDAYS = ['周日','周一','周二','周三','周四','周五','周六'];
+  const dayIndex = new Date(today + 'T00:00:00+08:00').getDay();
+  const prefix = WEEKDAYS[dayIndex];
+  const matches = allMatches.filter(m => m.code && m.code.startsWith(prefix));
   if (matches.length === 0) {
-    console.log(`[Snapshot] ${today} no matches for this period (${allMatches.length} total parsed)`);
+    console.log(`[Snapshot] ${today} no matches with prefix "${prefix}" (${allMatches.length} total parsed)`);
     return;
   }
 
