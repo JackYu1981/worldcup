@@ -11,6 +11,26 @@ import { createEnvelope } from '../../lib/schema.js';
 
 const adapter = getAdapter('500.com');
 
+async function writeLog(env, type, message) {
+  try {
+    const now = new Date().toISOString();
+    const entry = { type, message, time: now };
+    const month = now.slice(0, 7);
+
+    const recentData = await env.MATCH_DATA.get('system:logs', 'json');
+    const recent = recentData ? recentData.logs : [];
+    recent.unshift(entry);
+    if (recent.length > 500) recent.length = 500;
+    await env.MATCH_DATA.put('system:logs', JSON.stringify({ logs: recent }));
+
+    const shardKey = `system:logs:${month}`;
+    const shardData = await env.MATCH_DATA.get(shardKey, 'json');
+    const shard = shardData ? shardData.logs : [];
+    shard.unshift(entry);
+    await env.MATCH_DATA.put(shardKey, JSON.stringify({ logs: shard }), { expirationTtl: 86400 * 180 });
+  } catch (e) {}
+}
+
 async function fetchHtml(url, encoding) {
   const resp = await fetch(url, { headers: adapter.fetchHeaders });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -51,6 +71,7 @@ async function snapshotMatches(env) {
   const existing = await env.MATCH_DATA.get(kvKey, 'json');
   if (existing && existing.matches && existing.matches.length > 0) {
     console.log(`[Snapshot] ${today} already exists (${existing.matches.length} matches), skipping`);
+    await writeLog(env, '赛程', `${today} 已存在(${existing.matches.length}场)，跳过`);
     return;
   }
 
@@ -58,12 +79,14 @@ async function snapshotMatches(env) {
   const html = await fetchHtml(url);
   if (!html || html.length < 1000) {
     console.log(`[Snapshot] ${today} empty page`);
+    await writeLog(env, '赛程', `${today} 页面为空，抓取失败`);
     return;
   }
 
   const allMatches = adapter.parseMatches(html);
   if (allMatches.length === 0) {
     console.log(`[Snapshot] ${today} no matches parsed`);
+    await writeLog(env, '赛程', `${today} 解析0场，抓取失败`);
     return;
   }
 
@@ -80,6 +103,7 @@ async function snapshotMatches(env) {
   const envelope = createEnvelope(today, adapter.name, matches);
   await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope), { expirationTtl: 86400 * 30 });
   console.log(`[Snapshot] ${today}: saved ${matches.length} matches (filtered from ${allMatches.length})`);
+  await writeLog(env, '赛程', `${today} 保存${matches.length}场比赛(${prefix}期)`);
 }
 
 async function updateScores(env) {
@@ -153,6 +177,7 @@ async function updateScores(env) {
         nowAllDone ? {} : { expirationTtl: 86400 * 30 }
       );
       console.log(`[Scores] ${date}: updated ${updated} (${nowAllDone ? 'all done' : 'pending'})`);
+      await writeLog(env, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
     } else {
       console.log(`[Scores] ${date}: no new scores available`);
     }

@@ -171,7 +171,7 @@
         <a class="nav-tab" href="recommend.html">推荐</a>
         <a class="nav-tab active" href="result.html">方案</a>
         <a class="nav-tab" href="dashboard.html">看板</a>
-        <a class="nav-tab" href="design.html">修订</a>
+        <a class="nav-tab" href="design.html">管理</a>
     </div>
 
     <div id="content" style="padding: 0 12px;">
@@ -185,17 +185,52 @@
     <script src="pull-refresh.js"></script>
     <script>
         let allResults = [];
+        let loadedDays = 5;
+        let noMoreData = false;
 
-        async function loadAllResults() {
+        function getDateStr(daysAgo) {
+            const d = new Date();
+            d.setDate(d.getDate() - daysAgo);
+            return d.toISOString().slice(0, 10);
+        }
+
+        async function loadInitial() {
+            const from = getDateStr(loadedDays - 1);
             try {
-                const resp = await fetch('/api/plans');
-                if (!resp.ok) throw new Error('Failed to load plans');
+                const resp = await fetch(`/api/plans?from=${from}`);
+                if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 allResults = data.plans || [];
                 renderAllPlans();
             } catch (e) {
                 document.getElementById('content').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
             }
+        }
+
+        async function loadMore() {
+            if (noMoreData) return;
+            const prevFrom = getDateStr(loadedDays + 3 - 1);
+            const prevTo = getDateStr(loadedDays);
+            loadedDays += 3;
+
+            try {
+                const resp = await fetch(`/api/plans?from=${prevFrom}&to=${prevTo}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const older = data.plans || [];
+                if (older.length === 0) {
+                    noMoreData = true;
+                    return;
+                }
+                allResults = [...allResults, ...older];
+                renderAllPlans();
+            } catch (e) {}
+        }
+
+        async function refresh() {
+            loadedDays = 5;
+            noMoreData = false;
+            await loadInitial();
         }
 
         function togglePlan(el) {
@@ -296,7 +331,11 @@
             }).catch(() => {});
         }
 
-        loadAllResults();
+        loadInitial();
+        initPullRefresh({
+            onRefresh: refresh,
+            onLoadMore: loadMore
+        });
     </script>
 </body>
 </html>

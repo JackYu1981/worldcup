@@ -1,34 +1,96 @@
-# 2026 World Cup AI Betting Strategy
+# World Cup 2026 投注助手
 
-基于概率的世界杯复式投注策略系统，利用多数据源赔率分析辅助每日投注决策。
+基于概率的竞彩复式投注策略系统。多数据源赔率分析 + AI方案优化，目标：100元本金获取最优风险收益比。
 
-## Quick Start
+## 架构
 
-（开发中 — 待确定技术方案后补充）
+```
+┌─────────────────────────────────────────────────┐
+│  Frontend (Cloudflare Pages)                    │
+│  index.html  recommend.html  result.html        │
+│  dashboard.html  design.html                    │
+├─────────────────────────────────────────────────┤
+│  API Layer (Pages Functions)                    │
+│  /api/matches  /api/picks  /api/plans           │
+│  /api/submit   /api/logs   /api/login           │
+├─────────────────────────────────────────────────┤
+│  Shared Lib                                     │
+│  lib/response.js  lib/auth.js  lib/logger.js    │
+├─────────────────────────────────────────────────┤
+│  Storage: Cloudflare KV (MATCH_DATA)            │
+│  matches:{date}  picks:{date}  plans:pending    │
+│  plans:settled   system:logs   system:logs:{月}  │
+├─────────────────────────────────────────────────┤
+│  Worker (worldcup-scraper)                      │
+│  Cron: 03:01 UTC 赛程快照 / */30min 比分更新    │
+│  数据源: 500.com + live.500.com                 │
+└─────────────────────────────────────────────────┘
+```
 
-## Documentation
+## 页面说明
 
-- [策略设计方案](docs/strategy-design.md) — 完整的项目规划和策略框架
+| 页面 | 路径 | 功能 |
+|------|------|------|
+| 赛程 | `/index` | 按期查看比赛赔率，勾选生成投注推荐 |
+| 推荐 | `/recommend` | 查看/提交预备方案，AI确认后转正式方案 |
+| 方案 | `/result` | 查看所有正式方案及开奖结果（增量加载） |
+| 看板 | `/dashboard` | 累计收益曲线、命中率、盈亏日历 |
+| 管理 | `/design` | 系统日志、版本摘要、变更请求、版本历史 |
 
-## Data Sources
+## 方案生命周期
 
-| Source | Purpose | Cost |
-|--------|---------|------|
-| [The Odds API](https://the-odds-api.com/) | 多家博彩公司实时赔率 | Free 500 req/mo |
-| [Football-Data.org](https://www.football-data.org/) | 赛程/赛果/积分 | Free |
-| 500.com | 竞彩赔率补充 | Free (scraping) |
+```
+用户选赔率 → 推荐(recommendation) → 预备方案(pending_plan)
+    → AI优化(口令确认) → 正式方案(plan) → 开奖(won/lost)
+```
 
-## Project Status
+## API
 
-- [x] 需求分析
-- [x] 数据源调研
-- [x] 策略框架设计
-- [ ] 与合伙人讨论确认方案
-- [ ] 注册API Key
-- [ ] 数据采集模块开发
-- [ ] 概率模型开发
-- [ ] 历史数据回测
-- [ ] 上线运行
+| 端点 | 方法 | 参数 | 说明 |
+|------|------|------|------|
+| `/api/matches` | GET | `date` | 获取指定日期比赛数据 |
+| `/api/picks` | GET | `date` / `from,to` | 获取投注picks（日期范围） |
+| `/api/plans` | GET | `status`, `from`, `to` | 获取方案（支持过滤） |
+| `/api/submit` | POST | body | 提交推荐/预备方案 |
+| `/api/logs` | GET | `month` | 获取系统日志（支持月度查询） |
+| `/api/login` | POST | username, password | 用户登录 |
+
+## 本地开发
+
+```bash
+# 启动Pages本地开发
+npx wrangler pages dev . --kv=MATCH_DATA
+
+# 部署到Cloudflare Pages
+npx wrangler pages deploy . --project-name worldmoney --commit-dirty=true
+
+# 部署Scraper Worker
+cd workers/scraper && npx wrangler deploy
+
+# 写入系统日志
+node scripts/log.js "方案" "描述信息"
+```
+
+## 数据源
+
+| 来源 | 用途 |
+|------|------|
+| 500.com | 竞彩赛程、胜平负/让球赔率 |
+| live.500.com | 实时比分更新 |
+
+## 技术栈
+
+- **前端**: 原生HTML/JS，Chart.js（看板图表）
+- **后端**: Cloudflare Pages Functions (ES Module)
+- **存储**: Cloudflare KV（无数据库，全KV分片）
+- **定时任务**: Cloudflare Workers Cron Triggers
+- **部署**: Cloudflare Pages + Workers
+
+## 版本
+
+当前版本: **v4.0** (2026-05-17)
+
+详见管理页面 `/design` 的版本历史。
 
 ## License
 

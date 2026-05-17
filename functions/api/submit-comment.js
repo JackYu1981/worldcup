@@ -1,36 +1,25 @@
 import { verifyToken } from '../lib/auth.js';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+import { json, error, options } from '../lib/response.js';
 
 export async function onRequestPost(context) {
   try {
     const user = await verifyToken(context.request, context.env);
     if (!user) {
-      return new Response(JSON.stringify({ error: '未登录或登录已过期' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error('未登录或登录已过期', 401);
     }
 
     const body = await context.request.json();
     const { message, content, sha, filename: customFile } = body;
 
     if (!content) {
-      return new Response(JSON.stringify({ error: '缺少内容' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error('缺少内容', 400);
     }
 
     const allowedFiles = ['data/design-comments.json', 'data/change-requests.json'];
     const filename = allowedFiles.includes(customFile) ? customFile : 'data/design-comments.json';
     const ghBody = {
       message: message || `design feedback by ${user.username}`,
-      content: content,
+      content,
     };
     if (sha) ghBody.sha = sha;
 
@@ -49,25 +38,15 @@ export async function onRequestPost(context) {
 
     if (!ghResp.ok) {
       const err = await ghResp.text();
-      return new Response(JSON.stringify({ error: 'GitHub写入失败', detail: err }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error(`GitHub写入失败: ${err}`);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
+    return json({ success: true });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return error(e.message);
   }
 }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: corsHeaders });
+export function onRequestOptions() {
+  return options();
 }

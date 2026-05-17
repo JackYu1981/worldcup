@@ -218,7 +218,7 @@
         <a class="nav-tab" href="recommend.html">推荐</a>
         <a class="nav-tab" href="result.html">方案</a>
         <a class="nav-tab" href="dashboard.html">看板</a>
-        <a class="nav-tab" href="design.html">修订</a>
+        <a class="nav-tab" href="design.html">管理</a>
     </div>
 
     <div class="date-tabs" id="dateTabs"></div>
@@ -284,27 +284,9 @@
             return dates;
         }
 
-        function getTodayBettingDate() {
-            const now = new Date();
-            const beijingStr = now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai', hour12: false });
-            const beijing = new Date(beijingStr);
-            const hour = beijing.getHours();
-            const day = beijing.getDay();
-            const isWeekend = (day === 0 || day === 6);
-            const cutoff = isWeekend ? 11 : 10;
-            const offset = hour >= cutoff ? 1 : 0;
-            const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-            const d = new Date(baseDate + 'T00:00:00+08:00');
-            d.setDate(d.getDate() + offset);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${dd}`;
-        }
-
         const DATES = generateDates();
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-        currentDate = getTodayBettingDate();
+        currentDate = todayStr;
 
         function getBeijingDay(dateStr) {
             const d = new Date(dateStr + 'T12:00:00+08:00');
@@ -395,22 +377,43 @@
             renderMatches();
         }
 
+        const matchCache = {};
+
         async function loadMatches(date) {
             const list = document.getElementById('matchList');
             list.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
-                const matchResp = await fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`));
-                if (!matchResp.ok) throw new Error('no data');
-                const data = await matchResp.json();
+                const data = await fetchMatchData(date);
                 matches = data.matches;
-
                 updatePeriodHeader();
                 renderMatches();
+                prefetchAdjacent(date);
             } catch(e) {
                 matches = [];
                 updatePeriodHeader();
                 list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
             }
+        }
+
+        async function fetchMatchData(date) {
+            if (matchCache[date]) return matchCache[date];
+            const resp = await fetch(`/api/matches?date=${date}`).then(r => r.ok ? r : fetch(`/data/matches/${date}.json`));
+            if (!resp.ok) throw new Error('no data');
+            const data = await resp.json();
+            matchCache[date] = data;
+            return data;
+        }
+
+        function prefetchAdjacent(date) {
+            const idx = DATES.indexOf(date);
+            const toFetch = [];
+            if (idx > 0) toFetch.push(DATES[idx - 1]);
+            if (idx > 1) toFetch.push(DATES[idx - 2]);
+            if (idx < DATES.length - 1) toFetch.push(DATES[idx + 1]);
+            if (idx < DATES.length - 2) toFetch.push(DATES[idx + 2]);
+            toFetch.forEach(d => {
+                if (!matchCache[d]) fetchMatchData(d).catch(() => {});
+            });
         }
 
         function renderMatches() {
@@ -428,7 +431,7 @@
             updatePeriodHeader();
         }
 
-        const USER_TIMEZONES = { jack: 'Asia/Shanghai', brian: 'America/Montreal' };
+        const USER_TIMEZONES = { jack: 'Asia/Shanghai', brian: 'America/Montreal', test: 'Asia/Shanghai' };
         function getUserTimezone() {
             const user = (sessionStorage.getItem('auth_user') || 'jack').toLowerCase();
             return USER_TIMEZONES[user] || 'Asia/Shanghai';
@@ -784,6 +787,9 @@
         AUTH.requireLogin(function(user) {
             renderDateTabs();
             loadMatches(currentDate);
+            initPullRefresh({
+                onRefresh: () => { delete matchCache[currentDate]; return loadMatches(currentDate); }
+            });
         });
     </script>
 </body>

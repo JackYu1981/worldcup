@@ -206,7 +206,7 @@
         <a class="nav-tab" href="recommend.html">推荐</a>
         <a class="nav-tab" href="result.html">方案</a>
         <a class="nav-tab active" href="dashboard.html">看板</a>
-        <a class="nav-tab" href="design.html">修订</a>
+        <a class="nav-tab" href="design.html">管理</a>
     </div>
 
     <div style="padding: 12px;">
@@ -252,24 +252,22 @@
     </div>
 
     <script>
-        const RESULTS_INDEX_URL = 'https://api.github.com/repos/JackYu1981/worldcup/contents/results';
-        let allResults = [];
+        let allPlans = [];
         let dailyMap = {};
 
         async function loadData() {
             try {
-                const resp = await fetch(RESULTS_INDEX_URL);
-                const files = await resp.json();
-                const resultFiles = files.filter(f => f.name.endsWith('.json')).sort((a, b) => a.name.localeCompare(b.name));
+                const resp = await fetch('/api/plans');
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                allPlans = data.plans || [];
 
-                allResults = await Promise.all(resultFiles.map(async f => {
-                    const r = await fetch(f.download_url);
-                    return r.json();
-                }));
-
-                allResults.forEach(r => {
-                    if (!dailyMap[r.date]) dailyMap[r.date] = [];
-                    dailyMap[r.date].push(r);
+                dailyMap = {};
+                allPlans.forEach(p => {
+                    const d = p.date;
+                    if (!d) return;
+                    if (!dailyMap[d]) dailyMap[d] = [];
+                    dailyMap[d].push(p);
                 });
 
                 renderStats();
@@ -280,14 +278,30 @@
             renderCalendar();
         }
 
+        function getPlanStake(p) {
+            if (p.combinations && p.combinations.length > 1) {
+                return p.combinations.reduce((sum, c) => sum + (c.stake || 2), 0);
+            }
+            return p.combinations && p.combinations[0] ? p.combinations[0].stake : (p.stake || 100);
+        }
+
+        function getPlanReturn(p) {
+            if (!p.combinations) return 0;
+            return p.combinations.reduce((sum, c) => c.hit ? sum + c.potential_return : sum, 0);
+        }
+
+        function getPlanProfit(p) {
+            return getPlanReturn(p) - getPlanStake(p);
+        }
+
         function renderStats() {
             let totalStake = 0, totalReturn = 0, wonCount = 0, settledCount = 0;
-            allResults.forEach(r => {
-                if (r.status === 'won' || r.status === 'lost') {
-                    totalStake += r.total_stake || r.budget;
-                    totalReturn += r.actual_return || 0;
+            allPlans.forEach(p => {
+                if (p.status === 'won' || p.status === 'lost') {
+                    totalStake += getPlanStake(p);
+                    totalReturn += getPlanReturn(p);
                     settledCount++;
-                    if (r.status === 'won') wonCount++;
+                    if (p.status === 'won') wonCount++;
                 }
             });
             const profit = totalReturn - totalStake;
@@ -300,17 +314,21 @@
 
         function renderChart() {
             const ctx = document.getElementById('profitChart').getContext('2d');
-            const settled = allResults.filter(r => r.status === 'won' || r.status === 'lost').sort((a, b) => a.date.localeCompare(b.date));
+            const settled = allPlans
+                .filter(p => p.status === 'won' || p.status === 'lost')
+                .sort((a, b) => (a.submitted_at || a.date || '').localeCompare(b.submitted_at || b.date || ''));
+
             let cumulative = 0;
             const labels = ['开始'];
             const data = [0];
-            settled.forEach(r => {
-                cumulative += (r.profit || ((r.actual_return || 0) - (r.total_stake || r.budget)));
-                labels.push(r.date.slice(5));
+            settled.forEach(p => {
+                cumulative += getPlanProfit(p);
+                labels.push((p.date || '').slice(5));
                 data.push(cumulative);
             });
 
-            new Chart(ctx, {
+            if (window._chart) window._chart.destroy();
+            window._chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -376,12 +394,15 @@
                 if (plans && plans.length > 0) {
                     const hasWon = plans.some(p => p.status === 'won');
                     const allSettled = plans.every(p => p.status === 'won' || p.status === 'lost');
-                    const dayProfit = plans.reduce((sum, p) => sum + (p.profit || 0), 0);
+                    const dayProfit = plans.reduce((sum, p) => {
+                        if (p.status === 'won' || p.status === 'lost') return sum + getPlanProfit(p);
+                        return sum;
+                    }, 0);
 
                     if (!allSettled && !hasWon) {
                         div.classList.add('pending');
                         div.innerHTML = `${i}<span class="amount">待开</span>`;
-                    } else if (hasWon) {
+                    } else if (dayProfit >= 0 && hasWon) {
                         div.classList.add('won');
                         div.innerHTML = `${i}<span class="amount">+${dayProfit}</span>`;
                     } else {
@@ -414,34 +435,35 @@
             content.innerHTML = plans.map(p => {
                 const status = p.status || 'pending';
                 const statusText = status === 'won' ? '🎉 中奖' : status === 'lost' ? '💣 未中' : '⏳ 待开';
-                const profitText = p.profit !== undefined ? (p.profit >= 0 ? `+¥${p.profit}` : `-¥${Math.abs(p.profit)}`) : '';
+                const profit = getPlanProfit(p);
+                const profitText = (status === 'won' || status === 'lost') ? (profit >= 0 ? `+¥${profit}` : `-¥${Math.abs(profit)}`) : '';
 
-                const combosHtml = p.combinations.map((c, i) => {
+                const combosHtml = (p.combinations || []).map((c, i) => {
                     const hitLabel = c.hit === true ? ' ✓' : c.hit === false ? ' ✗' : '';
-                    const legsHtml = c.legs.map(l => {
+                    const legsHtml = (c.legs || []).map(l => {
                         const legClass = l.correct === true ? 'correct' : l.correct === false ? 'wrong' : '';
                         const icon = l.correct === true ? ' ✓' : l.correct === false ? ' ✗' : '';
                         return `<div class="ticket-leg ${legClass}">
-                            <span>${l.match_desc} · ${l.pick_desc}${icon}</span>
-                            <span>@${l.odds.toFixed(2)}</span>
+                            <span>${l.match_desc || ''} · ${l.pick_desc || ''}${icon}</span>
+                            <span>@${(l.odds || 0).toFixed(2)}</span>
                         </div>`;
                     }).join('');
                     return `<div class="ticket-combo">
                         <div class="ticket-combo-header">
                             <span>组合${i + 1}${hitLabel}</span>
-                            <span class="odds">×${c.combined_odds.toFixed(2)}</span>
+                            <span class="odds">×${(c.combined_odds || 0).toFixed(2)}</span>
                         </div>
                         ${legsHtml}
                         <div class="ticket-stake">
-                            <span>¥${c.stake}</span>
-                            <span class="return">${c.hit ? '中奖' : '可得'} ¥${c.potential_return.toLocaleString()}</span>
+                            <span>¥${c.stake || 2}</span>
+                            <span class="return">${c.hit ? '中奖' : '可得'} ¥${(c.potential_return || 0).toLocaleString()}</span>
                         </div>
                     </div>`;
                 }).join('');
 
                 return `<div class="ticket ${status}">
                     <div class="ticket-header">
-                        <span>${p.passphrase} ${statusText}</span>
+                        <span>${p.passphrase || '未命名'} ${statusText}</span>
                         <span>${profitText}</span>
                     </div>
                     <div class="ticket-body">
@@ -469,5 +491,8 @@
     <script src="auth.js"></script>
     <script>if(AUTH.isLoggedIn())AUTH.renderUserBadge('userBadge');</script>
     <script src="pull-refresh.js"></script>
+    <script>
+        initPullRefresh({ onRefresh: loadData });
+    </script>
 </body>
 </html>

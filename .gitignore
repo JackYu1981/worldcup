@@ -27,6 +27,9 @@ venv/
 *.sqlite3
 data/raw/
 data/matches/
+picks/
+recommendations/
+results/
 
 # Backups
 *.bak

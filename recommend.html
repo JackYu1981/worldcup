@@ -195,7 +195,7 @@
         <a class="nav-tab active" href="recommend.html">推荐</a>
         <a class="nav-tab" href="result.html">方案</a>
         <a class="nav-tab" href="dashboard.html">看板</a>
-        <a class="nav-tab" href="design.html">修订</a>
+        <a class="nav-tab" href="design.html">管理</a>
     </div>
 
     <div class="date-tabs" id="dateTabs"></div>
@@ -253,10 +253,16 @@
         let plans = [];
         let pendingPlans = [];
         let selectedRec = null;
+        let submittedRecKeys = new Set();
+
+        const picksCache = {};
 
         AUTH.requireLogin(function(user) {
             renderDateTabs();
             loadData(currentDate);
+            initPullRefresh({
+                onRefresh: () => { delete picksCache[currentDate]; return loadData(currentDate); }
+            });
         });
 
         function renderDateTabs() {
@@ -290,17 +296,36 @@
             pendingPlans = [];
 
             try {
-                const resp = await fetch(`/api/picks?date=${date}`);
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const allPicks = data.picks || [];
-                    userRecs = allPicks.filter(p => p.source === 'recommendation');
-                    plans = allPicks.filter(p => p.source === 'plan');
-                    pendingPlans = allPicks.filter(p => p.source === 'pending_plan');
-                }
+                const allPicks = await fetchPicks(date);
+                userRecs = allPicks.filter(p => p.source === 'recommendation');
+                plans = allPicks.filter(p => p.source === 'plan');
+                pendingPlans = allPicks.filter(p => p.source === 'pending_plan');
             } catch(e) {}
 
             renderAll();
+            prefetchAdjacentPicks(date);
+        }
+
+        async function fetchPicks(date) {
+            if (picksCache[date]) return picksCache[date];
+            const resp = await fetch(`/api/picks?date=${date}`);
+            if (!resp.ok) return [];
+            const data = await resp.json();
+            const picks = data.picks || [];
+            picksCache[date] = picks;
+            return picks;
+        }
+
+        function prefetchAdjacentPicks(date) {
+            const idx = DATES.indexOf(date);
+            const toFetch = [];
+            if (idx > 0) toFetch.push(DATES[idx - 1]);
+            if (idx > 1) toFetch.push(DATES[idx - 2]);
+            if (idx < DATES.length - 1) toFetch.push(DATES[idx + 1]);
+            if (idx < DATES.length - 2) toFetch.push(DATES[idx + 2]);
+            toFetch.forEach(d => {
+                if (!picksCache[d]) fetchPicks(d).catch(() => {});
+            });
         }
 
         function renderAll() {
@@ -407,11 +432,14 @@
                 </div>`
             ).join('');
 
+            const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
+            const isSubmitted = status || submittedRecKeys.has(recKey);
+
             let selectedStyle = '', selectedBadge = '';
             if (status === 'plan') {
                 selectedStyle = 'border-left-color:#1a73e8;opacity:0.7;';
                 selectedBadge = '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已确认</span>';
-            } else if (status === 'pending') {
+            } else if (status === 'pending' || submittedRecKeys.has(recKey)) {
                 selectedStyle = 'border-left-color:#ff9800;opacity:0.8;';
                 selectedBadge = '<span style="font-size:10px;background:#fff3e0;color:#e65100;padding:2px 6px;border-radius:3px;margin-left:6px;">待AI确认</span>';
             }
@@ -428,7 +456,7 @@
                     <span>${oddsSummary}</span>
                 </div>
                 <div class="rec-actions">
-                    <button class="btn-select-rec" onclick="selectRec(${idx})"${status ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
+                    <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
                     <button class="btn-copy-rec" onclick="copyRec(${idx})">📋</button>
                 </div>
             </div>`;
@@ -530,6 +558,8 @@
             btn.disabled = true;
             btn.textContent = '提交中...';
 
+            const recKey = selectedRec.legs.map(l => l.match_id + l.pick).sort().join('|');
+
             const payload = {
                 date: currentDate,
                 passphrase: passphrase,
@@ -549,18 +579,23 @@
                 });
                 const result = await resp.json();
                 if (result.success) {
+                    submittedRecKeys.add(recKey);
                     closeConfirm();
                     copyLegs(payload.legs);
                     showToast('预备方案已提交！请在Claude Code中用口令生成正式方案');
-                    loadData(currentDate);
+                    await loadData(currentDate);
+                    const content = document.getElementById('content');
+                    content.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
                     showToast(`失败：${result.error}`);
+                    btn.disabled = false;
+                    btn.textContent = '提交预备方案';
                 }
             } catch(e) {
                 showToast(`网络错误：${e.message}`);
+                btn.disabled = false;
+                btn.textContent = '提交预备方案';
             }
-            btn.disabled = false;
-            btn.textContent = '提交预备方案';
         }
 
         function copyRec(idx) {

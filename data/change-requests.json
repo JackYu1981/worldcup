@@ -473,6 +473,12 @@
       "date": "2026-05-16T10:30:00+08:00",
       "summary": "赛程结果高亮重构（所有已结束比赛红色标注结果赔率），预备方案流程（pending_plan→AI确认→plan），Scraper按竞彩期存储全量比赛不再过滤日期",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
+    },
+    {
+      "version": "v4.0",
+      "date": "2026-05-17T12:00:00+08:00",
+      "summary": "架构优化：API模块化(response.js统一响应)、KV即时写入消除CDN延迟、日志按月分片(500条热缓存+月度归档)、增量加载(日期范围查询+预缓存+滚动加载)",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
     }
   ]
 }

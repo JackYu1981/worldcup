@@ -1,8 +1,5 @@
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+import { logger } from '../lib/logger.js';
+import { json, error, options } from '../lib/response.js';
 
 function determineResult(match) {
   if (!match.score) return null;
@@ -24,7 +21,6 @@ function evaluatePlan(plan, matches) {
   let allEvaluated = true;
   let anyHit = false;
 
-  // Group legs by match for combination logic
   const byMatch = {};
   plan.legs.forEach(l => {
     const mid = l.match_id;
@@ -32,14 +28,11 @@ function evaluatePlan(plan, matches) {
     byMatch[mid].push(l);
   });
 
-  // Evaluate each leg
   plan.legs.forEach(l => {
     let m = matches.find(x => x.id === l.match_id);
-    // Fallback: match by code (handle old "011" vs new "周六011" format)
     if (!m && l.code) {
       m = matches.find(x => x.code === l.code || x.code.endsWith(l.code));
     }
-    // Fallback: match by team name
     if (!m && l.match_desc) {
       const home = l.match_desc.split('vs')[0];
       if (home) m = matches.find(x => x.home && x.home.includes(home.trim()));
@@ -54,7 +47,6 @@ function evaluatePlan(plan, matches) {
     }
   });
 
-  // Build combinations if not present
   if (!plan.combinations) {
     const groups = Object.values(byMatch);
     const combos = [];
@@ -84,7 +76,6 @@ function evaluatePlan(plan, matches) {
     plan.combinations = combos;
   }
 
-  // Evaluate combinations
   if (plan.combinations) {
     plan.combinations.forEach(c => {
       let comboAllCorrect = true;
@@ -125,8 +116,12 @@ function evaluatePlan(plan, matches) {
 export async function onRequestGet(context) {
   try {
     const kv = context.env.MATCH_DATA;
+    const url = new URL(context.request.url);
+    const statusFilter = url.searchParams.get('status');
+    const fromDate = url.searchParams.get('from');
+    const toDate = url.searchParams.get('to');
 
-    // 1. Read settled plans (already evaluated, won/lost)
+    // 1. Read settled plans
     const settledData = await kv.get('plans:settled', 'json');
     const settled = settledData ? settledData.plans : [];
 
@@ -134,12 +129,12 @@ export async function onRequestGet(context) {
     const pendingData = await kv.get('plans:pending', 'json');
     let pending = pendingData ? pendingData.plans : [];
 
-    // 3. If no pending data exists, migrate from picks
+    // 3. Migration fallback
     if (!pendingData && settled.length === 0) {
       pending = await migratePlansFromPicks(kv, context.env);
     }
 
-    // 4. Evaluate pending plans against match data
+    // 4. Evaluate pending plans
     const newlySettled = [];
     const stillPending = [];
 
@@ -161,33 +156,43 @@ export async function onRequestGet(context) {
         }
       }
 
-      // 5. Persist newly settled plans
       if (newlySettled.length > 0) {
         const allSettled = [...settled, ...newlySettled];
         await kv.put('plans:settled', JSON.stringify({ plans: allSettled }));
         await kv.put('plans:pending', JSON.stringify({ plans: stillPending }));
+
+        for (const p of newlySettled) {
+          await logger(kv, '开奖', `"${p.passphrase || '未命名'}" → ${p.status === 'won' ? '中奖' : '未中'}`);
+        }
       }
     }
 
-    const allPlans = [...settled, ...newlySettled, ...stillPending];
-    allPlans.sort((a, b) => {
+    // 5. Build response with filters
+    let results = [];
+    if (statusFilter === 'pending') {
+      results = stillPending;
+    } else if (statusFilter === 'settled') {
+      results = [...settled, ...newlySettled];
+    } else {
+      results = [...settled, ...newlySettled, ...stillPending];
+    }
+
+    if (fromDate) {
+      results = results.filter(p => (p.date || '') >= fromDate);
+    }
+    if (toDate) {
+      results = results.filter(p => (p.date || '') <= toDate);
+    }
+
+    results.sort((a, b) => {
       const ta = a.submitted_at || a.date || '';
       const tb = b.submitted_at || b.date || '';
       return tb.localeCompare(ta);
     });
 
-    return new Response(JSON.stringify({ plans: allPlans }), {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=30',
-      },
-    });
+    return json({ plans: results }, 200, 30);
   } catch (e) {
-    return new Response(JSON.stringify({ plans: [], error: e.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ plans: [], error: e.message }, 500);
   }
 }
 
@@ -221,6 +226,6 @@ async function migratePlansFromPicks(kv, env) {
   }
 }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: corsHeaders });
+export function onRequestOptions() {
+  return options();
 }

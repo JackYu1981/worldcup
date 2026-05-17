@@ -1,32 +1,23 @@
 import { verifyToken } from '../lib/auth.js';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+import { logger } from '../lib/logger.js';
+import { json, error, options } from '../lib/response.js';
 
 export async function onRequestPost(context) {
   try {
     const user = await verifyToken(context.request, context.env);
     if (!user) {
-      return new Response(JSON.stringify({ error: '未登录或登录已过期' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error('未登录或登录已过期', 401);
     }
 
     const body = await context.request.json();
     const { date, passphrase, source } = body;
 
     if (!date) {
-      return new Response(JSON.stringify({ error: '缺少日期字段' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error('缺少日期字段', 400);
     }
 
     body.submitted_by = user.username;
+    body.submitted_at = new Date().toISOString();
 
     let filename, commitMsg;
     if (source === 'recommendation') {
@@ -35,10 +26,7 @@ export async function onRequestPost(context) {
       commitMsg = `recommendation: ${date} by ${user.username}`;
     } else {
       if (!passphrase) {
-        return new Response(JSON.stringify({ error: '方案需要口令' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return error('方案需要口令', 400);
       }
       filename = `picks/${date}-${passphrase}.json`;
       commitMsg = `pick: ${date} ${passphrase} by ${user.username}`;
@@ -55,34 +43,43 @@ export async function onRequestPost(context) {
           'Content-Type': 'application/json',
           'User-Agent': 'worldmoney-pages',
         },
-        body: JSON.stringify({
-          message: commitMsg,
-          content: content,
-        }),
+        body: JSON.stringify({ message: commitMsg, content }),
       }
     );
 
     if (!ghResp.ok) {
       const err = await ghResp.text();
-      return new Response(JSON.stringify({ error: 'GitHub写入失败', detail: err }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return error(`GitHub写入失败: ${err}`);
     }
 
-    return new Response(JSON.stringify({ success: true, file: filename }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    // Immediately update KV cache (source of truth)
+    const kv = context.env.MATCH_DATA;
+    await updateKvPicks(kv, date, body);
 
+    if (source === 'pending_plan') {
+      await logger(kv, '方案', `预备方案提交: "${passphrase}" (${date}) by ${user.username}`);
+    } else if (source === 'recommendation') {
+      const legsCount = (body.legs || []).length;
+      await logger(kv, '推荐', `推荐提交: ${legsCount}场组合 (${date}) by ${user.username}`);
+    }
+
+    return json({ success: true, file: filename });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return error(e.message);
   }
 }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: corsHeaders });
+async function updateKvPicks(kv, date, newPick) {
+  if (!kv) return;
+  try {
+    const key = `picks:${date}`;
+    const existing = await kv.get(key, 'json');
+    const picks = existing ? existing.picks : [];
+    picks.push(newPick);
+    await kv.put(key, JSON.stringify({ picks }), { expirationTtl: 86400 * 30 });
+  } catch (e) {}
+}
+
+export function onRequestOptions() {
+  return options();
 }
