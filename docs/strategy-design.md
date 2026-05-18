@@ -320,3 +320,140 @@
 - 10-20倍回报对应的串关命中率约5-15%，需要做好连续不中的心理准备
 - 建议设定总投入上限（如整个世界杯期间不超过3000元）
 - 长期期望值取决于能否持续发现正EV投注机会
+
+---
+
+# 第二部分：当前实际架构（v4.x，持续更新）
+
+> 本节是系统的"活文档"，与代码同步更新。前面的初始设计仅作历史参考，**系统实际状态以本节为准**。
+
+## 当前架构概览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 前端：Cloudflare Pages (worldmoney.pages.dev)                │
+│  - index.html (赛程)                                         │
+│  - recommend.html (推荐 + AI优化卡)                          │
+│  - result.html (开奖方案)                                    │
+│  - dashboard.html (收益看板)                                 │
+│  - design.html (管理：CR/版本/日志)                          │
+└─────────────────┬───────────────────────────────────────────┘
+                  │ Pages Functions (/api/*)
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 后端：Cloudflare Pages Functions                              │
+│  - /api/login          认证                                   │
+│  - /api/matches        读取赛程                               │
+│  - /api/picks          推荐CRUD                               │
+│  - /api/plans          方案CRUD                               │
+│  - /api/submit         生成预备方案                           │
+│  - /api/submit-comment GitHub写入CR                          │
+│  - /api/upload         GitHub上传文件                        │
+│  - /api/logs           系统日志                               │
+│  - /api/design-data    管理页CR/版本聚合(走后端避免GitHub限流) │
+└──────────┬──────────────────────────────────────┬───────────┘
+           │                                       │
+           ▼                                       ▼
+   ┌───────────────┐                      ┌──────────────┐
+   │ Cloudflare KV │                      │ GitHub Repo  │
+   │ MATCH_DATA    │                      │ (CR/版本JSON) │
+   │ (主存储)      │                      └──────────────┘
+   │ - matches:    │
+   │ - picks:      │
+   │ - plans:      │
+   │ - system:logs │
+   └───────────────┘
+           ▲
+           │
+   ┌───────────────┐
+   │ Worker        │
+   │ worldcup-     │
+   │ scraper       │
+   │ cron 11:01    │
+   │ cron */30min  │
+   └───────────────┘
+```
+
+## 数据存储
+
+**主存储：Cloudflare KV (MATCH_DATA, namespace 278f1209ffd84662bd51921370a2fbe9)**
+- `matches:YYYY-MM-DD` — 当日赛程envelope，包含 score（90分钟）和 score_ft（含加时）
+- `picks:YYYY-MM-DD` — 用户推荐数组
+- `plans:pending:YYYY-MM-DD` — 预备方案
+- `plans:settled:YYYY-MM-DD` — 已开奖方案（won/lost）
+- `system:logs` — 系统日志（环形）
+- `system:logs:YYYY-MM` — 月度归档
+
+**GitHub Repo (JackYu1981/worldcup) 仅存：**
+- `data/change-requests.json` — CR追踪
+- `data/versions.json` — 版本记录
+- 设计文档与代码
+
+> 历史上 picks/results 也存过 GitHub，已迁移至 KV。
+
+## 数据采集（Worker: worldcup-scraper）
+
+- **域名**：`worldcup-scraper.yujuntao1981.workers.dev`（**注意：用户公司笔记本无法访问 workers.dev 子域名，由防火墙SSL拦截**）
+- **数据源**：500.com `https://trade.500.com/jczq/?playtype=1&date=YYYY-MM-DD`（GBK编码）
+- **比分源**：`https://live.500.com/zqdc.php?date=YYYY-MM-DD`
+- **Cron**：
+  - `1 3 * * *` (UTC) → 北京 11:01 抓当日赛程
+  - `*/30 * * * *` 每30分钟更新比分
+- **关键过滤**：按 code 前缀（"周X"）过滤 — 因为 500.com 一期可能跨日（周一期包含周一晚 + 周二凌晨的比赛）
+- **score vs score_ft**：score 为90分钟竞彩比分（开奖用），score_ft 为最终比分含加时点球
+
+## AI 投注优化算法 v1.0（2026-05-18 确立）
+
+详见 `memory/project_ai_betting_algorithm.md`，核心要点：
+
+**固定参数**：
+- 总本金 100 元
+- AI自主预算 ≤ 18 元
+- 目标收益窗口 [600, 1800]（6-18倍）
+- 最小注 2 元
+
+**核心哲学**：既不追极小概率超高赔率（赌博），也不追保底高命中低收益（无意义），让收益落在概率与奖金的中间地带。
+
+**算法流程**：
+1. 枚举候选3串1（用户原选 + AI候选单场切换）
+2. 剔除窗口外组合（>900倍剔除，<6倍标记需配合中奖）
+3. 计算每组合的金额可行窗口 `[ceil(600/odds/2)*2, floor(1800/odds/2)*2]`
+4. 整数线性规划：主目标=最大化"至少一组合中奖且收益落入[600,1800]"概率，次目标=最大化期望收益
+5. 自救机制：用户组合不可行时AI在18元预算内尝试加入未选结果；仍不可行则提示用户调整
+6. 输出：每注金额/赔率/概率，整体命中率/期望/收益区间
+
+**UI 入口**：recommend.html 的"🤖 AI 优化方案"卡片可点击，弹出算法详情。标注 "Powered by Claude Opus 4.7"。
+
+## 部署与运维
+
+- **部署方式**：必须用 wrangler CLI（GitHub自动部署不可靠，曾出现>4分钟未生效）
+  - Pages: `npx wrangler pages deploy . --project-name=worldmoney --branch=main --commit-dirty=true`
+  - Worker: 在 `workers/scraper/` 目录下 `npx wrangler deploy`
+- **每次发版后必须做的**：
+  1. 更新 `data/change-requests.json` 把已解决的CR标记为 adopted
+  2. 更新 `data/versions.json` 添加新版本（design.html 当前方案要点）
+  3. git commit + push
+  4. wrangler 部署到 Pages（如改了 functions/）和 Worker（如改了 scraper/）
+
+## 已知问题与待优化
+
+### 抓取可靠性（待实施）
+**问题**：worker cron 偶发不触发，用户公司防火墙无法访问 workers.dev 子域名手动触发。
+
+**方案A（推荐，待实施）**：在 `/api/matches` 中加入"按需自救"——当请求今日数据但KV为空时，由 Pages Functions 同步抓取并写入KV。这条路径走 `pages.dev` 域名，不被防火墙拦截。
+
+**方案B（已规划）**：cron 多次冗余 `1,16,31,46 3 * * *`，第一次失败后自动重试（已有 `existing.matches.length>0` 的跳过逻辑保证幂等）。
+
+### 历史已修复
+- 比分错误：原 `parseScores` 不检查 status，把进行中比分当作终场。已改为只取 status=3/4。
+- jczq vs live 双源：jczq `isend=1` 提供90分钟比分（开奖用），live 提供 `score_ft` 终场比分。
+- 浏览器缓存：`/api/picks` 的 `Cache-Control` + JS层 `picksCache` 双重缓存导致提交后看到旧数据。已加 `_t` 时间戳和缓存清除。
+- 管理页限流：design.html 直调 GitHub API 受 60次/小时 限制。已改走 `/api/design-data` 后端聚合。
+
+## 设计哲学
+
+1. **投注助手不替用户做赌博性决策** — AI 只在明确边界内优化，用户保留最终选择权
+2. **运气与概率协调** — 用户用胜率估计输入"运气感"，AI 在概率空间内优化
+3. **可解释、可复现** — 算法每次输出必须可解释，相同输入产生相同输出
+4. **600-1800 窗口不可妥协** — 这是策略灵魂，对应"中间地带"的投注哲学
+
