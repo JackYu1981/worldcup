@@ -88,26 +88,44 @@ rm "$TMP"
 
 # === 6. Git commit + push ===
 step "6/7 Git commit + push"
-git add -A
+# 只 stage 项目代码相关路径，避免把截图/临时文件也带上。
+# 用 ls 过滤存在的路径，避免 git add 因不存在的路径而报错跳过其他文件。
+PATHS=()
+for p in data/versions.json docs functions lib workers scripts \
+         index.html design.html recommend.html result.html dashboard.html login.html \
+         auth.js pull-refresh.js wrangler.toml package.json README.md; do
+  [ -e "$p" ] && PATHS+=("$p")
+done
+git add "${PATHS[@]}"
+
 COMMIT_MSG="$VERSION: $SUMMARY"
-# 限制首行长度，超出截断到 100 字符
 SHORT_MSG=$(echo "$COMMIT_MSG" | head -c 100)
-git commit -m "$SHORT_MSG" 2>&1 | tail -3
-git push 2>&1 | tail -3
+if git diff --cached --quiet; then
+  echo "（无暂存变更，跳过 commit）"
+else
+  git commit -m "$SHORT_MSG" 2>&1 | tail -3
+  git push 2>&1 | tail -3
+fi
 
-# === 7. 校验 GitHub 已收到新版本 ===
-step "7/7 校验 GitHub 同步"
+# === 7. 校验 GitHub 已收到新版本（非阻断） ===
+step "7/7 校验 GitHub 同步（非阻断）"
 sleep 3
-REMOTE_LATEST=$(curl -fsSL "$GITHUB_RAW" | python3 -c "
+set +e  # 临时关闭 errexit / nounset，校验失败不算发版失败
+set +u
+REMOTE_LATEST=$(curl -fsSL --max-time 10 "$GITHUB_RAW" 2>/dev/null | python3 -c "
 import json,sys
-d=json.load(sys.stdin)
-print(d['versions'][-1]['version'])
-" 2>/dev/null || echo "")
+try:
+    d=json.load(sys.stdin)
+    print(d['versions'][-1]['version'])
+except Exception:
+    pass
+" 2>/dev/null)
+set -eu
 
-if [ "$REMOTE_LATEST" = "$VERSION" ]; then
+if [ "${REMOTE_LATEST:-}" = "$VERSION" ]; then
   echo "✓ GitHub raw 已同步到 $VERSION"
 else
-  echo "⚠️  GitHub raw 当前是 $REMOTE_LATEST（CDN 可能延迟最多 5 分钟同步），请稍后刷新管理页确认"
+  echo "⚠️  GitHub raw 暂未同步（可能网络超时或 CDN 延迟），git push 已成功，稍后 GitHub 会同步。"
 fi
 
 # === 完成 ===
