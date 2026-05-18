@@ -378,7 +378,7 @@
             try {
                 const [allPicks, plansData] = await Promise.all([
                     fetchPicks(period, noCache),
-                    fetch(`/api/plans?from=${period}&to=${period}`).then(r => r.ok ? r.json() : { plans: [] })
+                    fetch(`/api/plans?from=${period}&to=${period}`, { headers: AUTH.headers() }).then(r => r.ok ? r.json() : { plans: [] })
                 ]);
                 userRecs = allPicks.filter(p => p.source === 'recommendation');
 
@@ -406,7 +406,7 @@
         async function fetchPicks(period, noCache) {
             if (!noCache && picksCache[period]) return picksCache[period];
             const url = `/api/picks?period=${period}` + (noCache ? `&_t=${Date.now()}` : '');
-            const resp = await fetch(url);
+            const resp = await fetch(url, { headers: AUTH.headers() });
             if (!resp.ok) return [];
             const data = await resp.json();
             const picks = data.picks || [];

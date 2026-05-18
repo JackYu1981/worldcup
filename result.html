@@ -265,7 +265,7 @@
         async function loadInitial() {
             const from = getDateStr(loadedDays - 1);
             try {
-                const resp = await fetch(`/api/plans?from=${from}`);
+                const resp = await fetch(`/api/plans?from=${from}`, { headers: AUTH.headers() });
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 allResults = data.plans || [];
@@ -282,7 +282,7 @@
             loadedDays += 3;
 
             try {
-                const resp = await fetch(`/api/plans?from=${prevFrom}&to=${prevTo}`);
+                const resp = await fetch(`/api/plans?from=${prevFrom}&to=${prevTo}`, { headers: AUTH.headers() });
                 if (!resp.ok) return false;
                 const data = await resp.json();
                 const older = data.plans || [];

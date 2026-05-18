@@ -136,14 +136,23 @@ async function updateScores(env) {
   }
 
   // 比分有更新 → 触发 Pages 端的方案结算（按需评估 pending plans）
+  if (!env.SCRAPER_SECRET) {
+    console.log('[Settle] SCRAPER_SECRET not configured, skip');
+    return;
+  }
   try {
-    const resp = await fetch('https://worldmoney.pages.dev/api/plans?status=settled', {
-      headers: { 'User-Agent': 'worldcup-scraper-cron' }
+    const resp = await fetch('https://worldmoney.pages.dev/api/admin/settle', {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'worldcup-scraper-cron',
+        'X-Scraper-Secret': env.SCRAPER_SECRET,
+      },
     });
     if (resp.ok) {
-      console.log('[Settle] triggered /api/plans for auto-settlement');
+      const body = await resp.json().catch(() => ({}));
+      console.log(`[Settle] triggered: newly_settled=${body.newly_settled || 0}`);
     } else {
-      console.log(`[Settle] /api/plans returned ${resp.status}`);
+      console.log(`[Settle] /api/admin/settle returned ${resp.status}`);
     }
   } catch (e) {
     console.log(`[Settle] failed to trigger: ${e.message}`);

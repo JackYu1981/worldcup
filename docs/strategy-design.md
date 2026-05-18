@@ -342,15 +342,19 @@
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 后端：Cloudflare Pages Functions                              │
-│  - /api/login          认证                                   │
-│  - /api/matches        读取赛程                               │
-│  - /api/picks          推荐CRUD                               │
-│  - /api/plans          方案CRUD                               │
-│  - /api/submit         生成预备方案                           │
-│  - /api/submit-comment GitHub写入CR                          │
-│  - /api/upload         GitHub上传文件                        │
-│  - /api/logs           系统日志                               │
-│  - /api/design-data    管理页CR/版本聚合(走后端避免GitHub限流) │
+│  - /api/login            认证                                 │
+│  - /api/matches          读取赛程（公开）                     │
+│  - /api/picks            推荐查询（需登录）                   │
+│  - /api/plans            方案查询（需登录，只读）             │
+│  - /api/submit           生成预备方案                         │
+│  - /api/cr               升级请求读写（KV）                   │
+│  - /api/upload           GitHub上传文件                       │
+│  - /api/logs             系统日志（admin）                    │
+│  - /api/design-data      管理页CR/版本聚合                    │
+│  - /api/period-version   比赛数据版本号（缓存失效用）         │
+│  - /api/admin/fix-score  比分修正（admin）                    │
+│  - /api/admin/release    发版（admin）                        │
+│  - /api/admin/settle     触发开奖结算（admin / scraper secret）│
 └──────────┬──────────────────────────────────────┬───────────┘
            │                                       │
            ▼                                       ▼
@@ -414,7 +418,7 @@ KV键命名（key 即 period 值）：
   - **已删除** jczq `data-isend=1` 备用源 —— 同样可能在 isend 设置时点不准确。
 - **Cron**：
   - `1 3 * * *` (UTC) → 北京 11:01 抓当期赛程，写入 `matches:{period}`，period=today
-  - `*/30 * * * *` 每30分钟更新比分；有比分变化时回调 `https://worldmoney.pages.dev/api/plans?status=settled` 触发自动结算
+  - `*/30 * * * *` 每30分钟更新比分；有比分变化时 POST `https://worldmoney.pages.dev/api/admin/settle`（带 `X-Scraper-Secret` 头）触发结算。`/api/admin/settle` 调用 `lib/settle.js` 的 `settlePendingPlans(kv)`，把已决出胜负的方案搬到 `plans:settled`。
 - **关键过滤**：按 code 前缀（"周X"）过滤 — 因为 500.com 一期可能跨日
 - **覆盖式更新**：开奖页比分更新会覆盖任何已存储记录（包括 status=finished 的旧错误数据），任何比分变化都会修正。
 

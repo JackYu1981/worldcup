@@ -11,13 +11,17 @@
 │          assets/explosion.json                   │
 │                                                  │
 │  Functions (functions/api/):                     │
-│    /api/matches   - GET match data by date       │
-│    /api/picks     - GET recommendations/plans    │
-│    /api/plans     - GET evaluated plans          │
-│    /api/submit    - POST new rec/plan to KV      │
-│    /api/login     - POST auth                    │
-│    /api/logs      - GET system logs (auth req)   │
-│    /api/submit-comment - POST design comments    │
+│    /api/matches         - GET 比赛数据（公开）   │
+│    /api/picks           - GET 推荐/方案（需登录）│
+│    /api/plans           - GET 已评估方案（需登录）│
+│    /api/submit          - POST 新推荐/方案       │
+│    /api/login           - POST 登录              │
+│    /api/logs            - GET 系统日志（admin）  │
+│    /api/cr              - GET/POST 升级请求      │
+│    /api/period-version  - GET 比赛数据版本号     │
+│    /api/admin/fix-score - POST 比分修正(admin)   │
+│    /api/admin/release   - POST 发版(admin)       │
+│    /api/admin/settle    - POST 触发结算(admin/scraper)│
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
@@ -55,7 +59,7 @@ All data persists indefinitely (no TTL) unless noted.
 | `pending_plans:{YYYY-MM-DD}` | `{ items[] }` | User-selected picks awaiting AI confirmation |
 | `plans:{YYYY-MM-DD}` | `{ items[] }` | AI-confirmed formal plans (source of truth) |
 
-### Plan Evaluation (written by plans API on read)
+### Plan Evaluation (written by /api/admin/settle, triggered by scraper cron)
 | Key | Value | Description |
 |-----|-------|-------------|
 | `plans:pending` | `{ plans[] }` | Aggregated plans awaiting match results |
@@ -82,9 +86,16 @@ recommendation (user submits AI output)
 | Variable | Purpose |
 |----------|---------|
 | `AUTH_SECRET` | HMAC signing key for JWT tokens (required) |
+| `SCRAPER_SECRET` | Shared secret for scraper worker → /api/admin/settle |
 | `GITHUB_TOKEN` | GitHub API token (only for design comments) |
 | `GITHUB_REPO` | GitHub repo name (default: JackYu1981/worldcup) |
 | `USERS` | JSON string of allowed users |
+
+## Environment Variables (Worker)
+
+| Variable | Purpose |
+|----------|---------|
+| `SCRAPER_SECRET` | Same value as Pages env; sent as `X-Scraper-Secret` header to /api/admin/settle |
 
 ## Deployment Commands
 

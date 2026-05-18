@@ -65,6 +65,12 @@
       "date": "2026-05-18T16:28:16+08:00",
       "summary": "release.sh 修正：第7步校验非阻断（curl超时不算失败）；第6步 git add 改用白名单避免误提交截图等无关文件。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.63",
+      "date": "2026-05-18T17:23:52+08:00",
+      "summary": "(1) /api/plans /api/picks 加登录鉴权，前端调用补 AUTH.headers() (2) 抽出 lib/settle.js，新增 /api/admin/settle，scraper 改 POST 该端点带 X-Scraper-Secret 触发结算 (3) 删除 plans.js GET 副作用和 migratePlansFromKv 死代码 (4) 文档同步：infrastructure/strategy-design 端点表与环境变量更新",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

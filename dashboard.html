@@ -258,7 +258,7 @@
 
         async function loadData() {
             try {
-                const resp = await fetch(`/api/plans?_t=${Date.now()}`);
+                const resp = await fetch(`/api/plans?_t=${Date.now()}`, { headers: AUTH.headers() });
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 allPlans = data.plans || [];

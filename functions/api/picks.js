@@ -1,7 +1,11 @@
 import { json, error, options } from '../lib/response.js';
+import { verifyToken } from '../lib/auth.js';
 
 export async function onRequestGet(context) {
   try {
+    const user = await verifyToken(context.request, context.env);
+    if (!user) return error('未登录', 401);
+
     const url = new URL(context.request.url);
     const period = url.searchParams.get('period') || url.searchParams.get('date');
     const from = url.searchParams.get('from');
