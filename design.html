@@ -397,6 +397,96 @@
         .section-body.collapsed {
             display: none;
         }
+        .fix-score-controls {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+        .fix-score-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .fix-score-load-btn {
+            padding: 8px 16px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .fix-score-load-btn:active { background: #1557b0; }
+        .fix-score-list {
+            padding: 8px 12px;
+        }
+        .fix-score-empty {
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+            padding: 20px;
+        }
+        .fix-score-row {
+            background: #f8f9fa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+        .fix-score-row.dirty {
+            background: #fff8e1;
+            border-color: #ffe082;
+        }
+        .fix-score-row-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        .fix-score-row-title .code {
+            color: #1a73e8;
+            margin-right: 6px;
+        }
+        .fix-score-row-edit {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+        .fix-score-row-edit .label {
+            color: #666;
+            font-size: 12px;
+        }
+        .fix-score-row-edit input[type="number"] {
+            width: 44px;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 13px;
+        }
+        .fix-score-row-edit .dash { color: #999; }
+        .fix-score-save-btn {
+            margin-left: auto;
+            padding: 5px 12px;
+            background: #c62828;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .fix-score-save-btn:disabled {
+            background: #bbb;
+            cursor: not-allowed;
+        }
+        .fix-score-save-btn:active:not(:disabled) { background: #a01818; }
         .log-item {
             padding: 8px 0;
             border-bottom: 1px solid #f0f0f0;
@@ -471,6 +561,17 @@
     <div class="section" id="section-version-history">
         <h2 class="collapsible" onclick="toggleSection(this)">📦 版本历史 <span class="toggle-icon">▼</span></h2>
         <div class="section-body collapsed" id="versionHistory"></div>
+    </div>
+
+    <div class="section" id="section-fix-score">
+        <h2 class="collapsible" onclick="toggleSection(this)">⚙️ 比分修正 <span class="toggle-icon">▼</span></h2>
+        <div class="section-body collapsed">
+            <div class="fix-score-controls">
+                <input type="date" id="fixScorePeriod" class="fix-score-input" />
+                <button class="fix-score-load-btn" onclick="loadFixScoreMatches()">加载</button>
+            </div>
+            <div id="fixScoreList" class="fix-score-list"></div>
+        </div>
     </div>
 
     <div class="comment-section" id="commentSection" style="display:none">
@@ -973,6 +1074,115 @@
             reader.readAsDataURL(file);
             e.target.value = '';
         });
+
+        let fixScoreMatches = [];
+
+        (function initFixScoreDate() {
+            const todayInput = document.getElementById('fixScorePeriod');
+            if (todayInput) {
+                const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                todayInput.value = `${y}-${m}-${d}`;
+            }
+        })();
+
+        async function loadFixScoreMatches() {
+            const period = document.getElementById('fixScorePeriod').value;
+            const list = document.getElementById('fixScoreList');
+            if (!period) { showToast('请选择 period'); return; }
+            list.innerHTML = '<div class="fix-score-empty">加载中...</div>';
+            try {
+                const resp = await fetch(`/api/matches?period=${period}&_t=${Date.now()}`);
+                if (!resp.ok) throw new Error('该期无数据');
+                const data = await resp.json();
+                fixScoreMatches = (data.matches || []).filter(m => m.status === 'finished');
+                renderFixScoreList(period);
+            } catch (e) {
+                fixScoreMatches = [];
+                list.innerHTML = `<div class="fix-score-empty">${e.message || '加载失败'}</div>`;
+            }
+        }
+
+        function renderFixScoreList(period) {
+            const list = document.getElementById('fixScoreList');
+            if (fixScoreMatches.length === 0) {
+                list.innerHTML = '<div class="fix-score-empty">该期暂无已开奖比赛</div>';
+                return;
+            }
+            list.innerHTML = fixScoreMatches.map((m, idx) => {
+                const [fh, fa] = (m.score || '0-0').split('-');
+                const [hh, ha] = (m.score_ht || '0-0').split('-');
+                return `<div class="fix-score-row" data-idx="${idx}">
+                    <div class="fix-score-row-title"><span class="code">${m.code || ''}</span>${m.home || ''} vs ${m.away || ''}</div>
+                    <div class="fix-score-row-edit">
+                        <span class="label">全场</span>
+                        <input type="number" min="0" max="99" value="${fh}" data-field="fh" oninput="markFixScoreDirty(${idx})">
+                        <span class="dash">-</span>
+                        <input type="number" min="0" max="99" value="${fa}" data-field="fa" oninput="markFixScoreDirty(${idx})">
+                        <span class="label">半场</span>
+                        <input type="number" min="0" max="99" value="${hh}" data-field="hh" oninput="markFixScoreDirty(${idx})">
+                        <span class="dash">-</span>
+                        <input type="number" min="0" max="99" value="${ha}" data-field="ha" oninput="markFixScoreDirty(${idx})">
+                        <button class="fix-score-save-btn" onclick="saveFixScore(${idx}, '${period}')">💾 保存</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function markFixScoreDirty(idx) {
+            const row = document.querySelector(`.fix-score-row[data-idx="${idx}"]`);
+            if (row) row.classList.add('dirty');
+        }
+
+        function readFixScoreInputs(idx) {
+            const row = document.querySelector(`.fix-score-row[data-idx="${idx}"]`);
+            if (!row) return null;
+            const fh = row.querySelector('input[data-field="fh"]').value;
+            const fa = row.querySelector('input[data-field="fa"]').value;
+            const hh = row.querySelector('input[data-field="hh"]').value;
+            const ha = row.querySelector('input[data-field="ha"]').value;
+            if (fh === '' || fa === '' || hh === '' || ha === '') return null;
+            return { score: `${parseInt(fh)}-${parseInt(fa)}`, score_ht: `${parseInt(hh)}-${parseInt(ha)}` };
+        }
+
+        async function saveFixScore(idx, period) {
+            const m = fixScoreMatches[idx];
+            if (!m) return;
+            const inputs = readFixScoreInputs(idx);
+            if (!inputs) { showToast('请填写完整比分'); return; }
+            const confirmMsg = `确定将 [${m.code || ''}] ${m.home}vs${m.away} 修改为：\n全场 ${inputs.score}，半场 ${inputs.score_ht}？\n\n该期所有方案将重新结算。`;
+            if (!confirm(confirmMsg)) return;
+
+            const row = document.querySelector(`.fix-score-row[data-idx="${idx}"]`);
+            const btn = row ? row.querySelector('.fix-score-save-btn') : null;
+            if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+
+            try {
+                const resp = await fetch('/api/admin/fix-score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...AUTH.headers() },
+                    body: JSON.stringify({
+                        period,
+                        match_id: m.id,
+                        code: m.code,
+                        score: inputs.score,
+                        score_ht: inputs.score_ht
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    throw new Error(data.error || '保存失败');
+                }
+                const n = (data.plan_changes || []).length;
+                showToast(n > 0 ? `已修正，${n} 个方案状态变化` : '已修正');
+                await loadFixScoreMatches();
+            } catch (e) {
+                showToast(`❌ ${e.message}`);
+                if (btn) { btn.disabled = false; btn.textContent = '💾 保存'; }
+            }
+        }
     </script>
 </body>
 </html>

@@ -78,6 +78,17 @@
       "replies": []
     },
     {
+      "id": 1779100000004,
+      "author": "jack",
+      "type": "feature",
+      "text": "管理页加入手动修复比分结果功能：admin 按 period 选择比赛→编辑半全场比分→保存触发开奖更新",
+      "time": "2026-05-18T18:30:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.5",
+      "resolution": "design.html 新增 ⚙️ 比分修正折叠卡片：选 period→拉出 status=finished 的比赛→编辑半场/全场比分→二次确认弹窗→保存。后端新 API POST /api/admin/fix-score：admin 鉴权+格式校验+新旧值不同校验→更新 matches:{period}→重算该期所有方案（pending+settled）→状态翻转方案在 plans:pending/plans:settled 间正确流转→system:logs 写入修正日志和状态变化日志。evaluatePlan 抽取到 functions/lib/evaluate.js 供新旧 API 复用。",
+      "replies": []
+    },
+    {
       "id": 1779007241858,
       "author": "jack",
       "type": "feature",

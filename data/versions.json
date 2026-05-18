@@ -101,6 +101,12 @@
       "date": "2026-05-18T17:30:00+08:00",
       "summary": "方案页按 period 分组折叠：plans 按 period 聚合成可折叠卡片，header 显示\"YYYY-MM-DD期 周X · N单\"，最新一期默认展开。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
+    },
+    {
+      "version": "v4.5",
+      "date": "2026-05-18T18:30:00+08:00",
+      "summary": "管理页新增比分修正功能：admin 选 period→列出已 finished 比赛→编辑半场/全场比分→二次确认后调用 /api/admin/fix-score 更新 KV 并重算该期所有方案（pending+settled），状态翻转写入 system:logs 审计。evaluatePlan 抽取到 functions/lib/evaluate.js 复用。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/superpowers/specs/2026-05-18-manual-score-fix-design.md"
     }
   ]
 }
