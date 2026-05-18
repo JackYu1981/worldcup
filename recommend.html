@@ -254,46 +254,53 @@
 
     <div class="ai-modal-overlay" id="aiModalOverlay" onclick="if(event.target===this)hideAiAlgorithm()">
         <div class="ai-modal">
-            <h3>🤖 AI 投注优化算法 v1.0</h3>
+            <h3>🤖 AI 投注优化算法 v2.0</h3>
             <div class="modal-poweredby">Powered by Claude Opus 4.7</div>
 
             <h4>核心哲学</h4>
-            <p>既不追极小概率超高赔率（赌博），也不追保底高命中低收益（无意义），让 100 元本金的中奖收益落在<strong>概率与奖金的中间地带</strong>。</p>
+            <p>世界杯样本有限（72 场），爆冷常发生，胜率估计在小样本下不稳定。<strong>AI 不在 EV 维度做剔除或加权</strong>，只做"格点最优分配 + 落窗优化 + 多状态覆盖"。让 150 元本金的中奖收益落在<strong>概率与奖金的中间地带</strong>。</p>
 
             <h4>固定参数</h4>
             <table class="param-table">
-                <tr><td>总本金</td><td>100 元</td></tr>
-                <tr><td>AI 自主预算上限</td><td>18 元</td></tr>
-                <tr><td>目标收益窗口</td><td>600 ~ 1800 元（6~18 倍）</td></tr>
+                <tr><td>总本金</td><td>150 元（允许 ±4 元浮动，146~154）</td></tr>
+                <tr><td>AI 自主预算上限</td><td>30 元</td></tr>
+                <tr><td>目标收益窗口</td><td>900 ~ 2700 元（6~18 倍）</td></tr>
                 <tr><td>最小投注单位</td><td>2 元</td></tr>
             </table>
+
+            <h4>主目标 vs 次目标</h4>
+            <p><strong>主目标</strong>：max P(有效命中) = ∑_ω P(ω) · 𝟙[Payoff(ω,x) ∈ [900,2700]]</p>
+            <p><strong>次目标</strong>（主目标平局时）：max 覆盖 ω 数 = |{ω : P(ω)>0 ∧ Payoff(ω,x) 落窗}|</p>
+            <p style="font-size:12px;color:#666;">(P(有效命中)：能产生一次落入策略窗口胜利的概率；覆盖 ω 数：在多少种世界状态下能有效胜利——分散度越高对胜率估计扰动越鲁棒)</p>
 
             <h4>硬约束</h4>
             <ul>
                 <li>每注金额必须是 2 的倍数</li>
-                <li>用户原选的每个结果至少有一个组合 ≥ 2 元（不可否决）</li>
-                <li>AI 新增结果（用户未选）总金额 ≤ 18 元</li>
-                <li>任一可能中奖路径的总到手金额 ∈ [600, 1800]</li>
+                <li>总投入 ∈ [146, 154]（受 2 元最小单位约束的浮动区间）</li>
+                <li>AI 新增结果（用户未选）总金额 ≤ 30 元</li>
+                <li>任一可能中奖路径的总到手金额 ∈ [900, 2700]</li>
+            </ul>
+
+            <h4>用户勾选软约束</h4>
+            <p>每个用户勾选 r 必须至少有一个组合 ≥ 2 元覆盖它。<strong>除非</strong>满足下列条件之一，AI 才可舍弃 r 并在报告中明示理由：</p>
+            <ul>
+                <li>覆盖 r 的所有候选组合都被窗口剔除（F(c)=∅）</li>
+                <li>强制保留 r 会让 P(有效命中) 下降超过 5%</li>
             </ul>
 
             <h4>算法流程</h4>
-            <p><strong>1. 枚举候选组合</strong>：用户原选生成的 3 串 1 + AI 候选（用户场次内单场切换未选结果）</p>
-            <p><strong>2. 剔除窗口外组合</strong>：极端高赔率（>900 倍）剔除；极低赔率单买不可达 600，标记为需配合中奖</p>
-            <p><strong>3. 计算每组合的金额可行窗口</strong></p>
-            <div class="formula">x_min = max(2, ceil(600 / odds / 2) × 2)<br>x_max = min(预算, floor(1800 / odds / 2) × 2)</div>
-            <p><strong>4. 整数线性规划求解</strong></p>
-            <ul>
-                <li>主目标：最大化「至少一组合中奖且收益落入窗口」的概率</li>
-                <li>次目标：相同主目标下最大化期望收益 Σ p × x × odds</li>
-                <li>约束：Σx=100，AI 部分 ≤18，用户必保结果 ≥2</li>
-            </ul>
-            <p><strong>5. 自救机制</strong>：若用户组合无法达成 600 下限，AI 在 18 元预算内尝试加入未选结果救援；仍不可行则提示用户调整选择，不擅自放宽窗口。</p>
+            <p><strong>1. 枚举候选组合</strong>：用户原选 U + AI 候选 A（用户场次内单场切换未选结果）</p>
+            <p><strong>2. 窗口剔除</strong>：对每个 c，F(c) = { x ∈ {2,4,6,...} : 900 ≤ x·odds_c ≤ 2700, x ≤ 剩余预算 }；F(c)=∅ 则剔除（高赔率不可达 odds>1350，或低赔率不可达 budget·odds<900）</p>
+            <p><strong>3. 世界状态枚举</strong>：ω ∈ {主胜,平,客胜}³（≤27 种），P(ω) = ∏ p_{i,r_i}</p>
+            <p><strong>4. 整数线性规划</strong>：变量 x_c ∈ {0,2,4,...}，按主目标→次目标依序优化</p>
+            <p><strong>5. 自救机制</strong>：若不可行，AI 在 30 元预算内枚举更多 A 候选；仍不可行则 fail，提示用户调整勾选（不擅自放宽窗口或本金）</p>
 
             <h4>输出</h4>
             <ul>
-                <li>每注的具体金额、赔率、中奖概率</li>
-                <li>用户预算 / AI 预算占比</li>
-                <li>整体命中率、期望收益、收益区间</li>
+                <li>每注的具体金额、组合、odds、命中概率</li>
+                <li>P(有效命中)（主目标值）+ 覆盖 ω 数（次目标值）</li>
+                <li>E[收益] 仅作描述指标，与 naive 复式 E[收益] 对比</li>
+                <li>被舍弃的用户勾选 + 舍弃理由</li>
             </ul>
 
             <button class="ai-modal-close" onclick="hideAiAlgorithm()">关闭</button>
@@ -599,7 +606,7 @@
                     <span>🤖 AI 优化方案</span>
                     <span class="ai-hint">点击查看算法 ›</span>
                 </div>
-                <div class="ai-desc">100元本金，AI在18元自主预算内对所选推荐进行整数线性规划优化，目标收益区间 600-1800 元（概率与奖金的中间地带）。</div>
+                <div class="ai-desc">150元本金（±4元浮动）+ AI 30元预算，主目标 max P(有效命中)、次目标 max ω 覆盖数；不引入 EV 维度，目标收益区间 900-2700 元。</div>
                 <div class="ai-poweredby">Powered by Claude Opus 4.7</div>
             </div>`;
         }
@@ -717,7 +724,7 @@
                 submitted_at: new Date().toISOString(),
                 selected_tier: selectedRec.selected_tier,
                 source: 'pending_plan',
-                stake: 100,
+                stake: 150,
                 combined_odds: selectedRec.combined_odds,
                 legs: selectedRec.legs
             };
