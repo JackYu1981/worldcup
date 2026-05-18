@@ -77,6 +77,12 @@
       "date": "2026-05-18T19:12:54+08:00",
       "summary": "前端缓存策略统一：移除所有 _t=Date.now() 缓存破坏器；design.html 修分页改用 period-version 版本号机制；recommend.html / dashboard.html 改用 fetch cache:'no-store' 选项绕缓存。Authorization header 已让 Cloudflare 不缓存这些端点。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.65",
+      "date": "2026-05-18T19:36:13+08:00",
+      "summary": "KV 命名空间清理：plans:pending/plans:settled 与 plans:{date} 命名冲突，改为 aggregate:pending_plans / aggregate:settled_plans。同时删除已迁移过的 picks:* 历史 KV 数据。涉及 functions/lib/settle.js + functions/api/{plans,submit,admin/fix-score}.js + 文档。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

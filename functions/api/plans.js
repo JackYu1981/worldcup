@@ -12,9 +12,9 @@ export async function onRequestGet(context) {
     const fromDate = url.searchParams.get('from');
     const toDate = url.searchParams.get('to');
 
-    const settledData = await kv.get('plans:settled', 'json');
+    const settledData = await kv.get('aggregate:settled_plans', 'json');
     const settled = settledData ? (settledData.plans || []) : [];
-    const pendingData = await kv.get('plans:pending', 'json');
+    const pendingData = await kv.get('aggregate:pending_plans', 'json');
     const pending = pendingData ? (pendingData.plans || []) : [];
 
     let results;

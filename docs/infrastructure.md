@@ -62,8 +62,8 @@ All data persists indefinitely (no TTL) unless noted.
 ### Plan Evaluation (written by /api/admin/settle, triggered by scraper cron)
 | Key | Value | Description |
 |-----|-------|-------------|
-| `plans:pending` | `{ plans[] }` | Aggregated plans awaiting match results |
-| `plans:settled` | `{ plans[] }` | Plans with final won/lost status |
+| `aggregate:pending_plans` | `{ plans[] }` | Aggregated plans awaiting match results |
+| `aggregate:settled_plans` | `{ plans[] }` | Plans with final won/lost status |
 
 ### System
 | Key | Value | TTL | Description |
@@ -77,8 +77,8 @@ All data persists indefinitely (no TTL) unless noted.
 recommendation (user submits AI output)
     → pending_plan (user selects picks + passphrase)
         → plan (AI confirms with combinations/odds)
-            → plans:pending (aggregated for evaluation)
-                → plans:settled (won/lost after match results)
+            → aggregate:pending_plans (aggregated for evaluation)
+                → aggregate:settled_plans (won/lost after match results)
 ```
 
 ## Environment Variables (Pages)

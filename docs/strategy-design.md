@@ -388,8 +388,8 @@ KV键命名（key 即 period 值）：
 - `matches:{period}` — 当期赛程envelope，envelope和每场match都带 `period` 字段
 - `picks:{period}` — 用户推荐数组（每条带 period）
 - `plans:{period}` — 当期所有方案明细（按提交时间累积）
-- `plans:pending` — 全局待结算方案队列
-- `plans:settled` — 全局已结算方案（won/lost）
+- `aggregate:pending_plans` — 全局待结算方案队列
+- `aggregate:settled_plans` — 全局已结算方案（won/lost）
 - `system:logs` — 系统日志（环形）
 - `system:logs:YYYY-MM` — 月度归档
 
@@ -418,7 +418,7 @@ KV键命名（key 即 period 值）：
   - **已删除** jczq `data-isend=1` 备用源 —— 同样可能在 isend 设置时点不准确。
 - **Cron**：
   - `1 3 * * *` (UTC) → 北京 11:01 抓当期赛程，写入 `matches:{period}`，period=today
-  - `*/30 * * * *` 每30分钟更新比分；有比分变化时 POST `https://worldmoney.pages.dev/api/admin/settle`（带 `X-Scraper-Secret` 头）触发结算。`/api/admin/settle` 调用 `lib/settle.js` 的 `settlePendingPlans(kv)`，把已决出胜负的方案搬到 `plans:settled`。
+  - `*/30 * * * *` 每30分钟更新比分；有比分变化时 POST `https://worldmoney.pages.dev/api/admin/settle`（带 `X-Scraper-Secret` 头）触发结算。`/api/admin/settle` 调用 `lib/settle.js` 的 `settlePendingPlans(kv)`，把已决出胜负的方案搬到 `aggregate:settled_plans`。
 - **关键过滤**：按 code 前缀（"周X"）过滤 — 因为 500.com 一期可能跨日
 - **覆盖式更新**：开奖页比分更新会覆盖任何已存储记录（包括 status=finished 的旧错误数据），任何比分变化都会修正。
 
