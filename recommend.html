@@ -405,8 +405,9 @@
 
         async function fetchPicks(period, noCache) {
             if (!noCache && picksCache[period]) return picksCache[period];
-            const url = `/api/picks?period=${period}` + (noCache ? `&_t=${Date.now()}` : '');
-            const resp = await fetch(url, { headers: AUTH.headers() });
+            const opts = { headers: AUTH.headers() };
+            if (noCache) opts.cache = 'no-store';
+            const resp = await fetch(`/api/picks?period=${period}`, opts);
             if (!resp.ok) return [];
             const data = await resp.json();
             const picks = data.picks || [];

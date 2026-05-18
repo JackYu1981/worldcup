@@ -1079,7 +1079,15 @@
             if (!period) { showToast('请选择 period'); return; }
             list.innerHTML = '<div class="fix-score-empty">加载中...</div>';
             try {
-                const resp = await fetch(`/api/matches?period=${period}&_t=${Date.now()}`);
+                let version = '';
+                try {
+                    const vr = await fetch(`/api/period-version?period=${period}`, { cache: 'no-store' });
+                    if (vr.ok) version = (await vr.json()).version || '';
+                } catch (e) {}
+                const url = version
+                    ? `/api/matches?period=${period}&v=${encodeURIComponent(version)}`
+                    : `/api/matches?period=${period}`;
+                const resp = await fetch(url);
                 if (!resp.ok) throw new Error('该期无数据');
                 const data = await resp.json();
                 fixScoreMatches = (data.matches || []).filter(m => m.status === 'finished');
