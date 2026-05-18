@@ -112,8 +112,15 @@
         }
         .match-center .kickoff-box .kickoff-date { font-size: 11px; color: #999; }
         .match-center .kickoff-box .kickoff-time { font-size: 11px; color: #999; }
+        .match-center .score-box {
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 50px; line-height: 1.2;
+        }
         .match-center .score-badge {
-            font-size: 16px; font-weight: 700; color: #e74c3c; min-width: 50px; text-align: center;
+            font-size: 16px; font-weight: 700; color: #e74c3c; text-align: center;
+        }
+        .match-center .score-half {
+            font-size: 10px; color: #999; margin-top: 2px;
         }
         .match-center .away {
             text-align: left; font-size: 13px; font-weight: 600; color: #333;
@@ -509,9 +516,9 @@
                 }
                 let ftNote = '';
                 if (m.score_ht && m.score_ht !== m.score) {
-                    ftNote = `<div style="font-size:10px;color:#999;margin-top:2px;">半 ${m.score_ht}</div>`;
+                    ftNote = `<span class="score-half">半 ${m.score_ht}</span>`;
                 }
-                centerHtml = `<span class="score-badge">${homeScore}-${awayScore}</span>${ftNote}`;
+                centerHtml = `<div class="score-box"><span class="score-badge">${homeScore}-${awayScore}</span>${ftNote}</div>`;
             } else {
                 centerHtml = `<div class="kickoff-box"><span class="kickoff-date">${kickoff.date}</span><span class="kickoff-time">${kickoff.time}</span></div>`;
             }
