@@ -258,7 +258,7 @@
 
         async function loadData() {
             try {
-                const resp = await fetch('/api/plans');
+                const resp = await fetch(`/api/plans?_t=${Date.now()}`);
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 allPlans = data.plans || [];
@@ -495,7 +495,13 @@
         }
 
         loadData();
-    </script>
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                loadData();
+            }
+        });
+</script>
     <script src="auth.js"></script>
     <script>if(AUTH.isLoggedIn())AUTH.renderUserBadge('userBadge');</script>
     <script src="pull-refresh.js"></script>
