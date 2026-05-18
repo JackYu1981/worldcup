@@ -89,6 +89,12 @@
       "date": "2026-05-18T20:54:03+08:00",
       "summary": "AI 投注优化算法升级 v2.0；本金 100→150 元（±4 浮动），AI 预算 30 元，收益窗口 [900,2700]（6-18× 不变）；主目标改为 P(有效命中)、次目标改为 ω 状态覆盖数；不引入 EV 维度（小样本下不可靠）；用户勾选改软约束（特定条件下 AI 可舍弃并明示）",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.67",
+      "date": "2026-05-18T21:35:30+08:00",
+      "summary": "AI 投注优化算法 v2.0 细化：取消'用户必保'硬约束（实践中常致几何不可行），改为第三优先级软偏好 N_user；引入信心放大因子 c（默认 0.6）从赔率反推 + 用户勾选信号合成 p_user，避免量化运气感的认知负担；用户可在指令中显式指定 c。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
