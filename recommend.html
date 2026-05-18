@@ -343,7 +343,6 @@
         let plans = [];
         let pendingPlans = [];
         let selectedRec = null;
-        let submittedRecKeys = new Set();
 
         const picksCache = {};
 
@@ -490,32 +489,14 @@
                     </div>
                     <div class="user-group-body">
                         ${userRecs.map((rec, idx) => {
-                            const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
-                            const recPickSet = new Set(rec.legs.map(l => l.match_id + l.pick));
-                            const recMatchSet = new Set(rec.legs.map(l => l.match_id));
-                            // v1.x plan：plan.legs 完全等于 rec.legs
-                            // v2.0 plan：所有 user_combo bets 的 leg 都来自 rec 候选；且涵盖 rec 中所有比赛
-                            const matchPlan = (p) => {
-                                if (p.legs && p.legs.length) {
-                                    return p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey;
-                                }
-                                const bets = (window.PlanAdapter ? PlanAdapter.getBets(p) : (p.bets || []));
-                                const userBets = bets.filter(b => b.is_user_combo !== false);
-                                if (userBets.length === 0) return false;
-                                const planMatchSet = new Set();
-                                for (const b of userBets) {
-                                    for (const l of (b.legs || [])) {
-                                        if (!recPickSet.has(l.match_id + l.pick)) return false;
-                                        planMatchSet.add(l.match_id);
-                                    }
-                                }
-                                if (planMatchSet.size !== recMatchSet.size) return false;
-                                for (const m of recMatchSet) if (!planMatchSet.has(m)) return false;
-                                return true;
-                            };
-                            const isPlan = plans.some(matchPlan);
-                            const isPending = pendingPlans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
-                            return renderRecCard(rec, idx, isPlan ? 'plan' : isPending ? 'pending' : null);
+                            // rec 是否已被使用 → 直接读 rec.pending_plan_passphrase
+                            // 进一步分 plan/pending：看正式方案集合里有没有同口令
+                            const usedPassphrase = rec.pending_plan_passphrase;
+                            let status = null;
+                            if (usedPassphrase) {
+                                status = plans.some(p => p.passphrase === usedPassphrase) ? 'plan' : 'pending';
+                            }
+                            return renderRecCard(rec, idx, status);
                         }).join('')}
                     </div>
                 </div>`;
@@ -595,14 +576,13 @@
                 </div>`
             ).join('');
 
-            const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
-            const isSubmitted = status || submittedRecKeys.has(recKey);
+            const isSubmitted = !!status;
 
             let selectedStyle = '', selectedBadge = '';
             if (status === 'plan') {
                 selectedStyle = 'border-left-color:#1a73e8;opacity:0.7;';
                 selectedBadge = '<span style="font-size:10px;background:#e3f2fd;color:#1a73e8;padding:2px 6px;border-radius:3px;margin-left:6px;">已确认</span>';
-            } else if (status === 'pending' || submittedRecKeys.has(recKey)) {
+            } else if (status === 'pending') {
                 selectedStyle = 'border-left-color:#ff9800;opacity:0.8;';
                 selectedBadge = '<span style="font-size:10px;background:#fff3e0;color:#e65100;padding:2px 6px;border-radius:3px;margin-left:6px;">待AI确认</span>';
             }
@@ -768,8 +748,6 @@
             btn.disabled = true;
             btn.textContent = '提交中...';
 
-            const recKey = selectedRec.legs.map(l => l.match_id + l.pick).sort().join('|');
-
             const payload = {
                 date: currentPeriod,
                 period: currentPeriod,
@@ -790,7 +768,6 @@
                 });
                 const result = await resp.json();
                 if (result.success) {
-                    submittedRecKeys.add(recKey);
                     closeConfirm();
                     copyLegs(payload.legs);
                     showToast('预备方案已提交！请在Claude Code中用口令生成正式方案');
