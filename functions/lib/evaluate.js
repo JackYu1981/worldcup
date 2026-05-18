@@ -1,3 +1,5 @@
+import { getBets, getPlanStatus, getTotalReturn } from './plan-adapter.js';
+
 function determineResult(match) {
   if (!match.score) return null;
   const parts = match.score.split('-');
@@ -25,84 +27,54 @@ function findMatch(matches, leg) {
 }
 
 export function evaluatePlan(plan, matches) {
-  if (!plan.legs || plan.legs.length === 0) return plan;
+  // 通过 adapter 拿到归一的 bets[] —— v2.0 原生 / v1.x combinations / v1.0 legs 都能处理
+  const bets = getBets(plan);
+  if (bets.length === 0) return plan;
 
   let allEvaluated = true;
-  let anyHit = false;
 
-  const byMatch = {};
-  plan.legs.forEach(l => {
-    const mid = l.match_id;
-    if (!byMatch[mid]) byMatch[mid] = [];
-    byMatch[mid].push(l);
+  // 评估每个 bet 的每个 leg（同时回写 plan 的源字段，让前端展示 leg.correct/actual_score）
+  bets.forEach(bet => {
+    let comboAllCorrect = true;
+    let comboAllEvaluated = true;
+    (bet.legs || []).forEach(l => {
+      const m = findMatch(matches, l);
+      if (m && m.score) {
+        const result = determineResult(m);
+        const market = l.market || '1x2';
+        l.correct = result[market] === l.pick;
+        l.actual_score = result.score;
+        if (!l.correct) comboAllCorrect = false;
+      } else {
+        comboAllEvaluated = false;
+        allEvaluated = false;
+      }
+    });
+    if (comboAllEvaluated) {
+      bet.hit = comboAllCorrect;
+      bet.actual_return = comboAllCorrect ? bet.potential_return : 0;
+    }
   });
 
-  plan.legs.forEach(l => {
-    const m = findMatch(matches, l);
-    if (m && m.score) {
-      const result = determineResult(m);
-      const market = l.market || '1x2';
-      l.correct = result[market] === l.pick;
-      l.actual_score = result.score;
-    } else {
-      allEvaluated = false;
-    }
-  });
-
-  if (!plan.combinations) {
-    const groups = Object.values(byMatch);
-    const combos = [];
-    function cartesian(idx, current) {
-      if (idx === groups.length) {
-        const odds = current.reduce((acc, l) => acc * l.odds, 1);
-        combos.push({
-          legs: current.slice(),
-          combined_odds: parseFloat(odds.toFixed(4)),
-          stake: 2,
-          potential_return: Math.round(odds * 2),
-          hit: null
-        });
-        return;
-      }
-      groups[idx].forEach(l => {
-        current.push(l);
-        cartesian(idx + 1, current);
-        current.pop();
-      });
-    }
-    cartesian(0, []);
-    if (combos.length === 1) {
-      combos[0].stake = plan.stake || 100;
-      combos[0].potential_return = Math.round(combos[0].combined_odds * (plan.stake || 100));
-    }
-    plan.combinations = combos;
-  }
-
-  if (plan.combinations) {
-    plan.combinations.forEach(c => {
-      let comboAllCorrect = true;
-      let comboAllEvaluated = true;
-      c.legs.forEach(l => {
-        const m = findMatch(matches, l);
-        if (m && m.score) {
-          const result = determineResult(m);
-          const market = l.market || '1x2';
-          l.correct = result[market] === l.pick;
-          l.actual_score = result.score;
-          if (!l.correct) comboAllCorrect = false;
-        } else {
-          comboAllEvaluated = false;
-        }
-      });
-      if (comboAllEvaluated) {
-        c.hit = comboAllCorrect;
-        if (comboAllCorrect) anyHit = true;
-      }
+  // 写回 plan：保持原有字段结构，加上 hit/actual_return
+  if (Array.isArray(plan.bets)) {
+    plan.bets.forEach((b, i) => {
+      const evaluated = bets[i];
+      b.hit = evaluated.hit;
+      b.actual_return = evaluated.actual_return;
+      // legs 已经被原地修改（同对象引用）
+    });
+  } else if (Array.isArray(plan.combinations)) {
+    plan.combinations.forEach((c, i) => {
+      const evaluated = bets[i];
+      c.hit = evaluated.hit;
     });
   }
 
   if (allEvaluated) {
-    plan.status = anyHit ? 'won' : 'lost';
+    plan.status = bets.some(b => b.hit === true) ? 'won' : 'lost';
+    plan.total_return = bets.reduce((s, b) => s + (b.actual_return || 0), 0);
+    plan.profit = plan.total_return - (plan.total_stake || bets.reduce((s, b) => s + (b.stake || 0), 0));
   }
 
   return plan;

@@ -101,6 +101,12 @@
       "date": "2026-05-18T21:45:41+08:00",
       "summary": "重命名 KV key aggregate:pending_plans → aggregate:unsettled_plans，与 pending_plans:{period}（待 AI 优化的预备方案）语义区分；前者是已优化的待结算正式方案队列。同步更新 4 个 Pages Functions、2 份文档，并完成 KV 数据迁移。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8",
+      "date": "2026-05-18T22:15:31+08:00",
+      "summary": "v2.0 plan schema 统一为 bets[] 多注格式：新增 plan-adapter（前后端）归一处理 v2.0/v1.x/v1.0 三种格式；result/recommend/dashboard/evaluate 重构使用 adapter；41 项单元测试通过",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

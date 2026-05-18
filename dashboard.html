@@ -252,6 +252,7 @@
     </div>
     </div>
 
+    <script src="assets/plan-adapter.js"></script>
     <script>
         let allPlans = [];
         let dailyMap = {};
@@ -280,15 +281,11 @@
         }
 
         function getPlanStake(p) {
-            if (p.combinations && p.combinations.length > 1) {
-                return p.combinations.reduce((sum, c) => sum + (c.stake || 2), 0);
-            }
-            return p.combinations && p.combinations[0] ? p.combinations[0].stake : (p.stake || 100);
+            return PlanAdapter.getTotalStake(p);
         }
 
         function getPlanReturn(p) {
-            if (!p.combinations) return 0;
-            return p.combinations.reduce((sum, c) => c.hit ? sum + c.potential_return : sum, 0);
+            return PlanAdapter.getTotalReturn(p);
         }
 
         function getPlanProfit(p) {
@@ -446,8 +443,10 @@
                 const profit = getPlanProfit(p);
                 const profitText = (status === 'won' || status === 'lost') ? (profit >= 0 ? `+¥${profit}` : `-¥${Math.abs(profit)}`) : '';
 
-                const combosHtml = (p.combinations || []).map((c, i) => {
+                const combosHtml = PlanAdapter.getBets(p).map((c, i) => {
                     const hitLabel = c.hit === true ? ' ✓' : c.hit === false ? ' ✗' : '';
+                    const userTag = c.is_user_combo === false ? ' <span style="font-size:10px;color:#888;">(AI)</span>' : '';
+                    const comboLabel = c.combo_id || `组合${i + 1}`;
                     const legsHtml = (c.legs || []).map(l => {
                         const legClass = l.correct === true ? 'correct' : l.correct === false ? 'wrong' : '';
                         const icon = l.correct === true ? ' ✓' : l.correct === false ? ' ✗' : '';
@@ -458,7 +457,7 @@
                     }).join('');
                     return `<div class="ticket-combo">
                         <div class="ticket-combo-header">
-                            <span>组合${i + 1}${hitLabel}</span>
+                            <span>${comboLabel}${userTag}${hitLabel}</span>
                             <span class="odds">×${(c.combined_odds || 0).toFixed(2)}</span>
                         </div>
                         ${legsHtml}

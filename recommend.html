@@ -311,6 +311,7 @@
     </div>
 
     <script src="auth.js"></script>
+    <script src="assets/plan-adapter.js"></script>
     <script>if(AUTH.isLoggedIn())AUTH.renderUserBadge('userBadge');</script>
     <script src="pull-refresh.js"></script>
     <script>
@@ -491,7 +492,14 @@
                     <div class="user-group-body">
                         ${userRecs.map((rec, idx) => {
                             const recKey = rec.legs.map(l => l.match_id + l.pick).sort().join('|');
-                            const isPlan = plans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
+                            // 比对：v2.0 plan 用 passphrase（用户推荐若已转正备方案应跨 bets 多注扩展），旧版 plan 仍按 legs 匹配
+                            const matchPlanLegs = (p) => {
+                                if (p.legs && p.legs.length) {
+                                    return p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey;
+                                }
+                                return false; // v2.0 plan 不再用 legs 匹配
+                            };
+                            const isPlan = plans.some(matchPlanLegs);
                             const isPending = pendingPlans.some(p => p.legs && p.legs.map(l => l.match_id + l.pick).sort().join('|') === recKey);
                             return renderRecCard(rec, idx, isPlan ? 'plan' : isPending ? 'pending' : null);
                         }).join('')}
@@ -627,15 +635,43 @@
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
             const icon = tierIcons[plan.selected_tier] || '🟡';
-            const tierName = tierNames[plan.selected_tier] || plan.selected_tier;
+            const tierName = tierNames[plan.selected_tier] || (plan.algorithm_version ? `AI · ${plan.algorithm_version}` : '方案');
             const timeStr = formatTime(plan.submitted_at);
+            const bets = PlanAdapter.getBets(plan);
 
-            const legsHtml = plan.legs.map(l =>
-                `<div class="plan-leg">
-                    <span>${l.code || '000'} ${l.match_desc} · ${l.pick_desc}</span>
-                    <span style="color:#e65100;font-weight:600;">@${l.odds.toFixed(2)}</span>
-                </div>`
-            ).join('');
+            // 多注 v2.0 渲染：每注独立卡
+            const betsHtml = bets.map((b, i) => {
+                const legsHtml = (b.legs || []).map(l =>
+                    `<div class="plan-leg">
+                        <span>${l.code || '000'} ${l.match_desc} · ${l.pick_desc}</span>
+                        <span style="color:#e65100;font-weight:600;">@${(l.odds || 0).toFixed(2)}</span>
+                    </div>`
+                ).join('');
+                const userTag = b.is_user_combo === false
+                    ? '<span style="font-size:10px;background:#f3e5f5;color:#7b1fa2;padding:1px 5px;border-radius:3px;margin-left:4px;">AI</span>'
+                    : '';
+                const comboLabel = b.combo_id || `组合 ${i+1}`;
+                return `<div style="margin:8px 0;padding:8px;background:#fafafa;border-left:3px solid #e65100;border-radius:4px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;margin-bottom:6px;">
+                        <span><b>${comboLabel}</b>${userTag} · ¥${b.stake}</span>
+                        <span>×${(b.combined_odds || 0).toFixed(2)} → ¥${(b.potential_return || 0).toLocaleString()}</span>
+                    </div>
+                    ${legsHtml}
+                </div>`;
+            }).join('');
+
+            const totalStake = PlanAdapter.getTotalStake(plan);
+            const minR = bets.length ? Math.min(...bets.map(b => b.potential_return || 0)) : 0;
+            const maxR = bets.length ? Math.max(...bets.map(b => b.potential_return || 0)) : 0;
+            const summary = bets.length === 1
+                ? `${bets.length}注 ¥${totalStake} → ¥${maxR.toLocaleString()}`
+                : `${bets.length}注 ¥${totalStake} → ¥${minR.toLocaleString()}~¥${maxR.toLocaleString()}`;
+
+            // 复制按钮：v2.0 多注合并所有 leg；v1.0 单注用 plan.legs
+            const copyLegs = bets.length > 0
+                ? bets.flatMap(b => b.legs || [])
+                : (plan.legs || []);
+            const copyLegsJson = JSON.stringify(copyLegs).replace(/"/g, '&quot;');
 
             return `<div class="plan-card">
                 <div class="plan-watermark">${plan.passphrase || ''}</div>
@@ -644,12 +680,12 @@
                     <span class="plan-passphrase">口令：${plan.passphrase}</span>
                 </div>
                 <div style="position:relative;z-index:1;">
-                ${legsHtml}
+                ${betsHtml}
                 <div class="plan-summary">
-                    <span>${formatOddsSummary(plan)}</span>
+                    <span>${summary}</span>
                     <span>by ${plan.submitted_by || '未知'} · ${timeStr}</span>
                 </div>
-                <button class="plan-copy-btn" onclick="copyLegs(${JSON.stringify(plan.legs).replace(/"/g,'&quot;')})">📋 复制竞彩格式</button>
+                <button class="plan-copy-btn" onclick="copyLegs(${copyLegsJson})">📋 复制竞彩格式</button>
                 </div>
             </div>`;
         }
