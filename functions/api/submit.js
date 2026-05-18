@@ -27,6 +27,7 @@ export async function onRequestPost(context) {
 
     body.submitted_by = user.username;
     body.submitted_at = new Date().toISOString();
+    body.period = body.period || date;  // 期次=开奖日(=用户选择的赛程日期)
 
     const kv = context.env.MATCH_DATA;
     await writeToKv(kv, source, date, body);
@@ -58,7 +59,7 @@ async function writeToKv(kv, source, date, data) {
     const existing = await kv.get(key, 'json');
     const items = existing ? existing.items : [];
     items.push(data);
-    await kv.put(key, JSON.stringify({ items }));
+    await kv.put(key, JSON.stringify({ period: date, items }));
 
     if (source === 'plan') {
       const pendingData = await kv.get('plans:pending', 'json');

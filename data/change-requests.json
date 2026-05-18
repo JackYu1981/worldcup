@@ -1,6 +1,50 @@
 {
   "requests": [
     {
+      "id": 1779082594388,
+      "author": "system",
+      "type": "bug",
+      "text": "5/17 19场比赛比分错误（半场比分被存为终场）",
+      "time": "2026-05-18T13:00:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.2",
+      "resolution": "比分抓取改为唯一权威源开奖页 zx.500.com/jczq/kaijiang.php，删除 live.500.com（实时数据会误抓半场）。score=90分钟全场，新增 score_ht=半场。已用开奖页数据修复 5/17 KV。",
+      "replies": []
+    },
+    {
+      "id": 1779082594389,
+      "author": "system",
+      "type": "feature",
+      "text": "引入 period（彩票期号）字段建立赛程/推荐/方案/开奖之间的稳定关联",
+      "time": "2026-05-18T13:30:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.2",
+      "resolution": "period=开奖日(YYYY-MM-DD，等同500.com kaijiang.php?date=X)。matches/picks/plans envelope和每条记录都带period。worker scrape写period，submit写period，plans评估按period加载matches。历史数据已迁移。",
+      "replies": []
+    },
+    {
+      "id": 1779082594390,
+      "author": "system",
+      "type": "feature",
+      "text": "比分更新后自动触发方案结算",
+      "time": "2026-05-18T13:45:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.2",
+      "resolution": "Worker updateScores 在比分有更新时回调 /api/plans?status=settled，由Pages端按period评估pending plans并写回settled。",
+      "replies": []
+    },
+    {
+      "id": 1779082594391,
+      "author": "system",
+      "type": "improvement",
+      "text": "结算时跳过status=finished但比分错误的记录无法修正",
+      "time": "2026-05-18T13:50:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.2",
+      "resolution": "重写 updateScores：开奖页是只列已开奖比赛的权威源，覆盖式比对（包括已finished的记录），任何比分变化都会修正并写回。",
+      "replies": []
+    },
+    {
       "id": 1779007241858,
       "author": "jack",
       "type": "feature",

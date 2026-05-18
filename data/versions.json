@@ -83,6 +83,12 @@
       "date": "2026-05-17T13:30:00+08:00",
       "summary": "数据结构分离：change-requests/versions拆分独立文件、KV按类型独立存储(recommendations/pending_plans/plans)、命名规范统一、折叠面板bug修复",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
+    },
+    {
+      "version": "v4.2",
+      "date": "2026-05-18T14:00:00+08:00",
+      "summary": "Period期次模型贯通赛程/推荐/方案/开奖：period=开奖日唯一标识，所有数据按period关联。比分源切换为开奖页zx.500.com/jczq/kaijiang.php（删除live.500.com避免半场误判），新增score_ht半场字段。Worker比分更新后自动触发结算。已修复5/17 19场错分+全部plans正确开奖。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     }
   ]
 }

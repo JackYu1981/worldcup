@@ -139,15 +139,16 @@ export async function onRequestGet(context) {
     const stillPending = [];
 
     if (pending.length > 0) {
-      const dates = [...new Set(pending.map(p => p.date).filter(Boolean))];
+      const periods = [...new Set(pending.map(p => p.period || p.date).filter(Boolean))];
       const matchCache = {};
-      for (const date of dates) {
-        const mData = await kv.get(`matches:${date}`, 'json');
-        matchCache[date] = mData ? mData.matches : [];
+      for (const period of periods) {
+        const mData = await kv.get(`matches:${period}`, 'json');
+        matchCache[period] = mData ? mData.matches : [];
       }
 
       for (const plan of pending) {
-        const matches = matchCache[plan.date] || [];
+        const period = plan.period || plan.date;
+        const matches = matchCache[period] || [];
         const evaluated = evaluatePlan(plan, matches);
         if (evaluated.status === 'won' || evaluated.status === 'lost') {
           newlySettled.push(evaluated);
@@ -178,15 +179,15 @@ export async function onRequestGet(context) {
     }
 
     if (fromDate) {
-      results = results.filter(p => (p.date || '') >= fromDate);
+      results = results.filter(p => (p.period || p.date || '') >= fromDate);
     }
     if (toDate) {
-      results = results.filter(p => (p.date || '') <= toDate);
+      results = results.filter(p => (p.period || p.date || '') <= toDate);
     }
 
     results.sort((a, b) => {
-      const da = a.date || '';
-      const db = b.date || '';
+      const da = a.period || a.date || '';
+      const db = b.period || b.date || '';
       if (da !== db) return db.localeCompare(da);
       const ta = a.submitted_at || '';
       const tb = b.submitted_at || '';
@@ -209,7 +210,9 @@ async function migratePlansFromKv(kv) {
       const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const data = await kv.get(`plans:${dateStr}`, 'json');
       if (data && data.items) {
-        plans.push(...data.items.filter(p => p.source === 'plan'));
+        const filtered = data.items.filter(p => p.source === 'plan');
+        filtered.forEach(p => { if (!p.period) p.period = data.period || dateStr; });
+        plans.push(...filtered);
       }
     }
     if (plans.length > 0) {

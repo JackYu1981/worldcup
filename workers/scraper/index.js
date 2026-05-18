@@ -27,41 +27,16 @@ function getBeijingDate(offsetDays = 0) {
   return beijing.toISOString().slice(0, 10);
 }
 
-async function fetchScoresForDates(dates) {
-  const allScores = {};
-  const uniqueDates = [...new Set(dates)];
-  for (const date of uniqueDates) {
-    try {
-      const url = adapter.buildScoresUrl(date);
-      const html = await fetchHtml(url, adapter.scoresEncoding);
-      if (html && html.length > 500) {
-        const scores = adapter.parseScores(html);
-        Object.assign(allScores, scores);
-      }
-    } catch (e) {
-      console.log(`[Cron] Failed to fetch live scores for ${date}: ${e.message}`);
-    }
-  }
-  return allScores;
-}
-
-async function fetchJczqScores(date) {
-  const results = {};
+async function fetchKaijiang(date) {
   try {
-    const url = adapter.buildMatchesUrl({ date });
+    const url = adapter.buildKaijiangUrl(date);
     const html = await fetchHtml(url);
-    if (html && html.length > 1000) {
-      const parsed = adapter.parseMatches(html);
-      parsed.forEach(p => {
-        if (p.status === 'finished' && p.score) {
-          results[p.id] = p.score;
-        }
-      });
-    }
+    if (!html || html.length < 1000) return {};
+    return adapter.parseKaijiang(html);
   } catch (e) {
-    console.log(`[Cron] Failed to fetch jczq for ${date}: ${e.message}`);
+    console.log(`[Cron] Failed to fetch kaijiang for ${date}: ${e.message}`);
+    return {};
   }
-  return results;
 }
 
 async function snapshotMatches(env) {
@@ -100,6 +75,9 @@ async function snapshotMatches(env) {
     return;
   }
 
+  // 每场比赛打上期次标识（=开奖日=today）
+  matches.forEach(m => { m.period = today; });
+
   const envelope = createEnvelope(today, adapter.name, matches);
   await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
   console.log(`[Snapshot] ${today}: saved ${matches.length} matches (filtered from ${allMatches.length})`);
@@ -118,58 +96,29 @@ async function updateScores(env) {
     if (!data || !data.matches || data.matches.length === 0) continue;
 
     const matches = data.matches;
-    const allDone = matches.every(m => m.status === 'finished' && m.score);
-    if (allDone) {
-      console.log(`[Scores] ${date} all done, skip`);
-      continue;
-    }
 
-    const beijingNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-    const startedWithoutScore = matches.filter(m => {
-      if (m.score) return false;
-      if (!m.date || !m.kickoff) return false;
-      const kickoffTime = new Date(`${m.date}T${m.kickoff}:00+08:00`);
-      return beijingNow > kickoffTime;
-    });
-
-    if (startedWithoutScore.length === 0) {
-      console.log(`[Scores] ${date} no started matches need scores`);
-      totalPending += matches.filter(m => !m.score).length;
-      continue;
-    }
-
+    // 开奖页只列已开奖的比赛 — 用它做唯一权威源，覆盖式更新
+    const kaijiang = await fetchKaijiang(date);
     const SCORE_RE = /^\d+-\d+$/;
     let updated = 0;
 
-    // Primary source: jczq page (data-isend=1) — 90分钟竞彩比分
-    const jczqScores = await fetchJczqScores(date);
     matches.forEach(m => {
-      if (!m.score && jczqScores[m.id] && SCORE_RE.test(jczqScores[m.id])) {
-        m.score = jczqScores[m.id];
+      const k = kaijiang[m.code];
+      if (!k) return;
+      if (!SCORE_RE.test(k.score)) return;
+      const changed = m.score !== k.score || m.score_ht !== k.score_ht || m.status !== 'finished';
+      if (changed) {
+        m.score = k.score;
+        m.score_ht = k.score_ht;
         m.status = 'finished';
         updated++;
       }
     });
 
-    // Secondary source: live.500.com (status=3/4) — 最终比分（含加时点球）
-    const matchDates = [...new Set(matches.filter(m => !m.score_ft).map(m => m.date))];
-    const liveScores = await fetchScoresForDates(matchDates);
-    matches.forEach(m => {
-      if (liveScores[m.id] && SCORE_RE.test(liveScores[m.id])) {
-        m.score_ft = liveScores[m.id];
-        // If no 90-min score yet but live shows finished, use as fallback
-        if (!m.score) {
-          m.score = liveScores[m.id];
-          m.status = 'finished';
-          updated++;
-        }
-      }
-    });
-
     if (updated > 0) {
-      const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
       const envelope = createEnvelope(date, adapter.name, matches);
       await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
+      const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
       console.log(`[Scores] ${date}: updated ${updated} (${nowAllDone ? 'all done' : 'pending'})`);
       await logger(env.MATCH_DATA, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
     }
@@ -183,6 +132,21 @@ async function updateScores(env) {
       ? `定时检查：无新结果(${totalPending}场待更新)`
       : '定时检查：无新结果(所有比赛已完成或无进行中比赛)';
     await logger(env.MATCH_DATA, '比分', msg);
+    return;
+  }
+
+  // 比分有更新 → 触发 Pages 端的方案结算（按需评估 pending plans）
+  try {
+    const resp = await fetch('https://worldmoney.pages.dev/api/plans?status=settled', {
+      headers: { 'User-Agent': 'worldcup-scraper-cron' }
+    });
+    if (resp.ok) {
+      console.log('[Settle] triggered /api/plans for auto-settlement');
+    } else {
+      console.log(`[Settle] /api/plans returned ${resp.status}`);
+    }
+  } catch (e) {
+    console.log(`[Settle] failed to trigger: ${e.message}`);
   }
 }
 

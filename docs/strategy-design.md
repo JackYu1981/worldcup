@@ -377,12 +377,21 @@
 ## 数据存储
 
 **主存储：Cloudflare KV (MATCH_DATA, namespace 278f1209ffd84662bd51921370a2fbe9)**
-- `matches:YYYY-MM-DD` — 当日赛程envelope，包含 score（90分钟）和 score_ft（含加时）
-- `picks:YYYY-MM-DD` — 用户推荐数组
-- `plans:pending:YYYY-MM-DD` — 预备方案
-- `plans:settled:YYYY-MM-DD` — 已开奖方案（won/lost）
+
+> **核心模型 v4.2：period（彩票期号）= 开奖日 YYYY-MM-DD**，等同 500.com `kaijiang.php?date=X` 中的 X，是赛程/推荐/方案/开奖之间的稳定关联键。一期可能跨日（周日期含 5/17 全天 + 5/18 凌晨比赛），但 period 始终为开奖日。
+
+KV键命名（key 即 period 值）：
+- `matches:{period}` — 当期赛程envelope，envelope和每场match都带 `period` 字段
+- `picks:{period}` — 用户推荐数组（每条带 period）
+- `plans:{period}` — 当期所有方案明细（按提交时间累积）
+- `plans:pending` — 全局待结算方案队列
+- `plans:settled` — 全局已结算方案（won/lost）
 - `system:logs` — 系统日志（环形）
 - `system:logs:YYYY-MM` — 月度归档
+
+**比分字段语义**：
+- `score` — 90分钟全场比分（竞彩开奖唯一权威值）
+- `score_ht` — 半场比分（竞猜半场玩法用，括号内值）
 
 **GitHub Repo (JackYu1981/worldcup) 仅存：**
 - `data/change-requests.json` — CR追踪
@@ -394,13 +403,15 @@
 ## 数据采集（Worker: worldcup-scraper）
 
 - **域名**：`worldcup-scraper.yujuntao1981.workers.dev`（**注意：用户公司笔记本无法访问 workers.dev 子域名，由防火墙SSL拦截**）
-- **数据源**：500.com `https://trade.500.com/jczq/?playtype=1&date=YYYY-MM-DD`（GBK编码）
-- **比分源**：`https://live.500.com/zqdc.php?date=YYYY-MM-DD`
+- **赛程源**：500.com `https://trade.500.com/jczq/?playtype=1&date=YYYY-MM-DD`（GBK编码）
+- **比分源（v4.2 切换为唯一权威源）**：`https://zx.500.com/jczq/kaijiang.php?date={period}` — 开奖页只列已开奖比赛，含半场+全场比分，按 `code`（"周日NNN"）匹配。
+  - **已删除** `live.500.com/zqdc.php` 抓取 —— 它是实时数据，红字td会误把半场比分当成终场。
+  - **已删除** jczq `data-isend=1` 备用源 —— 同样可能在 isend 设置时点不准确。
 - **Cron**：
-  - `1 3 * * *` (UTC) → 北京 11:01 抓当日赛程
-  - `*/30 * * * *` 每30分钟更新比分
-- **关键过滤**：按 code 前缀（"周X"）过滤 — 因为 500.com 一期可能跨日（周一期包含周一晚 + 周二凌晨的比赛）
-- **score vs score_ft**：score 为90分钟竞彩比分（开奖用），score_ft 为最终比分含加时点球
+  - `1 3 * * *` (UTC) → 北京 11:01 抓当期赛程，写入 `matches:{period}`，period=today
+  - `*/30 * * * *` 每30分钟更新比分；有比分变化时回调 `https://worldmoney.pages.dev/api/plans?status=settled` 触发自动结算
+- **关键过滤**：按 code 前缀（"周X"）过滤 — 因为 500.com 一期可能跨日
+- **覆盖式更新**：开奖页比分更新会覆盖任何已存储记录（包括 status=finished 的旧错误数据），任何比分变化都会修正。
 
 ## AI 投注优化算法 v1.0（2026-05-18 确立）
 
@@ -445,6 +456,9 @@
 **方案B（已规划）**：cron 多次冗余 `1,16,31,46 3 * * *`，第一次失败后自动重试（已有 `existing.matches.length>0` 的跳过逻辑保证幂等）。
 
 ### 历史已修复
+- **比分半场误判（v4.2）**：之前抓 live.500.com 的红字 td 误把半场比分当终场存入 score。已切换为开奖页 `kaijiang.php` 单一权威源，按 code 匹配。`score_ft` 字段误名（实际为半场）已重命名为 `score_ht`。5/17 19场错分已修复。
+- **结算skip-when-finished bug（v4.2）**：原 `updateScores` 用 `allDone` 跳过已finished记录，导致错分无法修正。新版改为开奖页覆盖式比对，任何比分变化都会写回。
+- **缺少期次稳定关联（v4.2）**：通过引入 `period` 字段（=开奖日），matches/picks/plans 全部按 period 关联，结算按 `plan.period` 加载对应期 matches，跨日比赛归属明确。
 - 比分错误：原 `parseScores` 不检查 status，把进行中比分当作终场。已改为只取 status=3/4。
 - jczq vs live 双源：jczq `isend=1` 提供90分钟比分（开奖用），live 提供 `score_ft` 终场比分。
 - 浏览器缓存：`/api/picks` 的 `Cache-Control` + JS层 `picksCache` 双重缓存导致提交后看到旧数据。已加 `_t` 时间戳和缓存清除。

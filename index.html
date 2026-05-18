@@ -508,8 +508,8 @@
                     homeScore = m.score.home; awayScore = m.score.away;
                 }
                 let ftNote = '';
-                if (m.score_ft && m.score_ft !== m.score) {
-                    ftNote = `<div style="font-size:10px;color:#999;margin-top:2px;">终 ${m.score_ft}</div>`;
+                if (m.score_ht && m.score_ht !== m.score) {
+                    ftNote = `<div style="font-size:10px;color:#999;margin-top:2px;">半 ${m.score_ht}</div>`;
                 }
                 centerHtml = `<span class="score-badge">${homeScore}-${awayScore}</span>${ftNote}`;
             } else {
@@ -588,7 +588,7 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', kickoff: m.kickoff || '', matchDate: m.date || currentDate };
+                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', kickoff: m.kickoff || '', matchDate: m.date || currentDate, period: m.period || currentDate };
             }
             renderMatches();
             updateComboBar();
@@ -746,6 +746,7 @@
 
             const payload = {
                 date: currentDate,
+                period: currentDate,
                 submitted_at: new Date().toISOString(),
                 selected_tier: tierName,
                 source: 'recommendation',
