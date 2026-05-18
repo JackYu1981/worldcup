@@ -95,6 +95,12 @@
       "date": "2026-05-18T21:35:30+08:00",
       "summary": "AI 投注优化算法 v2.0 细化：取消'用户必保'硬约束（实践中常致几何不可行），改为第三优先级软偏好 N_user；引入信心放大因子 c（默认 0.6）从赔率反推 + 用户勾选信号合成 p_user，避免量化运气感的认知负担；用户可在指令中显式指定 c。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.68",
+      "date": "2026-05-18T21:45:41+08:00",
+      "summary": "重命名 KV key aggregate:pending_plans → aggregate:unsettled_plans，与 pending_plans:{period}（待 AI 优化的预备方案）语义区分；前者是已优化的待结算正式方案队列。同步更新 4 个 Pages Functions、2 份文档，并完成 KV 数据迁移。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

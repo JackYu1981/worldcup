@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
     envelope.fetched_at = new Date().toISOString();
     await kv.put(`matches:${period}`, JSON.stringify(envelope));
 
-    const pendingData = await kv.get('aggregate:pending_plans', 'json');
+    const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
     const settledData = await kv.get('aggregate:settled_plans', 'json');
     const pending = pendingData ? (pendingData.plans || []) : [];
     const settled = settledData ? (settledData.plans || []) : [];
@@ -89,7 +89,7 @@ export async function onRequestPost(context) {
       }
     });
 
-    await kv.put('aggregate:pending_plans', JSON.stringify({ plans: newPending }));
+    await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: newPending }));
     await kv.put('aggregate:settled_plans', JSON.stringify({ plans: newSettled }));
 
     const matchDesc = `${target.code || ''} ${target.home || ''}vs${target.away || ''}`.trim();

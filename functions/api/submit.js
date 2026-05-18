@@ -62,10 +62,10 @@ async function writeToKv(kv, source, date, data) {
     await kv.put(key, JSON.stringify({ period: date, items }));
 
     if (source === 'plan') {
-      const pendingData = await kv.get('aggregate:pending_plans', 'json');
+      const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
       const pending = pendingData ? pendingData.plans : [];
       pending.push(data);
-      await kv.put('aggregate:pending_plans', JSON.stringify({ plans: pending }));
+      await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: pending }));
     }
   } catch (e) {}
 }

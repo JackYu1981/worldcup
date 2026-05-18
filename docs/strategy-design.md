@@ -388,7 +388,7 @@ KV键命名（key 即 period 值）：
 - `matches:{period}` — 当期赛程envelope，envelope和每场match都带 `period` 字段
 - `picks:{period}` — 用户推荐数组（每条带 period）
 - `plans:{period}` — 当期所有方案明细（按提交时间累积）
-- `aggregate:pending_plans` — 全局待结算方案队列
+- `aggregate:unsettled_plans` — 全局待结算方案队列
 - `aggregate:settled_plans` — 全局已结算方案（won/lost）
 - `system:logs` — 系统日志（环形）
 - `system:logs:YYYY-MM` — 月度归档

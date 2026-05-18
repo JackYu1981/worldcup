@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
 
     const settledData = await kv.get('aggregate:settled_plans', 'json');
     const settled = settledData ? (settledData.plans || []) : [];
-    const pendingData = await kv.get('aggregate:pending_plans', 'json');
+    const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
     const pending = pendingData ? (pendingData.plans || []) : [];
 
     let results;
