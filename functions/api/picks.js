@@ -3,7 +3,7 @@ import { json, error, options } from '../lib/response.js';
 export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
-    const date = url.searchParams.get('date');
+    const period = url.searchParams.get('period') || url.searchParams.get('date');
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
     const source = url.searchParams.get('source');
@@ -13,21 +13,21 @@ export async function onRequestGet(context) {
       return json({ picks: [] });
     }
 
-    let dates = [];
-    if (date) {
-      dates = [date];
+    let periods = [];
+    if (period) {
+      periods = [period];
     } else if (from && to) {
-      dates = getDateRange(from, to);
+      periods = getPeriodRange(from, to);
     } else if (from) {
-      dates = [from];
+      periods = [from];
     } else {
       const today = new Date().toISOString().slice(0, 10);
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      dates = [yesterday, today];
+      periods = [yesterday, today];
     }
 
     const allPicks = [];
-    for (const d of dates) {
+    for (const d of periods) {
       let found = false;
       if (!source || source === 'recommendation') {
         const recs = await kv.get(`recommendations:${d}`, 'json');
@@ -68,14 +68,14 @@ export async function onRequestGet(context) {
   }
 }
 
-function getDateRange(from, to) {
-  const dates = [];
+function getPeriodRange(from, to) {
+  const periods = [];
   const start = new Date(from + 'T00:00:00Z');
   const end = new Date(to + 'T00:00:00Z');
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    dates.push(d.toISOString().slice(0, 10));
+    periods.push(d.toISOString().slice(0, 10));
   }
-  return dates;
+  return periods;
 }
 
 export function onRequestOptions() {

@@ -393,6 +393,11 @@ KV键命名（key 即 period 值）：
 - `score` — 90分钟全场比分（竞彩开奖唯一权威值）
 - `score_ht` — 半场比分（竞猜半场玩法用，括号内值）
 
+**比赛时间字段语义（v4.3）**：
+- `period` — 竞彩期次（YYYY-MM-DD，开奖日），与跨日的实际比赛时间无关
+- `kickoff` — 比赛开赛时间（"YYYY-MM-DD HH:MM" 北京时间），单一字段同时含日期与时间
+- `date` — @deprecated，新数据不再写入；历史KV数据仍含此字段，前端通过fallback兼容
+
 **GitHub Repo (JackYu1981/worldcup) 仅存：**
 - `data/change-requests.json` — CR追踪
 - `data/versions.json` — 版本记录

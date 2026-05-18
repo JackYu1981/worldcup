@@ -89,6 +89,12 @@
       "date": "2026-05-18T14:00:00+08:00",
       "summary": "Period期次模型贯通赛程/推荐/方案/开奖：period=开奖日唯一标识，所有数据按period关联。比分源切换为开奖页zx.500.com/jczq/kaijiang.php（删除live.500.com避免半场误判），新增score_ht半场字段。Worker比分更新后自动触发结算。已修复5/17 19场错分+全部plans正确开奖。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
+    },
+    {
+      "version": "v4.3",
+      "date": "2026-05-18T17:00:00+08:00",
+      "summary": "命名一致性重构+match字段语义清理：(1) 全前后端 date→period 命名统一（API参数 ?date= 改为 ?period=，向下兼容；JS变量/CSS class/DOM id 全部rename）。(2) match字段精简：kickoff改为完整\"YYYY-MM-DD HH:MM\"包含日期与时间，废弃match.date字段（前端兼容历史KV数据）。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     }
   ]
 }

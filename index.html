@@ -26,20 +26,20 @@
         .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
         .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
 
-        .date-tabs {
+        .period-tabs {
             display: flex; overflow-x: auto; background: white;
             border-bottom: 1px solid #eee; padding: 0;
             -webkit-overflow-scrolling: touch;
         }
-        .date-tabs::-webkit-scrollbar { display: none; }
-        .date-tab {
+        .period-tabs::-webkit-scrollbar { display: none; }
+        .period-tab {
             flex: 0 0 auto; min-width: 80px; padding: 12px 8px; text-align: center;
             font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent;
             white-space: nowrap; transition: all 0.2s;
         }
-        .date-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; background: #fff8f8; }
-        .date-tab .day { font-weight: 600; font-size: 13px; }
-        .date-tab .weekday { font-size: 10px; margin-top: 2px; }
+        .period-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; background: #fff8f8; }
+        .period-tab .day { font-weight: 600; font-size: 13px; }
+        .period-tab .weekday { font-size: 10px; margin-top: 2px; }
 
         .period-header {
             padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee;
@@ -228,7 +228,7 @@
         <a class="nav-tab" href="design.html">管理</a>
     </div>
 
-    <div class="date-tabs" id="dateTabs"></div>
+    <div class="period-tabs" id="periodTabs"></div>
 
     <div class="period-header" id="periodHeader">
         <div class="period-left">
@@ -271,7 +271,7 @@
     <script>
         const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
         const WEEKDAY_PREFIX = ['周日','周一','周二','周三','周四','周五','周六'];
-        let currentDate = '';
+        let currentPeriod = '';
         let matches = [];
         let combo = {};
         let activeLeague = 'all';
@@ -293,35 +293,35 @@
 
         const DATES = generateDates();
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-        currentDate = todayStr;
+        currentPeriod = todayStr;
 
         function getBeijingDay(dateStr) {
             const d = new Date(dateStr + 'T12:00:00+08:00');
             return d.getUTCDay();
         }
 
-        function renderDateTabs() {
-            const container = document.getElementById('dateTabs');
+        function renderPeriodTabs() {
+            const container = document.getElementById('periodTabs');
             container.innerHTML = DATES.map(d => {
                 const parts = d.split('-');
                 const month = parseInt(parts[1]);
                 const day = parseInt(parts[2]);
-                const active = d === currentDate ? 'active' : '';
+                const active = d === currentPeriod ? 'active' : '';
                 const isToday = d === todayStr ? ' (今天)' : '';
-                return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
+                return `<div class="period-tab ${active}" onclick="switchPeriod('${d}')">
                     <div class="day">${month}月${day}日${isToday}</div>
                     <div class="weekday">周${WEEKDAY_SHORT[getBeijingDay(d)]}</div>
                 </div>`;
             }).join('');
-            const activeTab = container.querySelector('.date-tab.active');
+            const activeTab = container.querySelector('.period-tab.active');
             if (activeTab) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
         }
 
-        function switchDate(date) {
-            currentDate = date;
+        function switchPeriod(period) {
+            currentPeriod = period;
             activeLeague = 'all';
-            renderDateTabs();
-            loadMatches(date);
+            renderPeriodTabs();
+            loadMatches(period);
         }
 
         function getLeagues() {
@@ -334,9 +334,9 @@
         function getFilteredMatches() {
             const filtered = activeLeague === 'all' ? [...matches] : matches.filter(m => m.league === activeLeague);
             filtered.sort((a, b) => {
-                const ta = (a.date || '') + (a.kickoff || '');
-                const tb = (b.date || '') + (b.kickoff || '');
-                return ta.localeCompare(tb);
+                const ka = a.kickoff && /^\d{4}-\d{2}-\d{2}[ T]/.test(a.kickoff) ? a.kickoff : `${a.date || ''} ${a.kickoff || ''}`;
+                const kb = b.kickoff && /^\d{4}-\d{2}-\d{2}[ T]/.test(b.kickoff) ? b.kickoff : `${b.date || ''} ${b.kickoff || ''}`;
+                return ka.localeCompare(kb);
             });
             return filtered;
         }
@@ -348,8 +348,8 @@
             const showing = filtered.length;
             const countText = activeLeague === 'all' ? `${total}场比赛` : `${showing}/${total}场`;
             const filterActive = activeLeague !== 'all' ? ' active' : '';
-            const weekday = WEEKDAY_PREFIX[getBeijingDay(currentDate)];
-            const dateInfo = `${currentDate}期 ${weekday}`;
+            const weekday = WEEKDAY_PREFIX[getBeijingDay(currentPeriod)];
+            const dateInfo = `${currentPeriod}期 ${weekday}`;
 
             header.innerHTML = `
                 <div class="period-left">
@@ -386,33 +386,33 @@
 
         const matchCache = {};
 
-        async function loadMatches(date) {
+        async function loadMatches(period) {
             const list = document.getElementById('matchList');
             list.innerHTML = '<div class="empty-state">加载中...</div>';
             try {
-                const data = await fetchMatchData(date);
+                const data = await fetchMatchData(period);
                 matches = data.matches;
                 updatePeriodHeader();
                 renderMatches();
-                prefetchAdjacent(date);
+                prefetchAdjacent(period);
             } catch(e) {
                 matches = [];
                 updatePeriodHeader();
-                list.innerHTML = '<div class="empty-state">该日期暂无赛程数据</div>';
+                list.innerHTML = '<div class="empty-state">该期暂无赛程数据</div>';
             }
         }
 
-        async function fetchMatchData(date) {
-            if (matchCache[date]) return matchCache[date];
-            const resp = await fetch(`/api/matches?date=${date}`);
+        async function fetchMatchData(period) {
+            if (matchCache[period]) return matchCache[period];
+            const resp = await fetch(`/api/matches?period=${period}`);
             if (!resp.ok) throw new Error('no data');
             const data = await resp.json();
-            matchCache[date] = data;
+            matchCache[period] = data;
             return data;
         }
 
-        function prefetchAdjacent(date) {
-            const idx = DATES.indexOf(date);
+        function prefetchAdjacent(period) {
+            const idx = DATES.indexOf(period);
             const toFetch = [];
             if (idx > 0) toFetch.push(DATES[idx - 1]);
             if (idx > 1) toFetch.push(DATES[idx - 2]);
@@ -443,10 +443,27 @@
             const user = (sessionStorage.getItem('auth_user') || 'jack').toLowerCase();
             return USER_TIMEZONES[user] || 'Asia/Shanghai';
         }
-        function formatKickoff(date, time) {
+        function parseKickoff(kickoff) {
+            // Accept "YYYY-MM-DD HH:MM" (new) or "HH:MM" with separate date (legacy fallback handled at call sites)
+            if (!kickoff) return { date: '', time: '' };
+            const m = kickoff.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+            if (m) return { date: m[1], time: m[2] };
+            return { date: '', time: kickoff };
+        }
+        function formatKickoff(kickoff, legacyTime) {
+            // New API: formatKickoff("YYYY-MM-DD HH:MM"). Legacy: formatKickoff(date, time).
+            let date, time;
+            if (legacyTime !== undefined) {
+                date = kickoff;
+                time = legacyTime;
+            } else {
+                const p = parseKickoff(kickoff);
+                date = p.date;
+                time = p.time;
+            }
             const tz = getUserTimezone();
             const dt = new Date(`${date}T${time}:00+08:00`);
-            if (isNaN(dt.getTime())) return { date: date.slice(5), time: time };
+            if (isNaN(dt.getTime())) return { date: (date || '').slice(5), time: time };
             try {
                 const datePart = new Intl.DateTimeFormat('zh-CN', {
                     timeZone: tz, month: '2-digit', day: '2-digit'
@@ -455,7 +472,7 @@
                     timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false
                 }).format(dt);
                 return { date: datePart, time: timePart };
-            } catch(e) { return { date: date.slice(5), time: time }; }
+            } catch(e) { return { date: (date || '').slice(5), time: time }; }
         }
 
         const LEAGUE_COLORS = {
@@ -502,7 +519,8 @@
             const codeText = m.code || '000';
             const codeClass = status === 'finished' ? 'match-code finished' : 'match-code';
 
-            const kickoff = formatKickoff(m.date, m.kickoff);
+            const kickoffStr = (m.kickoff && /^\d{4}-\d{2}-\d{2}[ T]/.test(m.kickoff)) ? m.kickoff : `${m.date || ''} ${m.kickoff || ''}`.trim();
+            const kickoff = formatKickoff(kickoffStr);
             const leagueColor = getLeagueColor(m.league || '其他');
 
             let centerHtml;
@@ -595,7 +613,8 @@
                 delete combo[key];
             } else {
                 const m = matches.find(x => x.id === matchId);
-                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', kickoff: m.kickoff || '', matchDate: m.date || currentDate, period: m.period || currentDate };
+                const koFull = m.kickoff && /^\d{4}-\d{2}-\d{2}[ T]/.test(m.kickoff) ? m.kickoff : `${m.date || currentPeriod} ${m.kickoff || ''}`.trim();
+                combo[key] = { matchId, market, pick, odds, desc, home: m.home, away: m.away, match_desc: `${m.home}vs${m.away}`, code: m.code || '000', kickoff: koFull, matchDate: m.date || currentPeriod, period: m.period || currentPeriod };
             }
             renderMatches();
             updateComboBar();
@@ -673,7 +692,8 @@
                 const row1x2 = renderRow('1x2', '');
                 const rowHandicap = renderRow('handicap', '让');
 
-                const kickoff = formatKickoff(first.matchDate, first.kickoff);
+                const kickoffStr = (first.kickoff && /^\d{4}-\d{2}-\d{2}[ T]/.test(first.kickoff)) ? first.kickoff : `${first.matchDate || ''} ${first.kickoff || ''}`.trim();
+                const kickoff = formatKickoff(kickoffStr);
 
                 return `<div class="combo-match">
                     <div class="combo-match-info">
@@ -693,8 +713,8 @@
         }
 
         function generateCombo() {
-            if (currentDate < todayStr) {
-                showToast(`${currentDate} 竞彩已停售，无法生成推荐`);
+            if (currentPeriod < todayStr) {
+                showToast(`${currentPeriod} 竞彩已停售，无法生成推荐`);
                 return;
             }
             const keys = Object.keys(combo);
@@ -752,8 +772,8 @@
             else tierName = 'aggressive';
 
             const payload = {
-                date: currentDate,
-                period: currentDate,
+                date: currentPeriod,
+                period: currentPeriod,
                 submitted_at: new Date().toISOString(),
                 selected_tier: tierName,
                 source: 'recommendation',
@@ -801,10 +821,10 @@
         }
 
         AUTH.requireLogin(function(user) {
-            renderDateTabs();
-            loadMatches(currentDate);
+            renderPeriodTabs();
+            loadMatches(currentPeriod);
             initPullRefresh({
-                onRefresh: () => { delete matchCache[currentDate]; return loadMatches(currentDate); }
+                onRefresh: () => { delete matchCache[currentPeriod]; return loadMatches(currentPeriod); }
             });
         });
     </script>

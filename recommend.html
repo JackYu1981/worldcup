@@ -25,20 +25,20 @@
         .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
         .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
 
-        .date-tabs {
+        .period-tabs {
             display: flex; overflow-x: auto; background: white;
             border-bottom: 1px solid #eee; padding: 0;
             -webkit-overflow-scrolling: touch;
         }
-        .date-tabs::-webkit-scrollbar { display: none; }
-        .date-tab {
+        .period-tabs::-webkit-scrollbar { display: none; }
+        .period-tab {
             flex: 0 0 auto; min-width: 70px; padding: 12px 8px; text-align: center;
             font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent;
             white-space: nowrap; transition: all 0.2s;
         }
-        .date-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; background: #fff8f8; }
-        .date-tab .day { font-weight: 600; font-size: 13px; }
-        .date-tab .weekday { font-size: 10px; margin-top: 2px; }
+        .period-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; background: #fff8f8; }
+        .period-tab .day { font-weight: 600; font-size: 13px; }
+        .period-tab .weekday { font-size: 10px; margin-top: 2px; }
 
         .section-title {
             font-size: 14px; font-weight: 600; color: #333;
@@ -230,7 +230,7 @@
         <a class="nav-tab" href="design.html">管理</a>
     </div>
 
-    <div class="date-tabs" id="dateTabs"></div>
+    <div class="period-tabs" id="periodTabs"></div>
 
     <div style="padding: 0 12px;">
         <div id="content">
@@ -328,7 +328,7 @@
 
         const DATES = generateDates();
         const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-        let currentDate = todayStr;
+        let currentPeriod = todayStr;
         let userRecs = [];
         let plans = [];
         let pendingPlans = [];
@@ -338,37 +338,37 @@
         const picksCache = {};
 
         AUTH.requireLogin(function(user) {
-            renderDateTabs();
-            loadData(currentDate);
+            renderPeriodTabs();
+            loadData(currentPeriod);
             initPullRefresh({
-                onRefresh: () => { delete picksCache[currentDate]; return loadData(currentDate); }
+                onRefresh: () => { delete picksCache[currentPeriod]; return loadData(currentPeriod); }
             });
         });
 
-        function renderDateTabs() {
-            const container = document.getElementById('dateTabs');
+        function renderPeriodTabs() {
+            const container = document.getElementById('periodTabs');
             container.innerHTML = DATES.map(d => {
                 const weekday = '周' + WEEKDAY_SHORT[getBeijingDay(d)];
                 const dayStr = d.slice(5).replace('-', '/');
-                const active = d === currentDate ? 'active' : '';
+                const active = d === currentPeriod ? 'active' : '';
                 const isToday = d === todayStr ? ' (今天)' : '';
-                return `<div class="date-tab ${active}" onclick="switchDate('${d}')">
+                return `<div class="period-tab ${active}" onclick="switchPeriod('${d}')">
                     <div class="day">${dayStr}${isToday}</div>
                     <div class="weekday">${weekday}</div>
                 </div>`;
             }).join('');
-            const activeTab = container.querySelector('.date-tab.active');
+            const activeTab = container.querySelector('.period-tab.active');
             if (activeTab) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
         }
 
-        function switchDate(date) {
-            currentDate = date;
+        function switchPeriod(period) {
+            currentPeriod = period;
             selectedRec = null;
-            renderDateTabs();
-            loadData(date);
+            renderPeriodTabs();
+            loadData(period);
         }
 
-        async function loadData(date, noCache) {
+        async function loadData(period, noCache) {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="empty-state">加载中...</div>';
             userRecs = [];
@@ -377,8 +377,8 @@
 
             try {
                 const [allPicks, plansData] = await Promise.all([
-                    fetchPicks(date, noCache),
-                    fetch(`/api/plans?from=${date}&to=${date}`).then(r => r.ok ? r.json() : { plans: [] })
+                    fetchPicks(period, noCache),
+                    fetch(`/api/plans?from=${period}&to=${period}`).then(r => r.ok ? r.json() : { plans: [] })
                 ]);
                 userRecs = allPicks.filter(p => p.source === 'recommendation');
 
@@ -400,22 +400,22 @@
             } catch(e) {}
 
             renderAll();
-            prefetchAdjacentPicks(date);
+            prefetchAdjacentPicks(period);
         }
 
-        async function fetchPicks(date, noCache) {
-            if (!noCache && picksCache[date]) return picksCache[date];
-            const url = `/api/picks?date=${date}` + (noCache ? `&_t=${Date.now()}` : '');
+        async function fetchPicks(period, noCache) {
+            if (!noCache && picksCache[period]) return picksCache[period];
+            const url = `/api/picks?period=${period}` + (noCache ? `&_t=${Date.now()}` : '');
             const resp = await fetch(url);
             if (!resp.ok) return [];
             const data = await resp.json();
             const picks = data.picks || [];
-            picksCache[date] = picks;
+            picksCache[period] = picks;
             return picks;
         }
 
-        function prefetchAdjacentPicks(date) {
-            const idx = DATES.indexOf(date);
+        function prefetchAdjacentPicks(period) {
+            const idx = DATES.indexOf(period);
             const toFetch = [];
             if (idx > 0) toFetch.push(DATES[idx - 1]);
             if (idx > 1) toFetch.push(DATES[idx - 2]);
@@ -429,11 +429,11 @@
         function renderAll() {
             const content = document.getElementById('content');
             let html = '';
-            const isExpired = currentDate < todayStr;
+            const isExpired = currentPeriod < todayStr;
 
             if (isExpired) {
                 html += `<div style="background:#fff3e0;border:1px solid #ffcc02;border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#e65100;text-align:center;">
-                    ⚠️ ${currentDate} 竞彩已停售，不可生成新推荐或提交方案
+                    ⚠️ ${currentPeriod} 竞彩已停售，不可生成新推荐或提交方案
                 </div>`;
             }
 
@@ -586,7 +586,7 @@
                     <span>${oddsSummary}</span>
                 </div>
                 <div class="rec-actions">
-                    <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted || currentDate < todayStr ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
+                    <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted || currentPeriod < todayStr ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
                     <button class="btn-copy-rec" onclick="copyRec(${idx})">📋</button>
                 </div>
             </div>`;
@@ -671,8 +671,8 @@
         }
 
         function selectRec(idx) {
-            if (currentDate < todayStr) {
-                showToast(`${currentDate} 竞彩已停售，无法提交方案`);
+            if (currentPeriod < todayStr) {
+                showToast(`${currentPeriod} 竞彩已停售，无法提交方案`);
                 return;
             }
             selectedRec = userRecs[idx];
@@ -710,8 +710,8 @@
             const recKey = selectedRec.legs.map(l => l.match_id + l.pick).sort().join('|');
 
             const payload = {
-                date: currentDate,
-                period: currentDate,
+                date: currentPeriod,
+                period: currentPeriod,
                 passphrase: passphrase,
                 submitted_at: new Date().toISOString(),
                 selected_tier: selectedRec.selected_tier,
@@ -733,8 +733,8 @@
                     closeConfirm();
                     copyLegs(payload.legs);
                     showToast('预备方案已提交！请在Claude Code中用口令生成正式方案');
-                    delete picksCache[currentDate];
-                    await loadData(currentDate, true);
+                    delete picksCache[currentPeriod];
+                    await loadData(currentPeriod, true);
                     const ppGroup = document.getElementById('pending-plans-group');
                     if (ppGroup) {
                         ppGroup.classList.add('expanded');
