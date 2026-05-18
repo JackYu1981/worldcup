@@ -53,6 +53,12 @@
       "date": "2026-05-18T16:17:13+08:00",
       "summary": "(1) 修分后即时全网生效：新增 /api/period-version 返回 envelope.fetched_at 作版本号，前端拉 matches 前先取 version 带 ?v= 让 CDN 缓存按 URL 自动失效；cron 抓取与手动修分共用同一机制。(2) design.html 数据源解耦：CR 列表与当前版本迁移到 KV（cr:requests / cr:current_version），版本历史与升级文档保留在 GitHub；新增 /api/cr 与 /api/admin/release，发版统一走 scripts/release.sh。(3) 修正历史时间戳：CR 时间 .Z 后缀改 +08:00（27 条），v4.x 版本时间对齐 git commit 真实时间。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/superpowers/specs/2026-05-18-cdn-version-and-cr-kv-design.md"
+    },
+    {
+      "version": "v4.61",
+      "date": "2026-05-18T16:23:58+08:00",
+      "summary": "发版流程一键化：scripts/release.sh 重写为 7 步全自动脚本（前置校验/取时间/写versions/部署/写KV/git push/校验同步），失败即停；不再依赖人工 checklist 避免漏步。docs/release-workflow.md 同步重写为 TL;DR 风格。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
