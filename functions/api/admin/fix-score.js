@@ -41,6 +41,7 @@ export async function onRequestPost(context) {
 
     target.score = score;
     target.score_ht = score_ht;
+    envelope.fetched_at = new Date().toISOString();
     await kv.put(`matches:${period}`, JSON.stringify(envelope));
 
     const pendingData = await kv.get('plans:pending', 'json');

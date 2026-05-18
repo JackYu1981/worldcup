@@ -403,10 +403,25 @@
         }
 
         async function fetchMatchData(period) {
-            if (matchCache[period]) return matchCache[period];
-            const resp = await fetch(`/api/matches?period=${period}`);
+            let version = '';
+            try {
+                const vr = await fetch(`/api/period-version?period=${period}`, { cache: 'no-store' });
+                if (vr.ok) {
+                    const vj = await vr.json();
+                    version = vj.version || '';
+                }
+            } catch (e) { /* ignore version fetch failure */ }
+
+            if (matchCache[period] && matchCache[period].__version === version) {
+                return matchCache[period];
+            }
+            const url = version
+                ? `/api/matches?period=${period}&v=${encodeURIComponent(version)}`
+                : `/api/matches?period=${period}`;
+            const resp = await fetch(url);
             if (!resp.ok) throw new Error('no data');
             const data = await resp.json();
+            data.__version = version;
             matchCache[period] = data;
             return data;
         }

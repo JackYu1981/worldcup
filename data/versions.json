@@ -7,106 +7,52 @@
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     },
     {
-      "version": "v2.1",
-      "date": "2026-05-15T01:30:00+08:00",
-      "summary": "采纳Brian反馈：3备选/档、自定义组合、竞彩整数盘口、登录系统",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v2.2",
-      "date": "2026-05-15T15:00:00+08:00",
-      "summary": "用户方案展示到推荐页、竞彩格式一键复制、赛果赔率红色高亮",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v2.3",
-      "date": "2026-05-15T23:30:00+08:00",
-      "summary": "500.com数据抓取、复制编号bug修复、Admin删除/编辑功能",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v2.4",
-      "date": "2026-05-15T13:20:00+08:00",
-      "summary": "修复时区/数据加载/赛果高亮，清除demo数据，Worker多日抓取",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
       "version": "v3.0",
-      "date": "2026-05-15T18:20:00+08:00",
+      "date": "2026-05-15T18:22:47+08:00",
       "summary": "里程碑：数据适配器架构（schema + adapter模式），解耦数据源与业务逻辑，支持多数据源扩展，ESM模块化",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
     },
     {
-      "version": "v3.1",
-      "date": "2026-05-15T18:40:00+08:00",
-      "summary": "赛程页UI仿500.com风格重构：日期tab、期数头、编号标签、紧凑赔率网格、让球盘口标签",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v3.2",
-      "date": "2026-05-15T22:30:00+08:00",
-      "summary": "交互流程重构：推荐→选取→方案三阶段，复式投注支持，日期分组+截止时间，全站UI统一+下拉刷新",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v3.3",
-      "date": "2026-05-15T22:50:00+08:00",
-      "summary": "复式投注笛卡尔积组合（不再相乘所有赔率），取消3串1限制，看板日历修复+登录信息统一header",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v3.4",
-      "date": "2026-05-15T23:55:00+08:00",
-      "summary": "跨时区日期修复（UTC+8锚定），购彩期次模型对齐500.com，Combo栏固定网格+完整对阵信息，服务端/api/picks加速",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v3.5",
-      "date": "2026-05-16T00:15:00+08:00",
-      "summary": "修复500.com赔率映射反转（spf=让球/nspf=非让球），胜平负与让球胜平负赔率恢复正确",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
-      "version": "v3.6",
-      "date": "2026-05-16T10:30:00+08:00",
-      "summary": "赛程结果高亮重构（所有已结束比赛红色标注结果赔率），预备方案流程（pending_plan→AI确认→plan），Scraper按竞彩期存储全量比赛不再过滤日期",
-      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/new-design-proposal.md"
-    },
-    {
       "version": "v4.0",
-      "date": "2026-05-17T12:00:00+08:00",
+      "date": "2026-05-17T13:01:58+08:00",
       "summary": "架构优化：API模块化(response.js统一响应)、KV即时写入消除CDN延迟、日志按月分片(500条热缓存+月度归档)、增量加载(日期范围查询+预缓存+滚动加载)",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
     },
     {
       "version": "v4.1",
-      "date": "2026-05-17T13:30:00+08:00",
+      "date": "2026-05-17T13:17:19+08:00",
       "summary": "数据结构分离：change-requests/versions拆分独立文件、KV按类型独立存储(recommendations/pending_plans/plans)、命名规范统一、折叠面板bug修复",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/README.md"
     },
     {
       "version": "v4.2",
-      "date": "2026-05-18T14:00:00+08:00",
+      "date": "2026-05-18T13:40:38+08:00",
       "summary": "Period期次模型贯通赛程/推荐/方案/开奖：period=开奖日唯一标识，所有数据按period关联。比分源切换为开奖页zx.500.com/jczq/kaijiang.php（删除live.500.com避免半场误判），新增score_ht半场字段。Worker比分更新后自动触发结算。已修复5/17 19场错分+全部plans正确开奖。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     },
     {
       "version": "v4.3",
-      "date": "2026-05-18T17:00:00+08:00",
+      "date": "2026-05-18T14:31:37+08:00",
       "summary": "命名一致性重构+match字段语义清理：(1) 全前后端 date→period 命名统一（API参数 ?date= 改为 ?period=，向下兼容；JS变量/CSS class/DOM id 全部rename）。(2) match字段精简：kickoff改为完整\"YYYY-MM-DD HH:MM\"包含日期与时间，废弃match.date字段（前端兼容历史KV数据）。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     },
     {
       "version": "v4.4",
-      "date": "2026-05-18T17:30:00+08:00",
+      "date": "2026-05-18T14:40:24+08:00",
       "summary": "方案页按 period 分组折叠：plans 按 period 聚合成可折叠卡片，header 显示\"YYYY-MM-DD期 周X · N单\"，最新一期默认展开。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     },
     {
       "version": "v4.5",
-      "date": "2026-05-18T18:30:00+08:00",
+      "date": "2026-05-18T15:11:11+08:00",
       "summary": "管理页新增比分修正功能：admin 选 period→列出已 finished 比赛→编辑半场/全场比分→二次确认后调用 /api/admin/fix-score 更新 KV 并重算该期所有方案（pending+settled），状态翻转写入 system:logs 审计。evaluatePlan 抽取到 functions/lib/evaluate.js 复用。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/superpowers/specs/2026-05-18-manual-score-fix-design.md"
+    },
+    {
+      "version": "v4.6",
+      "date": "2026-05-18T16:17:13+08:00",
+      "summary": "(1) 修分后即时全网生效：新增 /api/period-version 返回 envelope.fetched_at 作版本号，前端拉 matches 前先取 version 带 ?v= 让 CDN 缓存按 URL 自动失效；cron 抓取与手动修分共用同一机制。(2) design.html 数据源解耦：CR 列表与当前版本迁移到 KV（cr:requests / cr:current_version），版本历史与升级文档保留在 GitHub；新增 /api/cr 与 /api/admin/release，发版统一走 scripts/release.sh。(3) 修正历史时间戳：CR 时间 .Z 后缀改 +08:00（27 条），v4.x 版本时间对齐 git commit 真实时间。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/superpowers/specs/2026-05-18-cdn-version-and-cr-kv-design.md"
     }
   ]
 }

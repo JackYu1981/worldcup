@@ -601,9 +601,6 @@
     <script src="auth.js"></script>
     <script src="pull-refresh.js"></script>
     <script>
-        const CR_FILE = 'data/change-requests.json';
-        let crSha = null;
-
         const USER_TIMEZONES = {
             jack: 'Asia/Shanghai',
             brian: 'America/Montreal',
@@ -650,19 +647,21 @@
             });
         });
 
+        let currentVersionInfo = null;
+
         async function loadCRs() {
             try {
                 const resp = await fetch('/api/design-data', { headers: AUTH.headers() });
                 if (resp.ok) {
                     const data = await resp.json();
                     requests = data.requests || [];
-                    crSha = data.sha || null;
+                    currentVersionInfo = data.current_version || null;
                     if (data.versions) {
                         versions = data.versions;
                         renderVersionHistory();
-                        renderReleaseNotes();
-                        updateVersionBadge();
                     }
+                    renderReleaseNotes();
+                    updateVersionBadge();
                 } else {
                     requests = [];
                 }
@@ -673,22 +672,22 @@
         }
 
         function updateVersionBadge() {
-            if (versions.length === 0) return;
-            const latest = versions[versions.length - 1];
-            document.getElementById('currentVersion').textContent = latest.version;
-            document.getElementById('updateTime').textContent = formatTime(latest.date);
+            const v = currentVersionInfo || (versions.length ? versions[versions.length - 1] : null);
+            if (!v) return;
+            document.getElementById('currentVersion').textContent = v.version;
+            document.getElementById('updateTime').textContent = formatTime(v.date);
         }
 
         function renderReleaseNotes() {
             const container = document.getElementById('releaseNotes');
-            if (versions.length === 0) {
+            const v = currentVersionInfo || (versions.length ? versions[versions.length - 1] : null);
+            if (!v) {
                 container.innerHTML = '<div class="empty-state">暂无版本信息</div>';
                 return;
             }
-            const latest = versions[versions.length - 1];
-            const points = latest.summary.split(/[，、；]/).filter(s => s.trim());
+            const points = (v.summary || '').split(/[，、；]/).filter(s => s.trim());
             container.innerHTML = `<div style="font-size:12px;color:#555;">
-                <div style="font-weight:600;margin-bottom:6px;">${latest.version} — ${latest.summary.split('：')[0] || latest.summary}</div>
+                <div style="font-weight:600;margin-bottom:6px;">${v.version} — ${(v.summary || '').split('：')[0] || v.summary}</div>
                 <ul style="margin:0;padding-left:16px;">
                     ${points.map(p => `<li style="margin-bottom:3px;">${p.trim()}</li>`).join('')}
                 </ul>
@@ -998,27 +997,13 @@
 
         async function saveCRs(commitMsg) {
             try {
-                const payload = { requests: requests };
-                const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
-
-                const body = {
-                    message: commitMsg,
-                    content: content,
-                    filename: CR_FILE,
-                };
-                if (crSha) body.sha = crSha;
-
-                const resp = await fetch('/api/submit-comment', {
+                const resp = await fetch('/api/cr', {
                     method: 'POST',
                     headers: AUTH.headers(),
-                    body: JSON.stringify(body)
+                    body: JSON.stringify({ requests })
                 });
-                const result = await resp.json();
-                if (result.success && result.sha) {
-                    crSha = result.sha;
-                } else if (resp.status === 409) {
-                    showToast('⚠️ 数据冲突，正在刷新...');
-                    await loadCRs();
+                if (!resp.ok) {
+                    showToast('⚠️ 保存失败');
                 }
             } catch(e) {
                 console.log('CR save failed:', e);

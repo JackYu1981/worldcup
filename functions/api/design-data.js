@@ -1,10 +1,9 @@
 import { verifyToken } from '../lib/auth.js';
 import { json, error, options } from '../lib/response.js';
 
-const FILES = {
-  cr: 'data/change-requests.json',
-  versions: 'data/versions.json',
-};
+const VERSIONS_FILE = 'data/versions.json';
+const KV_CR = 'cr:requests';
+const KV_CURRENT_VERSION = 'cr:current_version';
 
 async function fetchGitHubFile(env, path) {
   const repo = env.GITHUB_REPO || 'JackYu1981/worldcup';
@@ -31,18 +30,21 @@ export async function onRequestGet(context) {
 
   const url = new URL(context.request.url);
   const type = url.searchParams.get('type');
+  const kv = context.env.MATCH_DATA;
 
   if (type === 'versions') {
-    const { data } = await fetchGitHubFile(context.env, FILES.versions);
+    const { data } = await fetchGitHubFile(context.env, VERSIONS_FILE);
     return json({ versions: data ? (data.versions || []) : [] });
   }
 
-  const { data, sha } = await fetchGitHubFile(context.env, FILES.cr);
-  const versions = await fetchGitHubFile(context.env, FILES.versions);
+  const crData = await kv.get(KV_CR, 'json');
+  const currentVersion = await kv.get(KV_CURRENT_VERSION, 'json');
+  const versionsFile = await fetchGitHubFile(context.env, VERSIONS_FILE);
+
   return json({
-    requests: data ? (data.requests || []) : [],
-    sha,
-    versions: versions.data ? (versions.data.versions || []) : [],
+    requests: crData ? (crData.requests || []) : [],
+    current_version: currentVersion || null,
+    versions: versionsFile.data ? (versionsFile.data.versions || []) : [],
   });
 }
 
