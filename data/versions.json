@@ -95,6 +95,12 @@
       "date": "2026-05-18T17:00:00+08:00",
       "summary": "命名一致性重构+match字段语义清理：(1) 全前后端 date→period 命名统一（API参数 ?date= 改为 ?period=，向下兼容；JS变量/CSS class/DOM id 全部rename）。(2) match字段精简：kickoff改为完整\"YYYY-MM-DD HH:MM\"包含日期与时间，废弃match.date字段（前端兼容历史KV数据）。",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
+    },
+    {
+      "version": "v4.4",
+      "date": "2026-05-18T17:30:00+08:00",
+      "summary": "方案页按 period 分组折叠：plans 按 period 聚合成可折叠卡片，header 显示\"YYYY-MM-DD期 周X · N单\"，最新一期默认展开。",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/strategy-design.md"
     }
   ]
 }

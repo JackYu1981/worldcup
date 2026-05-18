@@ -67,6 +67,17 @@
       "replies": []
     },
     {
+      "id": 1779100000003,
+      "author": "system",
+      "type": "feature",
+      "text": "方案页按 period 分组折叠展示",
+      "time": "2026-05-18T17:30:00.000Z",
+      "status": "adopted",
+      "resolved_in": "v4.4",
+      "resolution": "result.html 把 plans 按 period 聚合成可折叠卡片，header 显示 \"YYYY-MM-DD期 周X · N单\"，最新一期默认展开。",
+      "replies": []
+    },
+    {
       "id": 1779007241858,
       "author": "jack",
       "type": "feature",

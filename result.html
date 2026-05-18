@@ -160,6 +160,49 @@
             font-size: 14px;
         }
 
+        .period-group {
+            margin-bottom: 16px;
+        }
+        .period-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            cursor: pointer;
+            user-select: none;
+        }
+        .period-header:active { opacity: 0.85; }
+        .period-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+        .period-meta {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .period-arrow {
+            font-size: 16px;
+            color: #999;
+            transition: transform 0.3s;
+        }
+        .period-group.expanded .period-arrow { transform: rotate(180deg); }
+        .period-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+        .period-group.expanded .period-body {
+            max-height: 20000px;
+        }
+        .period-body-inner {
+            padding-top: 10px;
+        }
+
         .bomb-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -659,6 +702,28 @@
             setTimeout(() => overlay.remove(), 3500);
         }
 
+        const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        function formatPeriodLabel(period) {
+            if (!period) return '未知期';
+            const d = new Date(`${period}T00:00:00+08:00`);
+            const wd = isNaN(d.getTime()) ? '' : ' ' + WEEKDAY_NAMES[d.getDay()];
+            return `${period}期${wd}`;
+        }
+
+        const expandedPeriods = new Set();
+
+        function togglePeriod(periodKey) {
+            const el = document.querySelector(`[data-period-key="${periodKey}"]`);
+            if (!el) return;
+            if (el.classList.contains('expanded')) {
+                el.classList.remove('expanded');
+                expandedPeriods.delete(periodKey);
+            } else {
+                el.classList.add('expanded');
+                expandedPeriods.add(periodKey);
+            }
+        }
+
         function renderAllPlans() {
             const content = document.getElementById('content');
 
@@ -667,77 +732,103 @@
                 return;
             }
 
-            const html = allResults.map((data, idx) => {
-                if (!data.combinations || data.combinations.length === 0) {
-                    return '';
-                }
-                const combosHtml = data.combinations.map((c, i) => {
-                    const legsHtml = c.legs.map(l => {
-                        let icon = '';
-                        if (l.correct === true) icon = ' ✓';
-                        else if (l.correct === false) icon = ' ✗';
-                        const legClass = l.correct === true ? 'leg-correct' : l.correct === false ? 'leg-wrong' : '';
-                        const scoreInfo = l.actual_score ? ` (${l.actual_score})` : '';
-                        return `<div class="leg-item ${legClass}">
-                            <span>${l.code || ''} ${l.match_desc} · ${l.pick_desc}${scoreInfo}${icon}</span>
-                            <span class="odds-val">@${l.odds.toFixed(2)}</span>
-                        </div>`;
-                    }).join('');
-                    const hitLabel = c.hit === true ? ' ✓ 命中' : c.hit === false ? ' ✗' : '';
-                    const comboClass = c.hit === true ? 'combo-hit' : c.hit === false ? 'combo-miss' : '';
-                    return `<div class="combo-section ${comboClass}">
-                        <div class="combo-header">
-                            <span>组合 ${i + 1}${hitLabel}</span>
-                            <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
-                        </div>
-                        ${legsHtml}
-                        <div class="stake-info">
-                            <span>投注 ¥${c.stake}</span>
-                            <span class="potential-return">${c.hit ? '中奖' : '可得'} ¥${c.potential_return.toLocaleString()}</span>
-                        </div>
-                        <button class="copy-btn" onclick="event.stopPropagation();copyCombo(${idx},${i})">📋 复制竞彩格式</button>
-                    </div>`;
-                }).join('');
+            const groups = new Map();
+            allResults.forEach((p, idx) => {
+                if (!p.combinations || p.combinations.length === 0) return;
+                const key = p.period || p.date || '未知';
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push({ plan: p, idx });
+            });
 
-                const status = data.status || 'pending';
-                const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 💣 未中' : '';
-                const comboCount = data.combinations.length;
-                const budget = comboCount > 1 ? comboCount * 2 : (data.budget || data.stake || 100);
-                const by = data.submitted_by ? ` · by ${data.submitted_by}` : '';
+            const sortedKeys = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+            if (expandedPeriods.size === 0 && sortedKeys.length > 0) {
+                expandedPeriods.add(sortedKeys[0]);
+            }
 
-                let totalReturn;
-                if (comboCount === 1) {
-                    totalReturn = `¥${data.combinations[0].potential_return}`;
-                } else {
-                    const returns = data.combinations.map(c => c.potential_return);
-                    const minR = Math.min(...returns);
-                    const maxR = Math.max(...returns);
-                    totalReturn = `¥${minR}~¥${maxR}`;
-                }
+            const html = sortedKeys.map(periodKey => {
+                const items = groups.get(periodKey);
+                const cardsHtml = items.map(({ plan: data, idx }) => renderPlanCard(data, idx)).join('');
 
-                return `<div class="plan-card ${status}" onclick="togglePlan(this)">
-                    <div class="plan-summary">
-                        <div class="plan-header">
-                            <div>
-                                <div class="plan-title">${data.passphrase || '未命名'}${statusLabel}</div>
-                                <div class="plan-date">${data.period || data.date}期 · ${data.combinations.length}注${by}</div>
-                            </div>
-                            <div class="plan-arrow">▼</div>
-                        </div>
-                        <div class="plan-meta">
-                            <span>投入 ¥${budget}</span>
-                            <span>回报 ${totalReturn}</span>
-                        </div>
+                const expandedClass = expandedPeriods.has(periodKey) ? 'expanded' : '';
+                return `<div class="period-group ${expandedClass}" data-period-key="${periodKey}">
+                    <div class="period-header" onclick="togglePeriod('${periodKey}')">
+                        <div class="period-title">${formatPeriodLabel(periodKey)} · ${items.length}单</div>
+                        <div class="period-arrow">▼</div>
                     </div>
-                    <div class="plan-detail">
-                        <div class="plan-detail-inner">
-                            ${combosHtml}
-                        </div>
+                    <div class="period-body">
+                        <div class="period-body-inner">${cardsHtml}</div>
                     </div>
                 </div>`;
             }).join('');
 
             content.innerHTML = html || '<div class="empty-state"><p>暂无投注方案</p></div>';
+        }
+
+        function renderPlanCard(data, idx) {
+            const combosHtml = data.combinations.map((c, i) => {
+                const legsHtml = c.legs.map(l => {
+                    let icon = '';
+                    if (l.correct === true) icon = ' ✓';
+                    else if (l.correct === false) icon = ' ✗';
+                    const legClass = l.correct === true ? 'leg-correct' : l.correct === false ? 'leg-wrong' : '';
+                    const scoreInfo = l.actual_score ? ` (${l.actual_score})` : '';
+                    return `<div class="leg-item ${legClass}">
+                        <span>${l.code || ''} ${l.match_desc} · ${l.pick_desc}${scoreInfo}${icon}</span>
+                        <span class="odds-val">@${l.odds.toFixed(2)}</span>
+                    </div>`;
+                }).join('');
+                const hitLabel = c.hit === true ? ' ✓ 命中' : c.hit === false ? ' ✗' : '';
+                const comboClass = c.hit === true ? 'combo-hit' : c.hit === false ? 'combo-miss' : '';
+                return `<div class="combo-section ${comboClass}">
+                    <div class="combo-header">
+                        <span>组合 ${i + 1}${hitLabel}</span>
+                        <span class="combo-odds">×${c.combined_odds.toFixed(2)}</span>
+                    </div>
+                    ${legsHtml}
+                    <div class="stake-info">
+                        <span>投注 ¥${c.stake}</span>
+                        <span class="potential-return">${c.hit ? '中奖' : '可得'} ¥${c.potential_return.toLocaleString()}</span>
+                    </div>
+                    <button class="copy-btn" onclick="event.stopPropagation();copyCombo(${idx},${i})">📋 复制竞彩格式</button>
+                </div>`;
+            }).join('');
+
+            const status = data.status || 'pending';
+            const statusLabel = status === 'won' ? ' 🎉 中奖' : status === 'lost' ? ' 💣 未中' : '';
+            const comboCount = data.combinations.length;
+            const budget = comboCount > 1 ? comboCount * 2 : (data.budget || data.stake || 100);
+            const by = data.submitted_by ? ` · by ${data.submitted_by}` : '';
+
+            let totalReturn;
+            if (comboCount === 1) {
+                totalReturn = `¥${data.combinations[0].potential_return}`;
+            } else {
+                const returns = data.combinations.map(c => c.potential_return);
+                const minR = Math.min(...returns);
+                const maxR = Math.max(...returns);
+                totalReturn = `¥${minR}~¥${maxR}`;
+            }
+
+            return `<div class="plan-card ${status}" onclick="event.stopPropagation();togglePlan(this)">
+                <div class="plan-summary">
+                    <div class="plan-header">
+                        <div>
+                            <div class="plan-title">${data.passphrase || '未命名'}${statusLabel}</div>
+                            <div class="plan-date">${data.combinations.length}注${by}</div>
+                        </div>
+                        <div class="plan-arrow">▼</div>
+                    </div>
+                    <div class="plan-meta">
+                        <span>投入 ¥${budget}</span>
+                        <span>回报 ${totalReturn}</span>
+                    </div>
+                </div>
+                <div class="plan-detail">
+                    <div class="plan-detail-inner">
+                        ${combosHtml}
+                    </div>
+                </div>
+            </div>`;
         }
 
         function copyCombo(resultIdx, comboIdx) {
