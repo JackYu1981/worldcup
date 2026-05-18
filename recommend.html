@@ -140,9 +140,41 @@
             background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
             border-radius: 10px; padding: 14px; margin-bottom: 10px;
             border: 1px solid #e1bee7;
+            cursor: pointer;
+            transition: transform 0.15s;
         }
-        .ai-section .ai-title { font-size: 13px; font-weight: 600; color: #6a1b9a; margin-bottom: 6px; }
+        .ai-section:active { transform: scale(0.98); }
+        .ai-section .ai-title { font-size: 13px; font-weight: 600; color: #6a1b9a; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
         .ai-section .ai-desc { font-size: 12px; color: #666; line-height: 1.5; }
+        .ai-section .ai-poweredby { font-size: 10px; color: #9c27b0; margin-top: 6px; font-style: italic; }
+        .ai-section .ai-hint { font-size: 10px; color: #9575cd; }
+
+        .ai-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px); z-index: 200;
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        .ai-modal-overlay.show { display: flex; }
+        .ai-modal {
+            background: white; border-radius: 12px; max-width: 500px; width: 100%;
+            max-height: 85vh; overflow-y: auto; padding: 20px;
+        }
+        .ai-modal h3 { font-size: 16px; color: #6a1b9a; margin-bottom: 4px; }
+        .ai-modal .modal-poweredby { font-size: 11px; color: #9575cd; margin-bottom: 14px; font-style: italic; }
+        .ai-modal h4 { font-size: 13px; color: #333; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+        .ai-modal p, .ai-modal li { font-size: 12px; color: #555; line-height: 1.65; }
+        .ai-modal ul { padding-left: 18px; margin: 4px 0; }
+        .ai-modal .formula { background: #f5f3fa; padding: 8px 10px; border-radius: 6px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #4a148c; margin: 6px 0; word-break: break-all; }
+        .ai-modal .param-table { width: 100%; font-size: 12px; margin: 6px 0; border-collapse: collapse; }
+        .ai-modal .param-table td { padding: 4px 8px; border-bottom: 1px solid #f0f0f0; }
+        .ai-modal .param-table td:first-child { color: #888; width: 40%; }
+        .ai-modal .param-table td:last-child { color: #333; font-weight: 600; }
+        .ai-modal-close {
+            margin-top: 16px; width: 100%; padding: 10px;
+            background: #6a1b9a; color: white; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+        }
 
         .confirm-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -219,6 +251,54 @@
     </div>
 
     <div class="toast" id="toast"></div>
+
+    <div class="ai-modal-overlay" id="aiModalOverlay" onclick="if(event.target===this)hideAiAlgorithm()">
+        <div class="ai-modal">
+            <h3>🤖 AI 投注优化算法 v1.0</h3>
+            <div class="modal-poweredby">Powered by Claude Opus 4.7</div>
+
+            <h4>核心哲学</h4>
+            <p>既不追极小概率超高赔率（赌博），也不追保底高命中低收益（无意义），让 100 元本金的中奖收益落在<strong>概率与奖金的中间地带</strong>。</p>
+
+            <h4>固定参数</h4>
+            <table class="param-table">
+                <tr><td>总本金</td><td>100 元</td></tr>
+                <tr><td>AI 自主预算上限</td><td>18 元</td></tr>
+                <tr><td>目标收益窗口</td><td>600 ~ 1800 元（6~18 倍）</td></tr>
+                <tr><td>最小投注单位</td><td>2 元</td></tr>
+            </table>
+
+            <h4>硬约束</h4>
+            <ul>
+                <li>每注金额必须是 2 的倍数</li>
+                <li>用户原选的每个结果至少有一个组合 ≥ 2 元（不可否决）</li>
+                <li>AI 新增结果（用户未选）总金额 ≤ 18 元</li>
+                <li>任一可能中奖路径的总到手金额 ∈ [600, 1800]</li>
+            </ul>
+
+            <h4>算法流程</h4>
+            <p><strong>1. 枚举候选组合</strong>：用户原选生成的 3 串 1 + AI 候选（用户场次内单场切换未选结果）</p>
+            <p><strong>2. 剔除窗口外组合</strong>：极端高赔率（>900 倍）剔除；极低赔率单买不可达 600，标记为需配合中奖</p>
+            <p><strong>3. 计算每组合的金额可行窗口</strong></p>
+            <div class="formula">x_min = max(2, ceil(600 / odds / 2) × 2)<br>x_max = min(预算, floor(1800 / odds / 2) × 2)</div>
+            <p><strong>4. 整数线性规划求解</strong></p>
+            <ul>
+                <li>主目标：最大化「至少一组合中奖且收益落入窗口」的概率</li>
+                <li>次目标：相同主目标下最大化期望收益 Σ p × x × odds</li>
+                <li>约束：Σx=100，AI 部分 ≤18，用户必保结果 ≥2</li>
+            </ul>
+            <p><strong>5. 自救机制</strong>：若用户组合无法达成 600 下限，AI 在 18 元预算内尝试加入未选结果救援；仍不可行则提示用户调整选择，不擅自放宽窗口。</p>
+
+            <h4>输出</h4>
+            <ul>
+                <li>每注的具体金额、赔率、中奖概率</li>
+                <li>用户预算 / AI 预算占比</li>
+                <li>整体命中率、期望收益、收益区间</li>
+            </ul>
+
+            <button class="ai-modal-close" onclick="hideAiAlgorithm()">关闭</button>
+        </div>
+    </div>
 
     <script src="auth.js"></script>
     <script>if(AUTH.isLoggedIn())AUTH.renderUserBadge('userBadge');</script>
@@ -513,10 +593,23 @@
         }
 
         function renderAiSection() {
-            return `<div class="ai-section" style="margin-top:14px;">
-                <div class="ai-title">🤖 AI 优化方案</div>
-                <div class="ai-desc">提供口令后，AI将根据投注策略对所选推荐进行本金分配和拆注优化，目标：100元本金获得最优风险收益比。</div>
+            return `<div class="ai-section" style="margin-top:14px;" onclick="showAiAlgorithm()">
+                <div class="ai-title">
+                    <span>🤖 AI 优化方案</span>
+                    <span class="ai-hint">点击查看算法 ›</span>
+                </div>
+                <div class="ai-desc">100元本金，AI在18元自主预算内对所选推荐进行整数线性规划优化，目标收益区间 600-1800 元（概率与奖金的中间地带）。</div>
+                <div class="ai-poweredby">Powered by Claude Opus 4.7</div>
             </div>`;
+        }
+
+        function showAiAlgorithm() {
+            const overlay = document.getElementById('aiModalOverlay');
+            overlay.classList.add('show');
+        }
+
+        function hideAiAlgorithm() {
+            document.getElementById('aiModalOverlay').classList.remove('show');
         }
 
         function renderPlanCard(plan) {
