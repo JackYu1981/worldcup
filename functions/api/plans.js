@@ -27,15 +27,15 @@ export async function onRequestGet(context) {
     }
 
     if (fromDate) {
-      results = results.filter(p => (p.period || p.date || '') >= fromDate);
+      results = results.filter(p => (p.date || p.period || '') >= fromDate);
     }
     if (toDate) {
-      results = results.filter(p => (p.period || p.date || '') <= toDate);
+      results = results.filter(p => (p.date || p.period || '') <= toDate);
     }
 
     results.sort((a, b) => {
-      const da = a.period || a.date || '';
-      const db = b.period || b.date || '';
+      const da = a.date || a.period || '';
+      const db = b.date || b.period || '';
       if (da !== db) return db.localeCompare(da);
       const ta = a.submitted_at || '';
       const tb = b.submitted_at || '';

@@ -44,50 +44,45 @@ export async function onRequestPost(context) {
     envelope.fetched_at = new Date().toISOString();
     await kv.put(`matches:${period}`, JSON.stringify(envelope));
 
+    // 跨期串单方案的 plan.legs 可能来自不同 period，必须用全量赛程池评估
+    const allMatches = await loadAllMatches(kv);
+    // 修正比分的目标 match 用最新值覆盖（loadAllMatches 取的可能是缓存里旧的）
+    const targetIdx = allMatches.findIndex(m => m.id === target.id);
+    if (targetIdx >= 0) allMatches[targetIdx] = target;
+    else allMatches.push(target);
+
+    // 仅重算 legs 里包含被修正比赛的 plan
+    const affectsPlan = plan => {
+      const legs = collectLegs(plan);
+      return legs.some(l => l.match_id === target.id || (target.code && l.code === target.code));
+    };
+
     const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
     const settledData = await kv.get('aggregate:settled_plans', 'json');
     const pending = pendingData ? (pendingData.plans || []) : [];
     const settled = settledData ? (settledData.plans || []) : [];
 
     const planChanges = [];
-
     const newPending = [];
-    pending.forEach(plan => {
-      if ((plan.period || plan.date) !== period) {
-        newPending.push(plan);
-        return;
-      }
-      const oldStatus = plan.status || 'pending';
-      const evaluated = evaluatePlan(plan, matches);
-      const newStatus = evaluated.status || 'pending';
-      if (oldStatus !== newStatus) {
-        planChanges.push({ passphrase: evaluated.passphrase || '未命名', old: oldStatus, new: newStatus });
-      }
-      if (newStatus === 'won' || newStatus === 'lost') {
-        settled.push(evaluated);
-      } else {
-        newPending.push(evaluated);
-      }
-    });
-
     const newSettled = [];
-    settled.forEach(plan => {
-      if ((plan.period || plan.date) !== period) {
-        newSettled.push(plan);
+
+    const reEvaluate = (plan, sourceList) => {
+      if (!affectsPlan(plan)) {
+        sourceList.push(plan);
         return;
       }
       const oldStatus = plan.status || 'pending';
-      const evaluated = evaluatePlan(plan, matches);
+      const evaluated = evaluatePlan(plan, allMatches);
       const newStatus = evaluated.status || 'pending';
       if (oldStatus !== newStatus) {
         planChanges.push({ passphrase: evaluated.passphrase || '未命名', old: oldStatus, new: newStatus });
       }
-      if (newStatus === 'won' || newStatus === 'lost') {
-        newSettled.push(evaluated);
-      } else {
-        newPending.push(evaluated);
-      }
-    });
+      if (newStatus === 'won' || newStatus === 'lost') newSettled.push(evaluated);
+      else newPending.push(evaluated);
+    };
+
+    pending.forEach(p => reEvaluate(p, newPending));
+    settled.forEach(p => reEvaluate(p, newSettled));
 
     await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: newPending }));
     await kv.put('aggregate:settled_plans', JSON.stringify({ plans: newSettled }));
@@ -109,6 +104,34 @@ export async function onRequestPost(context) {
   } catch (e) {
     return error(e.message, 500);
   }
+}
+
+// 收集 plan 中所有 leg（兼容 v2.0 bets[]/v1.x combinations[]/v1.0 legs）
+function collectLegs(plan) {
+  const legs = [];
+  if (Array.isArray(plan.bets)) {
+    plan.bets.forEach(b => (b.legs || []).forEach(l => legs.push(l)));
+  }
+  if (Array.isArray(plan.combinations)) {
+    plan.combinations.forEach(c => (c.legs || []).forEach(l => legs.push(l)));
+  }
+  if (Array.isArray(plan.legs)) plan.legs.forEach(l => legs.push(l));
+  return legs;
+}
+
+async function loadAllMatches(kv) {
+  const list = await kv.list({ prefix: 'matches:' });
+  const byId = new Map();
+  for (const key of list.keys || []) {
+    const env = await kv.get(key.name, 'json');
+    if (!env || !Array.isArray(env.matches)) continue;
+    for (const m of env.matches) {
+      if (!m || !m.id) continue;
+      const existing = byId.get(m.id);
+      if (!existing || (!existing.score && m.score)) byId.set(m.id, m);
+    }
+  }
+  return Array.from(byId.values());
 }
 
 export function onRequestOptions() {

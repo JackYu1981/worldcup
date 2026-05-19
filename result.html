@@ -704,11 +704,14 @@
         }
 
         const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-        function formatPeriodLabel(period) {
-            if (!period) return '未知期';
-            const d = new Date(`${period}T00:00:00+08:00`);
-            const wd = isNaN(d.getTime()) ? '' : ' ' + WEEKDAY_NAMES[d.getDay()];
-            return `${period}期${wd}`;
+        // date 是单据生成日期（YYYY-MM-DD）。展示成 "X月X日 周X"
+        function formatDateLabel(date) {
+            if (!date) return '未知日期';
+            const d = new Date(`${date}T00:00:00+08:00`);
+            if (isNaN(d.getTime())) return date;
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            return `${m}月${day}日 ${WEEKDAY_NAMES[d.getDay()]}`;
         }
 
         const expandedPeriods = new Set();
@@ -736,7 +739,7 @@
             const groups = new Map();
             allResults.forEach((p, idx) => {
                 if (PlanAdapter.getBets(p).length === 0) return;
-                const key = p.period || p.date || '未知';
+                const key = p.date || p.period || '未知';
                 if (!groups.has(key)) groups.set(key, []);
                 groups.get(key).push({ plan: p, idx });
             });
@@ -753,7 +756,7 @@
                 const expandedClass = expandedPeriods.has(periodKey) ? 'expanded' : '';
                 return `<div class="period-group ${expandedClass}" data-period-key="${periodKey}">
                     <div class="period-header" onclick="togglePeriod('${periodKey}')">
-                        <div class="period-title">${formatPeriodLabel(periodKey)} · ${items.length}单</div>
+                        <div class="period-title">${formatDateLabel(periodKey)} · ${items.length}单</div>
                         <div class="period-arrow">▼</div>
                     </div>
                     <div class="period-body">

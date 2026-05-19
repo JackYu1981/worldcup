@@ -439,13 +439,6 @@
         function renderAll() {
             const content = document.getElementById('content');
             let html = '';
-            const isExpired = currentPeriod < todayStr;
-
-            if (isExpired) {
-                html += `<div style="background:#fff3e0;border:1px solid #ffcc02;border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#e65100;text-align:center;">
-                    ⚠️ ${currentPeriod} 竞彩已停售，不可生成新推荐或提交方案
-                </div>`;
-            }
 
             if (plans.length > 0) {
                 html += `<div class="user-group expanded">
@@ -749,8 +742,6 @@
             btn.textContent = '提交中...';
 
             const payload = {
-                date: currentPeriod,
-                period: currentPeriod,
                 passphrase: passphrase,
                 submitted_at: new Date().toISOString(),
                 selected_tier: selectedRec.selected_tier,

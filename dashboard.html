@@ -266,7 +266,7 @@
 
                 dailyMap = {};
                 allPlans.forEach(p => {
-                    const d = p.period || p.date;
+                    const d = p.date || p.period;
                     if (!d) return;
                     if (!dailyMap[d]) dailyMap[d] = [];
                     dailyMap[d].push(p);
@@ -314,11 +314,11 @@
             const ctx = document.getElementById('profitChart').getContext('2d');
             const settled = allPlans
                 .filter(p => p.status === 'won' || p.status === 'lost')
-                .sort((a, b) => (a.period || a.date || a.submitted_at || '').localeCompare(b.period || b.date || b.submitted_at || ''));
+                .sort((a, b) => (a.date || a.period || a.submitted_at || '').localeCompare(b.date || b.period || b.submitted_at || ''));
 
             const byDate = {};
             settled.forEach(p => {
-                const d = (p.period || p.date || '').slice(0, 10);
+                const d = (p.date || p.period || '').slice(0, 10);
                 if (!byDate[d]) byDate[d] = 0;
                 byDate[d] += getPlanProfit(p);
             });

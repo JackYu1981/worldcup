@@ -2,6 +2,12 @@ import { verifyToken } from '../lib/auth.js';
 import { logger } from '../lib/logger.js';
 import { json, error, options } from '../lib/response.js';
 
+// 单据日期 = 服务器北京时区当天 YYYY-MM-DD
+// 推荐/预备方案/最终方案的 grouping key 都用单据日期，与赛程的 period（销售期次）无关
+function beijingToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+}
+
 export async function onRequestPost(context) {
   try {
     const user = await verifyToken(context.request, context.env);
@@ -10,16 +16,12 @@ export async function onRequestPost(context) {
     }
 
     const body = await context.request.json();
-    const { date, passphrase, source } = body;
+    const { passphrase, source } = body;
 
-    if (!date) {
-      return error('缺少日期字段', 400);
-    }
-
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-    if (date < todayStr && (source === 'recommendation' || source === 'pending_plan')) {
-      return error(`${date} 竞彩已停售，无法提交`, 400);
-    }
+    // date 由服务器决定，忽略前端传值
+    const date = beijingToday();
+    body.date = date;
+    delete body.period;
 
     if (source !== 'recommendation' && !passphrase) {
       return error('方案需要口令', 400);
@@ -27,11 +29,10 @@ export async function onRequestPost(context) {
 
     body.submitted_by = user.username;
     body.submitted_at = new Date().toISOString();
-    body.period = body.period || date;
 
     const kv = context.env.MATCH_DATA;
 
-    // 提交预备方案：先校验源 rec 未被使用过，再写 pending_plan、回写 rec.pending_plan_passphrase
+    // 提交预备方案：先在最近的 recommendations:* 里找匹配源 rec、打 pending_plan_passphrase 标记
     if (source === 'pending_plan') {
       const stampResult = await stampRecommendation(kv, date, body.legs, passphrase);
       if (stampResult.error) {
@@ -57,25 +58,30 @@ export async function onRequestPost(context) {
 // 给匹配的 recommendation 打上 pending_plan_passphrase 标记。
 // 匹配规则：legs 的 (match_id+pick) 集合完全相等。
 // 硬约束：rec 已有 pending_plan_passphrase 即拒绝二次提交。
+// 先查当天的 recommendations:{date}，找不到则扫最近 7 天（覆盖跨天提交场景）。
 async function stampRecommendation(kv, date, legs, passphrase) {
   if (!kv || !legs || legs.length === 0) return {};
-  const recsData = await kv.get(`recommendations:${date}`, 'json');
-  if (!recsData || !recsData.items) return {};
-
   const targetKey = legSetKey(legs);
-  let matched = null;
-  for (const rec of recsData.items) {
-    if (legSetKey(rec.legs || []) === targetKey) {
+
+  const candidateDates = [date];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(date + 'T00:00:00+08:00');
+    d.setUTCDate(d.getUTCDate() - i);
+    candidateDates.push(d.toISOString().slice(0, 10));
+  }
+
+  for (const d of candidateDates) {
+    const recsData = await kv.get(`recommendations:${d}`, 'json');
+    if (!recsData || !recsData.items) continue;
+    for (const rec of recsData.items) {
+      if (legSetKey(rec.legs || []) !== targetKey) continue;
       if (rec.pending_plan_passphrase) {
         return { error: `该推荐已提交过预备方案（口令：${rec.pending_plan_passphrase}），不可重复提交` };
       }
-      matched = rec;
-      break;
+      rec.pending_plan_passphrase = passphrase;
+      await kv.put(`recommendations:${d}`, JSON.stringify(recsData));
+      return {};
     }
-  }
-  if (matched) {
-    matched.pending_plan_passphrase = passphrase;
-    await kv.put(`recommendations:${date}`, JSON.stringify(recsData));
   }
   return {};
 }
@@ -98,7 +104,7 @@ async function writeToKv(kv, source, date, data) {
     const existing = await kv.get(key, 'json');
     const items = existing ? existing.items : [];
     items.push(data);
-    await kv.put(key, JSON.stringify({ period: date, items }));
+    await kv.put(key, JSON.stringify({ date, items }));
 
     if (source === 'plan') {
       const pendingData = await kv.get('aggregate:unsettled_plans', 'json');

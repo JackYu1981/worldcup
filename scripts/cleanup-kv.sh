@@ -7,13 +7,14 @@
 #   scripts/cleanup-kv.sh 2026-05-17                 # 列清单：删除 2026-05-17 及之前的业务数据
 #   scripts/cleanup-kv.sh 2026-05-17 --apply         # 实际执行
 #
-# 删除范围（按 key 前缀）:
+# 删除范围（按 key 前缀，date = 单据生成日期）:
 #   - recommendations:{date}    where date <= cutoff
 #   - pending_plans:{date}      where date <= cutoff
 #   - plans:{date}              where date <= cutoff
-#   - picks:{date}              where date <= cutoff（legacy）
+#   - picks:{date}              where date <= cutoff（legacy，已弃用）
 # 同时清理:
-#   - aggregate:unsettled_plans 中 period <= cutoff 的 plans
+#   - aggregate:unsettled_plans / aggregate:settled_plans 中 date <= cutoff 的 plans
+#     （兼容老数据：如果 date 不存在，回退到 period）
 # 保留:
 #   - matches:* / results:* / users / cr:* / versions / logs:*
 
@@ -77,8 +78,8 @@ cutoff = '$CUTOFF'
 try:
     d = json.load(sys.stdin)
     plans = d.get('plans', [])
-    keep = [p for p in plans if (p.get('period') or p.get('date') or '9999') > cutoff]
-    drop = [p for p in plans if (p.get('period') or p.get('date') or '9999') <= cutoff]
+    keep = [p for p in plans if (p.get('date') or p.get('period') or '9999') > cutoff]
+    drop = [p for p in plans if (p.get('date') or p.get('period') or '9999') <= cutoff]
     print(f'保留 {len(keep)} 条 / 移除 {len(drop)} 条')
     for p in drop:
         print(f'  - {p.get(\"period\")} {p.get(\"passphrase\")}')
@@ -99,8 +100,8 @@ cutoff = '$CUTOFF'
 try:
     d = json.load(sys.stdin)
     plans = d.get('plans', [])
-    keep = [p for p in plans if (p.get('period') or p.get('date') or '9999') > cutoff]
-    drop = [p for p in plans if (p.get('period') or p.get('date') or '9999') <= cutoff]
+    keep = [p for p in plans if (p.get('date') or p.get('period') or '9999') > cutoff]
+    drop = [p for p in plans if (p.get('date') or p.get('period') or '9999') <= cutoff]
     print(f'保留 {len(keep)} 条 / 移除 {len(drop)} 条')
     for p in drop:
         print(f'  - {p.get(\"period\")} {p.get(\"passphrase\")} status={p.get(\"status\")}')
@@ -133,7 +134,7 @@ if [ -n "$UNSETTLED" ]; then
 import json,sys
 cutoff = '$CUTOFF'
 d = json.load(sys.stdin)
-keep = [p for p in d.get('plans', []) if (p.get('period') or p.get('date') or '9999') > cutoff]
+keep = [p for p in d.get('plans', []) if (p.get('date') or p.get('period') or '9999') > cutoff]
 print(json.dumps({'plans': keep}, ensure_ascii=False))
 ")
   TMP=$(mktemp)
@@ -149,7 +150,7 @@ if [ -n "$SETTLED" ]; then
 import json,sys
 cutoff = '$CUTOFF'
 d = json.load(sys.stdin)
-keep = [p for p in d.get('plans', []) if (p.get('period') or p.get('date') or '9999') > cutoff]
+keep = [p for p in d.get('plans', []) if (p.get('date') or p.get('period') or '9999') > cutoff]
 print(json.dumps({'plans': keep}, ensure_ascii=False))
 ")
   TMP=$(mktemp)
