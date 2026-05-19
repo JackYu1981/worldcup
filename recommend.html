@@ -495,7 +495,7 @@
                 </div>`;
             }
 
-            if (!isExpired) {
+            if (currentPeriod >= todayStr) {
                 html += renderAiSection();
             }
 
