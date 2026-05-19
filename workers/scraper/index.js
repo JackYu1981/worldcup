@@ -2,7 +2,8 @@
  * Cloudflare Worker: 竞彩数据定时抓取
  *
  * Cron triggers:
- * - 每5分钟: 检查当天 matches 是否缺失，缺失则补抓（轮询机制：直到 500.com 发布当天赛程为止）
+ * - 每小时整点: 抓 500.com 在售页，按 kickoff 日期分发到 matches:{date}，
+ *   已有比赛合并（赔率覆盖、已写入的 score/status='finished' 不被退化）
  * - 每30分钟: 更新比分
  */
 
@@ -39,57 +40,97 @@ async function fetchKaijiang(date) {
   }
 }
 
-async function snapshotMatches(env) {
-  const today = getBeijingDate(0);
-  const kvKey = `matches:${today}`;
-
-  const existing = await env.MATCH_DATA.get(kvKey, 'json');
-  if (existing && existing.matches && existing.matches.length > 0) {
-    // 已有数据，静默跳过（每5分钟跑一次，不刷屏）
-    return;
+// 在售页面拿到的比赛按 kickoff 日期(YYYY-MM-DD, 北京时区) 分桶
+function bucketByKickoffDate(matches) {
+  const buckets = {};
+  for (const m of matches) {
+    if (!m.kickoff) continue;
+    // kickoff 形如 "2026-05-20 03:00" 或 "03:00"；统一取前 10 字符做日期
+    const date = m.kickoff.length >= 10 ? m.kickoff.slice(0, 10) : null;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (!buckets[date]) buckets[date] = [];
+    buckets[date].push(m);
   }
+  return buckets;
+}
 
-  // 仅在每小时第一次重试时写日志，避免每 5 分钟刷一条
-  const nowUtc = new Date();
-  const minute = nowUtc.getUTCMinutes();
-  const verbose = minute < 5;
+// 合并新旧 match 列表：按 id 去重
+// - 已 finished + 有 score 的旧 match 完整保留（避免新拉取没有比分时退化）
+// - 否则用新值覆盖（赔率/状态会更新）
+// - 在售页消失但 KV 已有的旧 match 保留
+function mergeMatches(oldMatches, newMatches) {
+  const map = new Map();
+  for (const m of (oldMatches || [])) {
+    if (m && m.id) map.set(m.id, m);
+  }
+  for (const fresh of newMatches) {
+    if (!fresh || !fresh.id) continue;
+    const old = map.get(fresh.id);
+    if (old && old.status === 'finished' && old.score) {
+      // 已开奖的不被新数据覆盖（在售页对 finished 比赛通常没有完整分数）
+      continue;
+    }
+    if (old) {
+      // 合并：新值优先，但保留旧的 score/status='finished' 不被空值退化
+      const merged = { ...old, ...fresh };
+      if (old.status === 'finished' && !fresh.status) merged.status = old.status;
+      if (old.score && !fresh.score) merged.score = old.score;
+      if (old.score_ht && !fresh.score_ht) merged.score_ht = old.score_ht;
+      map.set(fresh.id, merged);
+    } else {
+      map.set(fresh.id, fresh);
+    }
+  }
+  // 按 kickoff 排序输出
+  return Array.from(map.values()).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+}
 
-  const url = adapter.buildMatchesUrl({ date: today });
+async function snapshotMatches(env) {
+  const url = adapter.buildMatchesUrl();  // 不带 date，拿当前在售全部
   let html;
   try {
     html = await fetchHtml(url);
   } catch (e) {
-    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 抓取失败：${e.message}（轮询中）`);
+    await logger(env.MATCH_DATA, '赛程', `在售页抓取失败：${e.message}`);
     return;
   }
   if (!html || html.length < 1000) {
-    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 页面为空，轮询中`);
+    await logger(env.MATCH_DATA, '赛程', `在售页为空`);
     return;
   }
 
   const allMatches = adapter.parseMatches(html);
   if (allMatches.length === 0) {
-    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 解析0场，500.com 可能尚未发布，轮询中`);
+    await logger(env.MATCH_DATA, '赛程', `在售页解析0场（500.com 可能无在售比赛）`);
     return;
   }
 
-  // 按code前缀(周X)过滤，只保留属于本期的比赛
-  const WEEKDAYS = ['周日','周一','周二','周三','周四','周五','周六'];
-  const dayIndex = new Date(today + 'T00:00:00+08:00').getDay();
-  const prefix = WEEKDAYS[dayIndex];
-  const matches = allMatches.filter(m => m.code && m.code.startsWith(prefix));
-  if (matches.length === 0) {
-    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 无 ${prefix} 期比赛（共解析${allMatches.length}场），轮询中`);
-    return;
+  const buckets = bucketByKickoffDate(allMatches);
+  const dates = Object.keys(buckets).sort();
+  const summary = [];
+
+  for (const date of dates) {
+    const fresh = buckets[date];
+    fresh.forEach(m => { m.period = date; });
+
+    const kvKey = `matches:${date}`;
+    const existing = await env.MATCH_DATA.get(kvKey, 'json');
+    const oldMatches = (existing && existing.matches) || [];
+    const merged = mergeMatches(oldMatches, fresh);
+
+    const oldIds = new Set(oldMatches.map(m => m.id));
+    const newCount = merged.filter(m => !oldIds.has(m.id)).length;
+
+    if (merged.length === 0) continue;
+    const envelope = createEnvelope(date, adapter.name, merged);
+    await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
+    summary.push(`${date}:${merged.length}场${newCount > 0 ? `(+${newCount})` : ''}`);
   }
 
-  // 每场比赛打上期次标识（=开奖日=today）
-  matches.forEach(m => { m.period = today; });
-
-  const envelope = createEnvelope(today, adapter.name, matches);
-  await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
-  console.log(`[Snapshot] ${today}: saved ${matches.length} matches (filtered from ${allMatches.length})`);
-  await logger(env.MATCH_DATA, '赛程', `${today} 保存${matches.length}场比赛(${prefix}期)`);
+  if (summary.length > 0) {
+    console.log(`[Snapshot] ${summary.join(' / ')}`);
+    await logger(env.MATCH_DATA, '赛程', summary.join(' / '));
+  }
 }
 
 async function updateScores(env) {
@@ -171,8 +212,8 @@ export default {
   async scheduled(event, env, ctx) {
     console.log(`[Cron] Triggered: ${event.cron}`);
 
-    if (event.cron === '*/5 * * * *') {
-      // 5分钟轮询：缺失则补抓 snapshot；snapshotMatches 内部已有 early-return 跳过已有数据
+    if (event.cron === '0 * * * *') {
+      // 每整点：抓在售页合并到对应日期 KV
       await snapshotMatches(env);
     } else {
       await updateScores(env);
