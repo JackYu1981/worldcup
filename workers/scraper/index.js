@@ -2,7 +2,7 @@
  * Cloudflare Worker: 竞彩数据定时抓取
  *
  * Cron triggers:
- * - 每天UTC 03:01 (北京11:01): 抓取当天赛程快照
+ * - 每5分钟: 检查当天 matches 是否缺失，缺失则补抓（轮询机制：直到 500.com 发布当天赛程为止）
  * - 每30分钟: 更新比分
  */
 
@@ -45,23 +45,31 @@ async function snapshotMatches(env) {
 
   const existing = await env.MATCH_DATA.get(kvKey, 'json');
   if (existing && existing.matches && existing.matches.length > 0) {
-    console.log(`[Snapshot] ${today} already exists (${existing.matches.length} matches), skipping`);
-    await logger(env.MATCH_DATA, '赛程', `${today} 已存在(${existing.matches.length}场)，跳过`);
+    // 已有数据，静默跳过（每5分钟跑一次，不刷屏）
     return;
   }
 
+  // 仅在每小时第一次重试时写日志，避免每 5 分钟刷一条
+  const nowUtc = new Date();
+  const minute = nowUtc.getUTCMinutes();
+  const verbose = minute < 5;
+
   const url = adapter.buildMatchesUrl({ date: today });
-  const html = await fetchHtml(url);
+  let html;
+  try {
+    html = await fetchHtml(url);
+  } catch (e) {
+    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 抓取失败：${e.message}（轮询中）`);
+    return;
+  }
   if (!html || html.length < 1000) {
-    console.log(`[Snapshot] ${today} empty page`);
-    await logger(env.MATCH_DATA, '赛程', `${today} 页面为空，抓取失败`);
+    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 页面为空，轮询中`);
     return;
   }
 
   const allMatches = adapter.parseMatches(html);
   if (allMatches.length === 0) {
-    console.log(`[Snapshot] ${today} no matches parsed`);
-    await logger(env.MATCH_DATA, '赛程', `${today} 解析0场，抓取失败`);
+    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 解析0场，500.com 可能尚未发布，轮询中`);
     return;
   }
 
@@ -71,7 +79,7 @@ async function snapshotMatches(env) {
   const prefix = WEEKDAYS[dayIndex];
   const matches = allMatches.filter(m => m.code && m.code.startsWith(prefix));
   if (matches.length === 0) {
-    console.log(`[Snapshot] ${today} no matches with prefix "${prefix}" (${allMatches.length} total parsed)`);
+    if (verbose) await logger(env.MATCH_DATA, '赛程', `${today} 无 ${prefix} 期比赛（共解析${allMatches.length}场），轮询中`);
     return;
   }
 
@@ -163,7 +171,8 @@ export default {
   async scheduled(event, env, ctx) {
     console.log(`[Cron] Triggered: ${event.cron}`);
 
-    if (event.cron === '1 3 * * *') {
+    if (event.cron === '*/5 * * * *') {
+      // 5分钟轮询：缺失则补抓 snapshot；snapshotMatches 内部已有 early-return 跳过已有数据
       await snapshotMatches(env);
     } else {
       await updateScores(env);
