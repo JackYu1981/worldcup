@@ -54,9 +54,12 @@ function bucketByPeriod(matches) {
 }
 
 // 合并新旧 match 列表：按 id 去重
-// - 已 finished + 有 score 的旧 match 完整保留（避免新拉取没有比分时退化）
-// - 否则用新值覆盖（赔率/状态会更新）
-// - 在售页消失但 KV 已有的旧 match 保留
+// 同一 id 的旧 match：只更新赔率（odds + handicap），其他字段一律保留旧值
+//   原因：500.com 同一 code（周X001 等）一旦发布，对阵/code/kickoff 都不再变，
+//   赔率会随调盘变化。score/status 仅由 updateScores（kaijiang 路径）维护，
+//   snapshotMatches 不能写入这两个字段。
+// 在售页新出现的 → 整条新增
+// 在售页消失的 → KV 中保留
 function mergeMatches(oldMatches, newMatches) {
   const map = new Map();
   for (const m of (oldMatches || [])) {
@@ -65,16 +68,11 @@ function mergeMatches(oldMatches, newMatches) {
   for (const fresh of newMatches) {
     if (!fresh || !fresh.id) continue;
     const old = map.get(fresh.id);
-    if (old && old.status === 'finished' && old.score) {
-      // 已开奖的不被新数据覆盖（在售页对 finished 比赛通常没有完整分数）
-      continue;
-    }
     if (old) {
-      // 合并：新值优先，但保留旧的 score/status='finished' 不被空值退化
-      const merged = { ...old, ...fresh };
-      if (old.status === 'finished' && !fresh.status) merged.status = old.status;
-      if (old.score && !fresh.score) merged.score = old.score;
-      if (old.score_ht && !fresh.score_ht) merged.score_ht = old.score_ht;
+      // 只更新赔率，其他保留旧值
+      const merged = { ...old };
+      if (fresh.odds) merged.odds = fresh.odds;
+      if (fresh.handicap) merged.handicap = fresh.handicap;
       map.set(fresh.id, merged);
     } else {
       map.set(fresh.id, fresh);

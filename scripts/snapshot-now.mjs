@@ -36,6 +36,8 @@ function bucketByPeriod(matches) {
   return buckets;
 }
 
+// 同一 id 的旧 match 只更新赔率（odds + handicap），其余字段保留。
+// status/score 不由 snapshot 写，仅 kaijiang 流程维护。
 function mergeMatches(oldMatches, newMatches) {
   const map = new Map();
   for (const m of (oldMatches || [])) {
@@ -44,12 +46,10 @@ function mergeMatches(oldMatches, newMatches) {
   for (const fresh of newMatches) {
     if (!fresh || !fresh.id) continue;
     const old = map.get(fresh.id);
-    if (old && old.status === 'finished' && old.score) continue;
     if (old) {
-      const merged = { ...old, ...fresh };
-      if (old.status === 'finished' && !fresh.status) merged.status = old.status;
-      if (old.score && !fresh.score) merged.score = old.score;
-      if (old.score_ht && !fresh.score_ht) merged.score_ht = old.score_ht;
+      const merged = { ...old };
+      if (fresh.odds) merged.odds = fresh.odds;
+      if (fresh.handicap) merged.handicap = fresh.handicap;
       map.set(fresh.id, merged);
     } else {
       map.set(fresh.id, fresh);
