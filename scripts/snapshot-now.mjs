@@ -25,36 +25,13 @@ function fetchPage(url) {
   });
 }
 
-const WEEKDAY_NAMES = ['周日','周一','周二','周三','周四','周五','周六'];
-
-function periodFromCode(code, todayBeijing) {
-  if (!code) return null;
-  const m = code.match(/^(周[日一二三四五六])/);
-  if (!m) return null;
-  const codeDayIdx = WEEKDAY_NAMES.indexOf(m[1]);
-  if (codeDayIdx < 0) return null;
-  const todayDate = new Date(todayBeijing + 'T00:00:00+08:00');
-  const todayDayIdx = todayDate.getUTCDay();
-  let diff = codeDayIdx - todayDayIdx;
-  if (diff < 0) diff += 7;
-  const period = new Date(todayDate);
-  period.setUTCDate(period.getUTCDate() + diff);
-  return period.toISOString().slice(0, 10);
-}
-
-function getBeijingToday() {
-  const now = new Date();
-  const beijing = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-  return beijing.toISOString().slice(0, 10);
-}
-
-function bucketByPeriod(matches, todayBeijing) {
+// 按 adapter 已解析的 period (来自 500.com data-buyendtime) 分桶
+function bucketByPeriod(matches) {
   const buckets = {};
   for (const m of matches) {
-    const period = periodFromCode(m.code, todayBeijing);
-    if (!period) continue;
-    if (!buckets[period]) buckets[period] = [];
-    buckets[period].push(m);
+    if (!m.period) continue;
+    if (!buckets[m.period]) buckets[m.period] = [];
+    buckets[m.period].push(m);
   }
   return buckets;
 }
@@ -109,11 +86,9 @@ function kvPut(key, value) {
   const allMatches = adapter.parseMatches(html);
   console.log('parsed matches:', allMatches.length);
 
-  const today = getBeijingToday();
-  const buckets = bucketByPeriod(allMatches, today);
+  const buckets = bucketByPeriod(allMatches);
   for (const date of Object.keys(buckets).sort()) {
     const fresh = buckets[date];
-    fresh.forEach(m => { m.period = date; });
     const existing = kvGet(`matches:${date}`);
     const oldMatches = (existing && existing.matches) || [];
     const merged = mergeMatches(oldMatches, fresh);

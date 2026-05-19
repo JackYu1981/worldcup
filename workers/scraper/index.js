@@ -40,38 +40,15 @@ async function fetchKaijiang(date) {
   }
 }
 
-// 用 code 里的"周X"反推 500.com 的"销售日期/开奖期次"
-// 500 的期次以 code 里"周一/周二/..."为准（销售日），不以 kickoff 日期为准
-// （部分凌晨场 kickoff 日期是次日，但仍属前一日销售期）
-const WEEKDAY_NAMES = ['周日','周一','周二','周三','周四','周五','周六'];
-
-function periodFromCode(code, todayBeijing) {
-  if (!code) return null;
-  const m = code.match(/^(周[日一二三四五六])/);
-  if (!m) return null;
-  const codeDayIdx = WEEKDAY_NAMES.indexOf(m[1]);
-  if (codeDayIdx < 0) return null;
-  // todayBeijing 形如 "2026-05-19"
-  const todayDate = new Date(todayBeijing + 'T00:00:00+08:00');
-  const todayDayIdx = todayDate.getUTCDay();  // 0=Sun..6=Sat（北京日 00:00 UTC == 前一日 16:00 但 getDay 仍为该日）
-  // 计算 code 周X 相对今天的 offset：500 在售页通常包含今天及未来几天
-  // diff = codeDay - todayDay；负数则 +7（当周后续）
-  let diff = codeDayIdx - todayDayIdx;
-  if (diff < 0) diff += 7;
-  // 但若 diff > 6（不可能）或场次明显属过去，500.com 不会列出，所以无需处理过去
-  const period = new Date(todayDate);
-  period.setUTCDate(period.getUTCDate() + diff);
-  return period.toISOString().slice(0, 10);
-}
-
-// 按"销售期次"分桶（code 决定，不是 kickoff）
-function bucketByPeriod(matches, todayBeijing) {
+// 按"销售期次"分桶
+// adapter 已从 data-buyendtime 解析出 match.period（500.com 权威字段，形如 "2026-05-19"）
+// 不要按 kickoff 分桶（凌晨场 kickoff 日期次日但仍属前一日销售期）
+function bucketByPeriod(matches) {
   const buckets = {};
   for (const m of matches) {
-    const period = periodFromCode(m.code, todayBeijing);
-    if (!period) continue;
-    if (!buckets[period]) buckets[period] = [];
-    buckets[period].push(m);
+    if (!m.period) continue;
+    if (!buckets[m.period]) buckets[m.period] = [];
+    buckets[m.period].push(m);
   }
   return buckets;
 }
@@ -127,13 +104,12 @@ async function snapshotMatches(env) {
     return;
   }
 
-  const buckets = bucketByPeriod(allMatches, getBeijingDate(0));
+  const buckets = bucketByPeriod(allMatches);
   const dates = Object.keys(buckets).sort();
   const summary = [];
 
   for (const date of dates) {
     const fresh = buckets[date];
-    fresh.forEach(m => { m.period = date; });
 
     const kvKey = `matches:${date}`;
     const existing = await env.MATCH_DATA.get(kvKey, 'json');
