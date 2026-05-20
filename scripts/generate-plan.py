@@ -20,6 +20,7 @@ import itertools
 import json
 import os
 import sys
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -34,9 +35,11 @@ BUDGET_UB = 154
 AI_BUDGET = 30
 WIN_LO = 900
 WIN_HI = 2700
+AI_WIN_LO = 600
+AI_WIN_HI = 3000
 STAKE_STEP = 2
 DEFAULT_C = 0.6
-ALGO_VERSION = "v2.0"
+ALGO_VERSION = "v2.2"
 
 API_BASE = "https://worldmoney.pages.dev"
 PICK_KEYS = ["home_win", "draw", "away_win"]
@@ -248,7 +251,12 @@ def enumerate_omegas(slots):
 
 
 def is_user_combo(combo, slots):
-    """combo = (slot_idx_a, pick_a, slot_idx_b, pick_b, slot_idx_c, pick_c)，由 3 个 (slot, pick) 组成"""
+    """combo = [(slot_idx, pick), ...]，长度 3 或 4。leg 全部命中 picked 即 user combo。
+    注意：v2.1 起，is_user 由 build_candidates 直接按结构指派——
+      - N=3 场景：3 串 user / 3 串 AI（与旧逻辑一致）
+      - N=4 场景：4 串恒为 user / 3 串恒为 AI（不论 leg 是否全在 picked 里）
+    本函数仅作 fallback / 调试用途。
+    """
     for slot_idx, pick in combo:
         if pick not in slots[slot_idx]["picked"]:
             return False
@@ -257,27 +265,57 @@ def is_user_combo(combo, slots):
 
 def build_candidates(slots):
     """
-    生成 3-leg 组合：选 3 个不同场次的 slot，每个 slot 选一个 outcome。
-    U: 全部 picks 都来自 user picked
-    A: 至少有一个 pick 不在 user picked（且整体仍是合法的 3 串 1）
-    返回 list of {legs:[(slot_idx,pick)*3], is_user}
+    生成串关候选。规则按用户勾选场数 N 分支：
+    - N=3：仅 3 串 1。leg 全在 picked 里 → is_user=True；至少 1 条 leg 替换 → is_user=False。
+    - N=4：4 串 user + 3 串 AI。
+        * 4 串：4 场各取 1 个 leg；is_user=True 当且仅当所有 leg 都在 picked 里（理论上恒成立，因为 4 串候选只在 picked 内枚举）；
+                AI 4 串候选 = 不生成（硬性规定）。
+        * 3 串：从 4 场里选 3 场，每场取 1 个 leg（来自该场的 picked ∪ 未 picked 全部 outcome）；is_user=False 恒为真。
+    - N>=5 或 N<3：报错。
+    返回 list of {legs:[(slot_idx, pick), ...], is_user, k_str:3|4}
     """
     by_match = defaultdict(list)
     for i, s in enumerate(slots):
         by_match[s["match_id"]].append(i)
 
     match_ids = list(by_match.keys())
-    if len(match_ids) < 3:
-        raise RuntimeError(f"不足 3 场（仅 {len(match_ids)} 场），无法构建 3 串 1")
+    N = len(match_ids)
+    if N < 3 or N > 4:
+        raise RuntimeError(f"build_candidates 仅支持 3 或 4 场用户勾选（当前 {N} 场）")
 
     candidates = []
+
+    if N == 3:
+        # 旧逻辑：3 串 1，leg 全 picked → user，否则 AI
+        for trio in itertools.combinations(match_ids, 3):
+            slot_choices = [by_match[m] for m in trio]
+            for slot_combo in itertools.product(*slot_choices):
+                for pick_combo in itertools.product(PICK_KEYS, repeat=3):
+                    legs = list(zip(slot_combo, pick_combo))
+                    user = all(p in slots[si]["picked"] for si, p in legs)
+                    candidates.append({"legs": legs, "is_user": user, "k_str": 3})
+        return candidates
+
+    # N == 4
+    # 4 串 user 候选：每场只从 picked 里选 leg
+    slot_choices_4 = [by_match[m] for m in match_ids]
+    for slot_combo in itertools.product(*slot_choices_4):
+        # 每场可选 pick = 该场 picked 集合
+        picked_choices = [list(slots[si]["picked"]) for si in slot_combo]
+        if any(len(pc) == 0 for pc in picked_choices):
+            continue  # 某场无 picked，理论上不会发生（用户既然勾了这场）
+        for pick_combo in itertools.product(*picked_choices):
+            legs = list(zip(slot_combo, pick_combo))
+            candidates.append({"legs": legs, "is_user": True, "k_str": 4})
+
+    # 3 串 AI 候选：从 4 场里选 3 场，每场任意 outcome（picked 或非 picked 都行），整票恒为 AI
     for trio in itertools.combinations(match_ids, 3):
         slot_choices = [by_match[m] for m in trio]
         for slot_combo in itertools.product(*slot_choices):
             for pick_combo in itertools.product(PICK_KEYS, repeat=3):
                 legs = list(zip(slot_combo, pick_combo))
-                user = all(p in slots[si]["picked"] for si, p in legs)
-                candidates.append({"legs": legs, "is_user": user})
+                candidates.append({"legs": legs, "is_user": False, "k_str": 3})
+
     return candidates
 
 
@@ -297,18 +335,16 @@ def combo_hits(combo, omega, slots):
 
 
 def filter_window_feasible(candidates, slots):
-    """剔除 F(c)=∅：单注无任何 stake ∈ [2..154] 能让 stake*odds 落入 [WIN_LO, WIN_HI]"""
+    """剔除单注无任何 stake 能让 stake*odds 落入对应窗口的候选。
+    user 候选用 [WIN_LO, WIN_HI]，AI 候选用 [AI_WIN_LO, AI_WIN_HI]。"""
     out = []
     for c in candidates:
         odds = combo_odds(c, slots)
         c["odds"] = odds
-        # 至少存在 stake = ceil(WIN_LO/odds) 向上取偶数 ≤ min(154, ai or total)
-        min_stake = WIN_LO / odds
-        max_stake = WIN_HI / odds
-        # 偶数格点上要存在 x 使 2*odds <= 2700 且 154*odds >= 900
-        if STAKE_STEP * odds > WIN_HI:
+        lo, hi = (WIN_LO, WIN_HI) if c["is_user"] else (AI_WIN_LO, AI_WIN_HI)
+        if STAKE_STEP * odds > hi:
             continue  # odds 太高，最小 2 元就越上限
-        if BUDGET_UB * odds < WIN_LO:
+        if BUDGET_UB * odds < lo:
             continue  # odds 太低，全押也达不到下限
         out.append(c)
     return out
@@ -316,12 +352,12 @@ def filter_window_feasible(candidates, slots):
 
 # ---------- ILP 求解（三阶段 lex） ----------
 
-def solve_ilp(candidates, slots, omegas, stage_label, fix_p_eff=None, fix_n_cov=None):
+def solve_ilp(candidates, slots, omegas, stage_label, fix_n_user=None, fix_p_eff=None):
     """
-    单阶段求解。
-    - 阶段 1：max P_eff
-    - 阶段 2：固定 P_eff = best1，max N_cov
-    - 阶段 3：固定 P_eff/N_cov = best1/best2，max N_user
+    单阶段求解（v2.2 lex 顺序：N_user → P_eff → N_cov）。
+    - 阶段 1（n_user）：max N_user（用户 leg 覆盖数）
+    - 阶段 2（p_eff）：固定 N_user = best1，max P_eff
+    - 阶段 3（n_cov）：固定 N_user/P_eff，max N_cov
     """
     K = len(candidates)
     M_max = 154
@@ -337,6 +373,18 @@ def solve_ilp(candidates, slots, omegas, stage_label, fix_p_eff=None, fix_n_cov=
     for i in range(K):
         prob += y[i] <= (M_max // STAKE_STEP) * z[i]
         prob += y[i] >= z[i]  # z=1 ⇒ y>=1 (即 stake>=2)
+
+    # v2.1 收益窗口硬约束：若启用某注，stake×odds 必须落入对应窗口
+    #   - 用户注：[WIN_LO, WIN_HI] = [900, 2700]
+    #   - AI 注：[AI_WIN_LO, AI_WIN_HI] = [600, 3000]
+    # big-M：z=0 ⇒ stake=0 ⇒ stake×odds=0；z=1 ⇒ 下沿/上沿生效
+    for i in range(K):
+        odds_i = candidates[i]["odds"]
+        lo, hi = (WIN_LO, WIN_HI) if candidates[i]["is_user"] else (AI_WIN_LO, AI_WIN_HI)
+        # 下沿：stake*odds >= lo * z
+        prob += stake[i] * odds_i >= lo * z[i]
+        # 上沿：stake*odds <= hi + (M_max*odds_i) * (1 - z) ；z=1 时退化为 hi
+        prob += stake[i] * odds_i <= hi + (M_max * odds_i) * (1 - z[i])
 
     # ω 命中指示 e_w
     e = [pulp.LpVariable(f"e_{j}", cat="Binary") for j in range(len(omegas))]
@@ -387,21 +435,27 @@ def solve_ilp(candidates, slots, omegas, stage_label, fix_p_eff=None, fix_n_cov=
     n_cov_expr = pulp.lpSum(e[j] for j in range(len(omegas)) if P_w[j] > 0)
     n_user_expr = pulp.lpSum(u_cov)
 
-    if stage_label == "p_eff":
+    if stage_label == "n_user":
+        prob += n_user_expr
+    elif stage_label == "p_eff":
+        # N_user 是整数（u_cov Binary 求和），0.5 容差等价于不变
+        prob += n_user_expr >= fix_n_user - 0.5
         prob += p_eff_expr
     elif stage_label == "n_cov":
+        prob += n_user_expr >= fix_n_user - 0.5
         # 容差 1e-4：吸收 PuLP writeMPS 浮点输出位数差与 CBC 内部 ULP 累积
         # 对 P_eff（典型 0.3-0.7）的实际语义影响 < 0.01%
         prob += p_eff_expr >= fix_p_eff - 1e-4
         prob += n_cov_expr
-    elif stage_label == "n_user":
-        prob += p_eff_expr >= fix_p_eff - 1e-4
-        # N_cov 是整数（e_j Binary 求和），0.5 容差等价于不变
-        prob += n_cov_expr >= fix_n_cov - 0.5
-        prob += n_user_expr
 
     solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=120)
+    t0 = time.perf_counter()
     status = prob.solve(solver)
+    elapsed = time.perf_counter() - t0
+    print(
+        f"[timing] stage={stage_label} slots={len(slots)} |Ω|={len(omegas)} "
+        f"K={len(candidates)} solve={elapsed:.3f}s status={pulp.LpStatus[status]}"
+    )
     if pulp.LpStatus[status] != "Optimal":
         prob.writeLP(f"/tmp/plan_{stage_label}.lp")
         prob.writeMPS(f"/tmp/plan_{stage_label}.mps")
@@ -750,12 +804,12 @@ def main():
     print(f"  Ω = {len(omegas)}")
 
     print("[6/7] ILP 求解（三阶段 lex）...")
-    sol1 = solve_ilp(candidates, slots, omegas, "p_eff")
-    print(f"  阶段 1 P_eff = {sol1['p_eff']*100:.4f}%")
-    sol2 = solve_ilp(candidates, slots, omegas, "n_cov", fix_p_eff=sol1["p_eff"])
-    print(f"  阶段 2 N_cov = {sol2['n_cov']}")
-    sol3 = solve_ilp(candidates, slots, omegas, "n_user", fix_p_eff=sol1["p_eff"], fix_n_cov=sol2["n_cov"])
-    print(f"  阶段 3 N_user = {sol3['n_user']}")
+    sol1 = solve_ilp(candidates, slots, omegas, "n_user")
+    print(f"  阶段 1 N_user = {sol1['n_user']}")
+    sol2 = solve_ilp(candidates, slots, omegas, "p_eff", fix_n_user=sol1["n_user"])
+    print(f"  阶段 2 P_eff = {sol2['p_eff']*100:.4f}%")
+    sol3 = solve_ilp(candidates, slots, omegas, "n_cov", fix_n_user=sol1["n_user"], fix_p_eff=sol2["p_eff"])
+    print(f"  阶段 3 N_cov = {sol3['n_cov']}")
 
     print("[7/7] 装配 plan ...")
     plan = assemble_plan(args.passphrase, args.user, args.c, slots, candidates, sol3, match_idx, source_rec)
