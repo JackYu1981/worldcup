@@ -155,6 +155,12 @@
       "date": "2026-05-20T21:38:39+08:00",
       "summary": "submit.js writeToKv 改为按 passphrase upsert：plans:{date} 和 aggregate:unsettled_plans 提交时自动清同口令旧版本，避免运维覆盖工作流后 plans:{date} 沉积过期方案",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.9",
+      "date": "2026-05-20T21:55:50+08:00",
+      "summary": "result.html 移除每注的「复制竞彩格式」按钮：开奖审计页场景下逐注复制无意义（票已打完），同步清掉 .copy-btn CSS 与 copyCombo 函数",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
