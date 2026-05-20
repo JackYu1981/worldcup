@@ -149,6 +149,12 @@
       "date": "2026-05-20T21:31:34+08:00",
       "summary": "recommend.html plan 去重逻辑修复：picks 历史档与 KV 同口令多版本时，按 submitted_at 取最新，避免显示旧算法版本的 narrative",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.8",
+      "date": "2026-05-20T21:38:39+08:00",
+      "summary": "submit.js writeToKv 改为按 passphrase upsert：plans:{date} 和 aggregate:unsettled_plans 提交时自动清同口令旧版本，避免运维覆盖工作流后 plans:{date} 沉积过期方案",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

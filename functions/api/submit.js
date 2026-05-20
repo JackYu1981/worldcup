@@ -115,13 +115,19 @@ async function writeToKv(kv, source, date, data) {
     key = `plans:${date}`;
   }
   const existing = await kv.get(key, 'json');
-  const items = existing ? existing.items : [];
+  let items = existing ? existing.items : [];
+  if (source === 'plan' && data.passphrase) {
+    items = items.filter(p => p.passphrase !== data.passphrase);
+  }
   items.push(data);
   await kv.put(key, JSON.stringify({ date, items }));
 
   if (source === 'plan') {
     const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
-    const pending = pendingData ? pendingData.plans : [];
+    let pending = pendingData ? pendingData.plans : [];
+    if (data.passphrase) {
+      pending = pending.filter(p => p.passphrase !== data.passphrase);
+    }
     pending.push(data);
     await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: pending }));
   }
