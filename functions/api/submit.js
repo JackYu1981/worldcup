@@ -40,6 +40,14 @@ export async function onRequestPost(context) {
       }
     }
 
+    // plan：去重检查（同 passphrase 已存在则拒绝）
+    if (source === 'plan') {
+      const dupCheck = await checkPlanDuplicate(kv, passphrase);
+      if (dupCheck.duplicate) {
+        return error(`方案"${passphrase}"已生成，不可重复生成（位于 ${dupCheck.location}）`, 409);
+      }
+    }
+
     await writeToKv(kv, source, date, body);
 
     if (source === 'pending_plan') {
@@ -47,6 +55,12 @@ export async function onRequestPost(context) {
     } else if (source === 'recommendation') {
       const legsCount = (body.legs || []).length;
       await logger(kv, '推荐', `推荐提交: ${legsCount}场组合 (${date}) by ${user.username}`);
+    } else if (source === 'plan') {
+      const pEff = body.p_eff !== undefined ? `P_eff=${(body.p_eff * 100).toFixed(2)}%` : '';
+      const nCov = body.n_cov !== undefined ? `N_cov=${body.n_cov}` : '';
+      const total = body.total_stake !== undefined ? `total=${body.total_stake}` : '';
+      const metrics = [pEff, nCov, total].filter(Boolean).join(', ');
+      await logger(kv, '方案', `方案生成: "${passphrase}" (${date}) by ${user.username}${metrics ? ', ' + metrics : ''}`);
     }
 
     return json({ success: true });
@@ -91,28 +105,41 @@ function legSetKey(legs) {
 }
 
 async function writeToKv(kv, source, date, data) {
-  if (!kv) return;
-  try {
-    let key;
-    if (source === 'recommendation') {
-      key = `recommendations:${date}`;
-    } else if (source === 'pending_plan') {
-      key = `pending_plans:${date}`;
-    } else {
-      key = `plans:${date}`;
-    }
-    const existing = await kv.get(key, 'json');
-    const items = existing ? existing.items : [];
-    items.push(data);
-    await kv.put(key, JSON.stringify({ date, items }));
+  if (!kv) throw new Error('KV namespace not bound');
+  let key;
+  if (source === 'recommendation') {
+    key = `recommendations:${date}`;
+  } else if (source === 'pending_plan') {
+    key = `pending_plans:${date}`;
+  } else {
+    key = `plans:${date}`;
+  }
+  const existing = await kv.get(key, 'json');
+  const items = existing ? existing.items : [];
+  items.push(data);
+  await kv.put(key, JSON.stringify({ date, items }));
 
-    if (source === 'plan') {
-      const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
-      const pending = pendingData ? pendingData.plans : [];
-      pending.push(data);
-      await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: pending }));
-    }
-  } catch (e) {}
+  if (source === 'plan') {
+    const pendingData = await kv.get('aggregate:unsettled_plans', 'json');
+    const pending = pendingData ? pendingData.plans : [];
+    pending.push(data);
+    await kv.put('aggregate:unsettled_plans', JSON.stringify({ plans: pending }));
+  }
+}
+
+// 同口令查重：扫 plans:* 和 aggregate:unsettled_plans / aggregate:settled_plans
+async function checkPlanDuplicate(kv, passphrase) {
+  const unsettled = await kv.get('aggregate:unsettled_plans', 'json');
+  if (unsettled && Array.isArray(unsettled.plans)) {
+    const hit = unsettled.plans.find(p => p.passphrase === passphrase);
+    if (hit) return { duplicate: true, location: 'aggregate:unsettled_plans' };
+  }
+  const settled = await kv.get('aggregate:settled_plans', 'json');
+  if (settled && Array.isArray(settled.plans)) {
+    const hit = settled.plans.find(p => p.passphrase === passphrase);
+    if (hit) return { duplicate: true, location: 'aggregate:settled_plans' };
+  }
+  return { duplicate: false };
 }
 
 export function onRequestOptions() {

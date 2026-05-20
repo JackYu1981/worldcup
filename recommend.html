@@ -106,10 +106,19 @@
             margin-top: 8px; font-size: 12px; color: #666;
             display: flex; justify-content: space-between;
         }
+        .plan-card .plan-actions {
+            margin-top: 8px; display: flex; gap: 8px;
+        }
+        .plan-card .plan-copy-btn,
+        .plan-card .plan-opt-btn {
+            flex: 1; padding: 8px; border-radius: 6px; font-size: 12px;
+            cursor: pointer; border: 1px solid #e0e0e0;
+        }
         .plan-card .plan-copy-btn {
-            margin-top: 8px; width: 100%; padding: 8px; background: #f5f5f5;
-            border: 1px solid #e0e0e0; border-radius: 6px; font-size: 12px;
-            color: #333; cursor: pointer;
+            background: #f5f5f5; color: #333;
+        }
+        .plan-card .plan-opt-btn {
+            background: #f3e8fb; color: #6a1b9a; border-color: #d6b8e8;
         }
 
         .user-group {
@@ -306,6 +315,15 @@
             </ul>
 
             <button class="ai-modal-close" onclick="hideAiAlgorithm()">关闭</button>
+        </div>
+    </div>
+
+    <div class="ai-modal-overlay" id="optModalOverlay" onclick="if(event.target===this)hideOptResult()">
+        <div class="ai-modal">
+            <h3>🤖 优化结果</h3>
+            <div class="modal-poweredby" id="optModalSubtitle"></div>
+            <div id="optModalBody"></div>
+            <button class="ai-modal-close" onclick="hideOptResult()">关闭</button>
         </div>
     </div>
 
@@ -618,6 +636,115 @@
             document.getElementById('aiModalOverlay').classList.remove('show');
         }
 
+        function showOptResult(plan) {
+            const fmt = v => (v === undefined || v === null || v === '') ? '—' : v;
+            const pct = v => (v === undefined || v === null) ? '—' : (v * 100).toFixed(2) + '%';
+            const num = v => (v === undefined || v === null) ? '—' : v;
+            const subtitle = plan.algorithm_version
+                ? `算法 ${plan.algorithm_version} · c=${fmt(plan.confidence_factor_c)}`
+                : '（旧版方案，无优化指标）';
+            document.getElementById('optModalSubtitle').textContent = subtitle;
+
+            // 「总投入」单元格：150 元（用户 120 + AI 30）
+            const totalStakeCell = plan.total_stake !== undefined
+                ? `${plan.total_stake} 元（用户 ${num(plan.user_stake)} + AI ${num(plan.ai_stake)}）`
+                : '—';
+
+            // 「n_user」单元格：4 / 4 全覆盖；若有舍弃则 covered / total
+            const dropped = plan.dropped_user_legs || [];
+            const userTotal = (plan.n_user !== undefined) ? plan.n_user + dropped.length : null;
+            const nUserCell = (plan.n_user === undefined)
+                ? '—'
+                : (userTotal !== null
+                    ? `${plan.n_user} / ${userTotal}${dropped.length === 0 ? ' 全覆盖' : ''}`
+                    : `${plan.n_user}`);
+
+            // 「E[收益]」单元格：313.40 元
+            const evCell = plan.expected_value !== undefined && plan.expected_value !== null
+                ? `${plan.expected_value} 元`
+                : '—';
+
+            // 两注配置区
+            const bets = plan.bets || [];
+            const betsHtml = bets.map(b => {
+                const isUser = b.is_user_combo !== false;
+                const label = isUser ? '用户主注' : 'AI 补注';
+                const headline = `<strong>${fmt(b.combo_id)}</strong>（${label}，${num(b.stake)} 元，赔率 ${(b.combined_odds || 0).toFixed(2)}，到手 ${num(b.potential_return)}）`;
+                const legsList = (b.legs || []).map(l => {
+                    const note = l.note ? ` <span style="color:#888;">${l.note}</span>` : '';
+                    return `<li>${fmt(l.code)} ${fmt(l.match_desc)} ${fmt(l.pick_desc)} @${(l.odds || 0).toFixed(2)}${note}</li>`;
+                }).join('');
+                return `<div style="margin:10px 0;">
+                    <div style="font-size:12px;margin-bottom:4px;">${headline}</div>
+                    <ul style="margin:0;padding-left:20px;">${legsList}</ul>
+                </div>`;
+            }).join('');
+
+            // 舍弃列表（仅当有时显示）
+            const droppedHtml = dropped.length === 0
+                ? ''
+                : `<h4>用户勾选舍弃</h4><ul>${dropped.map(d => `<li>${fmt(d.code || d.match_id)} · ${fmt(d.pick_desc)} — ${fmt(d.reason)}</li>`).join('')}</ul>`;
+
+            // 叙事段落：优先用 plan.optimization_narrative，否则不显示
+            const narrativeHtml = plan.optimization_narrative
+                ? `<h4>为什么这个分配</h4><p>${plan.optimization_narrative}</p>`
+                : '';
+
+            // 用户原始勾选 odds 网格
+            const grid = plan.original_odds_grid || [];
+            const gridHtml = grid.length === 0 ? '' : (() => {
+                const matchBlocks = grid.map(g => {
+                    const lineLabel = (mr) => mr.market === 'handicap'
+                        ? `让球${mr.line >= 0 ? '+' : ''}${mr.line}`
+                        : '胜平负';
+                    const rowsHtml = g.rows.map(mr => {
+                        const cells = mr.cells.map(c => {
+                            const style = c.picked
+                                ? 'background:#6a1b9a;color:white;font-weight:600;'
+                                : 'background:#fafafa;color:#333;';
+                            const star = c.picked ? ' ★' : '';
+                            return `<td style="padding:5px 8px;text-align:center;border:1px solid #eee;${style}">${c.desc} ${c.odds.toFixed(2)}${star}</td>`;
+                        }).join('');
+                        return `<tr>
+                            <td style="padding:5px 8px;color:#666;font-size:11px;border:1px solid #eee;background:#f5f5f5;white-space:nowrap;">${lineLabel(mr)}</td>
+                            ${cells}
+                        </tr>`;
+                    }).join('');
+                    return `<div style="margin:8px 0;">
+                        <div style="font-size:12px;color:#444;margin-bottom:4px;"><strong>${g.code}</strong> ${g.home} vs ${g.away}</div>
+                        <table style="width:100%;border-collapse:collapse;font-size:11px;">${rowsHtml}</table>
+                    </div>`;
+                }).join('');
+                return `<h4>用户原始勾选</h4>${matchBlocks}`;
+            })();
+
+            const body = `
+                <h4>优化结果</h4>
+                <table class="param-table">
+                    <tr><td>P_eff（落窗概率）</td><td>${pct(plan.p_eff)}</td></tr>
+                    <tr><td>N_cov（覆盖 ω 数）</td><td>${num(plan.n_cov)} / 729</td></tr>
+                    <tr><td>n_user（用户 leg 覆盖）</td><td>${nUserCell}</td></tr>
+                    <tr><td>总投入</td><td>${totalStakeCell}</td></tr>
+                    <tr><td>E[收益]</td><td>${evCell}</td></tr>
+                </table>
+
+                ${gridHtml}
+
+                <h4>${bets.length === 1 ? '一注' : bets.length === 2 ? '两注' : `${bets.length} 注`}配置</h4>
+                ${bets.length ? betsHtml : '<p>—</p>'}
+
+                ${droppedHtml}
+
+                ${narrativeHtml}
+            `;
+            document.getElementById('optModalBody').innerHTML = body;
+            document.getElementById('optModalOverlay').classList.add('show');
+        }
+
+        function hideOptResult() {
+            document.getElementById('optModalOverlay').classList.remove('show');
+        }
+
         function renderPlanCard(plan) {
             const tierIcons = { conservative: '🟢', progressive: '🟡', aggressive: '🔴' };
             const tierNames = { conservative: '保守型', progressive: '进取型', aggressive: '激进型' };
@@ -660,6 +787,8 @@
                 : (plan.legs || []);
             const copyLegsJson = JSON.stringify(copyLegs).replace(/"/g, '&quot;');
 
+            const planJson = JSON.stringify(plan).replace(/"/g, '&quot;');
+
             return `<div class="plan-card">
                 <div class="plan-watermark">${plan.passphrase || ''}</div>
                 <div class="plan-header" style="position:relative;z-index:1;">
@@ -672,7 +801,10 @@
                     <span>${summary}</span>
                     <span>by ${plan.submitted_by || '未知'} · ${timeStr}</span>
                 </div>
-                <button class="plan-copy-btn" onclick="copyLegs(${copyLegsJson})">📋 复制竞彩格式</button>
+                <div class="plan-actions">
+                    <button class="plan-opt-btn" onclick="showOptResult(${planJson})">🤖 优化结果</button>
+                    <button class="plan-copy-btn" onclick="copyLegs(${copyLegsJson})">📋 复制竞彩格式</button>
+                </div>
                 </div>
             </div>`;
         }

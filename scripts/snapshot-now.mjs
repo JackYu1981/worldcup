@@ -38,6 +38,19 @@ function bucketByPeriod(matches) {
 
 // 同一 id 的旧 match 只更新赔率（odds + handicap），其余字段保留。
 // status/score 不由 snapshot 写，仅 kaijiang 流程维护。
+//
+// 防御：若 fresh.odds / fresh.handicap 看起来是「无效赔率快照」（全 null 或任一 ≤ 1），
+// 不覆盖既有有效 odds——保留赛前抓到的赔率。
+// 判定理由：足彩赔率永远 > 1.01；= 1 / null 表示 500.com 在比赛结束/下架后返回的占位值，
+// 用它覆盖会破坏赛前快照（v2.0 算法依赖赛前赔率算 P_eff）。
+function isOddsValid(o) {
+  if (!o || typeof o !== 'object') return false;
+  const vals = ['home_win', 'draw', 'away_win'].map(k => o[k]);
+  if (vals.some(v => v == null)) return false;
+  if (vals.some(v => v <= 1)) return false;
+  return true;
+}
+
 function mergeMatches(oldMatches, newMatches) {
   const map = new Map();
   for (const m of (oldMatches || [])) {
@@ -48,14 +61,37 @@ function mergeMatches(oldMatches, newMatches) {
     const old = map.get(fresh.id);
     if (old) {
       const merged = { ...old };
-      if (fresh.odds) merged.odds = fresh.odds;
-      if (fresh.handicap) merged.handicap = fresh.handicap;
+      // odds: 仅在 fresh 有效时覆盖；fresh 无效则保留 old.odds
+      if (isOddsValid(fresh.odds)) {
+        merged.odds = fresh.odds;
+      } else if (fresh.odds && !isOddsValid(old.odds)) {
+        // old 也无效（首次写入场景），仍写入但记一笔
+        merged.odds = fresh.odds;
+        console.warn(`  ⚠️  ${fresh.id} ${fresh.code || ''}: odds 仍无效（fresh ${JSON.stringify(fresh.odds)}），保留 fresh 占位`);
+      } else if (fresh.odds) {
+        console.warn(`  ⚠️  ${fresh.id} ${fresh.code || ''}: 收到无效 odds ${JSON.stringify(fresh.odds)}，保留旧值 ${JSON.stringify(old.odds)}`);
+      }
+      // handicap 同理（含 line 字段：line 单独可有效，但 spf 三项要校验）
+      if (fresh.handicap) {
+        const freshSpf = { home_win: fresh.handicap.home_win, draw: fresh.handicap.draw, away_win: fresh.handicap.away_win };
+        const oldSpf = old.handicap ? { home_win: old.handicap.home_win, draw: old.handicap.draw, away_win: old.handicap.away_win } : null;
+        if (isOddsValid(freshSpf)) {
+          merged.handicap = fresh.handicap;
+        } else if (!oldSpf || !isOddsValid(oldSpf)) {
+          merged.handicap = fresh.handicap;
+          console.warn(`  ⚠️  ${fresh.id} ${fresh.code || ''}: handicap 仍无效（fresh ${JSON.stringify(freshSpf)}），保留 fresh 占位`);
+        } else {
+          // fresh handicap 无效但 line 可能更新——至少保留 line
+          merged.handicap = { ...old.handicap, line: fresh.handicap.line ?? old.handicap.line };
+          console.warn(`  ⚠️  ${fresh.id} ${fresh.code || ''}: 收到无效 handicap ${JSON.stringify(freshSpf)}，保留旧值`);
+        }
+      }
       map.set(fresh.id, merged);
     } else {
       map.set(fresh.id, fresh);
     }
   }
-  return Array.from(map.values()).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+  return Array.from(map.values()).sort((a, b) => (a.code || '').localeCompare(b.code || ''));
 }
 
 function kvGet(key) {

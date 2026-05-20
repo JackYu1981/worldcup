@@ -1,0 +1,782 @@
+#!/Users/I064337/ai/worldcup/.venv/bin/python
+"""
+AI 投注方案生成器（v2.0 算法）
+
+入口：scripts/generate-plan.py --passphrase XXX [--user jack] [--c 0.6] [--dry-run]
+
+流程：
+  1. login → token
+  2. /api/picks 拿当天 recommendation + pending_plan，按 passphrase 锁定一份预备方案
+  3. /api/matches 拿赛程（含 1x2 / handicap 赔率）
+  4. 合成 p_user（c 因子）
+  5. 枚举世界状态 Ω 与候选组合 C = U ∪ A
+  6. PuLP ILP：max P_eff → max N_cov → max N_user
+  7. 装配 plan（含 optimization_narrative / original_odds_grid / bets[].legs[].note）
+  8. POST /api/submit 写 KV
+"""
+import argparse
+import getpass
+import itertools
+import json
+import os
+import sys
+import urllib.request
+import urllib.error
+from datetime import datetime
+from collections import defaultdict
+
+import pulp
+
+# === 算法常量（v2.0 契约） ===
+TOTAL_BUDGET = 150
+BUDGET_LB = 146
+BUDGET_UB = 154
+AI_BUDGET = 30
+WIN_LO = 900
+WIN_HI = 2700
+STAKE_STEP = 2
+DEFAULT_C = 0.6
+ALGO_VERSION = "v2.0"
+
+API_BASE = "https://worldmoney.pages.dev"
+PICK_KEYS = ["home_win", "draw", "away_win"]
+PICK_DESC = {"home_win": "主胜", "draw": "平", "away_win": "客胜"}
+
+
+# ---------- HTTP ----------
+
+def http_post(url, body, token=None):
+    data = json.dumps(body).encode("utf-8")
+    headers = {"Content-Type": "application/json", "User-Agent": "worldmoney-cli/1.0"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode("utf-8"))
+
+
+def http_get(url, token=None):
+    headers = {"User-Agent": "worldmoney-cli/1.0"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode("utf-8"))
+
+
+def login(username, password):
+    code, body = http_post(f"{API_BASE}/api/login", {"username": username, "password": password})
+    if code != 200 or not body.get("success"):
+        raise RuntimeError(f"登录失败 ({code}): {body}")
+    return body["token"]
+
+
+# ---------- 数据获取 ----------
+
+def fetch_picks(token, date):
+    code, body = http_get(f"{API_BASE}/api/picks?date={date}", token)
+    if code != 200:
+        raise RuntimeError(f"/api/picks 失败 ({code}): {body}")
+    return body.get("picks", [])
+
+
+def fetch_matches(period):
+    code, body = http_get(f"{API_BASE}/api/matches?period={period}")
+    if code != 200:
+        raise RuntimeError(f"/api/matches 失败 ({code}): {body}")
+    return body.get("matches", [])
+
+
+# ---------- 数据预处理 ----------
+
+def find_pending_plan(picks, passphrase):
+    pending = [p for p in picks if p.get("source") == "pending_plan" and p.get("passphrase") == passphrase]
+    if not pending:
+        raise RuntimeError(f"未找到 passphrase='{passphrase}' 的预备方案")
+    if len(pending) > 1:
+        raise RuntimeError(f"passphrase='{passphrase}' 存在多个预备方案，请检查 KV")
+    return pending[0]
+
+
+def find_source_recommendation(picks, pending):
+    """
+    推荐 = 预备方案的源头：取 source=recommendation 且 pending_plan_passphrase==passphrase 的那条。
+    用于读取「用户全部原始勾选」(可能比 pending 的 3 条 leg 多——如同场多选)。
+    """
+    pp = pending.get("passphrase")
+    cand = [p for p in picks if p.get("source") == "recommendation" and p.get("pending_plan_passphrase") == pp]
+    if not cand:
+        # 兜底：用 pending.legs 反推
+        return None
+    return cand[0]
+
+
+def build_match_index(matches):
+    return {m["id"]: m for m in matches}
+
+
+def reconstruct_matches_from_rec(rec, match_idx):
+    """
+    用 rec.legs 里保存的赛前赔率覆盖 match_idx 中的赔率（用于 dry-run 历史复盘：
+    /api/matches 在比赛结束后会把 odds 重置为 1）。
+    rec.legs 仅含被勾选的 leg，未勾选 outcome 的赔率仍来自 match_idx。
+    若 match_idx 里整组赔率都是 1（全场已重置），就用 rec.legs 中的勾选赔率
+    + 1.0 作为占位（不会被作为 user pick，但仍参与候选枚举）。
+    """
+    for leg in rec.get("legs", []):
+        mid = leg["match_id"]
+        if mid not in match_idx:
+            continue
+        m = match_idx[mid]
+        if leg["market"] == "1x2":
+            m["odds"][leg["pick"]] = leg["odds"]
+        else:
+            m["handicap"][leg["pick"]] = leg["odds"]
+            if "line" in leg:
+                m["handicap"]["line"] = leg.get("line", m["handicap"].get("line"))
+    return match_idx
+
+
+def collect_user_picks(rec_or_pending, match_idx):
+    """
+    返回 user_picks: {match_id: {market: {line(or None): set(picks)}}}
+    """
+    legs = rec_or_pending.get("legs", [])
+    out = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    for leg in legs:
+        mid = leg["match_id"]
+        market = leg["market"]
+        if market == "handicap":
+            line = match_idx[mid].get("handicap", {}).get("line")
+        else:
+            line = None
+        out[mid][market][line].add(leg["pick"])
+    return out
+
+
+def calc_p_market(odds_dict):
+    """去 margin 归一化：odds {home_win,draw,away_win} → {p_home,p_draw,p_away}"""
+    raw = {k: 1.0 / v for k, v in odds_dict.items() if v and v > 0}
+    s = sum(raw.values())
+    if s <= 0:
+        return None
+    return {k: v / s for k, v in raw.items()}
+
+
+def calc_p_user(p_market, picked_set, c):
+    """
+    若 picked_set 非空：sum_picked = c*1 + (1-c)*∑ p_market[picked]，按 p_market 比例分配
+    若 picked_set 为空：直接返回 p_market
+    """
+    if not picked_set:
+        return dict(p_market)
+    picked = [k for k in PICK_KEYS if k in picked_set]
+    sum_picked_market = sum(p_market[k] for k in picked)
+    sum_picked_user = c * 1.0 + (1 - c) * sum_picked_market
+    if sum_picked_user > 1:
+        sum_picked_user = 1.0
+    p_user = {}
+    for k in PICK_KEYS:
+        if k in picked:
+            p_user[k] = sum_picked_user * p_market[k] / sum_picked_market if sum_picked_market > 0 else sum_picked_user / len(picked)
+        else:
+            unpicked = [x for x in PICK_KEYS if x not in picked]
+            sum_unpicked_market = sum(p_market[x] for x in unpicked)
+            if sum_unpicked_market > 0:
+                p_user[k] = (1 - sum_picked_user) * p_market[k] / sum_unpicked_market
+            else:
+                p_user[k] = (1 - sum_picked_user) / len(unpicked) if unpicked else 0
+    return p_user
+
+
+# ---------- 候选构建 ----------
+
+def build_legs_universe(user_picks, match_idx, c):
+    """
+    每个 (match_id, market, line) 是一个 leg slot；每个 slot 在三个 outcome 下各有一个 leg 候选。
+    返回:
+      slots: 列表 [(match_id, market, line)]，每个 slot 的 outcomes={pick: {odds, p_user, p_market, picked}}
+      slot_match_id: {idx -> match_id}
+    """
+    slots = []
+    for mid, markets in user_picks.items():
+        m = match_idx[mid]
+        for market, lines in markets.items():
+            for line, picked_set in lines.items():
+                if market == "1x2":
+                    odds_dict = {k: m["odds"][k] for k in PICK_KEYS}
+                else:
+                    odds_dict = {k: m["handicap"][k] for k in PICK_KEYS}
+                p_market = calc_p_market(odds_dict)
+                p_user = calc_p_user(p_market, picked_set, c)
+                slots.append({
+                    "match_id": mid,
+                    "match": m,
+                    "market": market,
+                    "line": line,
+                    "picked": set(picked_set),
+                    "outcomes": {
+                        k: {
+                            "odds": odds_dict[k],
+                            "p_user": p_user[k],
+                            "p_market": p_market[k],
+                            "picked": k in picked_set,
+                        }
+                        for k in PICK_KEYS
+                    },
+                })
+    return slots
+
+
+def world_state_prob(omega, slots):
+    """omega 是 (pick_per_slot,) 元组，长度与 slots 一致"""
+    p = 1.0
+    for slot, pick in zip(slots, omega):
+        p *= slot["outcomes"][pick]["p_user"]
+    return p
+
+
+def enumerate_omegas(slots):
+    """笛卡尔积 ≤ 3^len(slots)"""
+    return list(itertools.product(PICK_KEYS, repeat=len(slots)))
+
+
+def is_user_combo(combo, slots):
+    """combo = (slot_idx_a, pick_a, slot_idx_b, pick_b, slot_idx_c, pick_c)，由 3 个 (slot, pick) 组成"""
+    for slot_idx, pick in combo:
+        if pick not in slots[slot_idx]["picked"]:
+            return False
+    return True
+
+
+def build_candidates(slots):
+    """
+    生成 3-leg 组合：选 3 个不同场次的 slot，每个 slot 选一个 outcome。
+    U: 全部 picks 都来自 user picked
+    A: 至少有一个 pick 不在 user picked（且整体仍是合法的 3 串 1）
+    返回 list of {legs:[(slot_idx,pick)*3], is_user}
+    """
+    by_match = defaultdict(list)
+    for i, s in enumerate(slots):
+        by_match[s["match_id"]].append(i)
+
+    match_ids = list(by_match.keys())
+    if len(match_ids) < 3:
+        raise RuntimeError(f"不足 3 场（仅 {len(match_ids)} 场），无法构建 3 串 1")
+
+    candidates = []
+    for trio in itertools.combinations(match_ids, 3):
+        slot_choices = [by_match[m] for m in trio]
+        for slot_combo in itertools.product(*slot_choices):
+            for pick_combo in itertools.product(PICK_KEYS, repeat=3):
+                legs = list(zip(slot_combo, pick_combo))
+                user = all(p in slots[si]["picked"] for si, p in legs)
+                candidates.append({"legs": legs, "is_user": user})
+    return candidates
+
+
+def combo_odds(combo, slots):
+    o = 1.0
+    for si, p in combo["legs"]:
+        o *= slots[si]["outcomes"][p]["odds"]
+    return o
+
+
+def combo_hits(combo, omega, slots):
+    """omega 同 slots 等长。组合命中 ⇔ 每个 leg 的 (slot, pick) 在 omega 中匹配"""
+    for si, p in combo["legs"]:
+        if omega[si] != p:
+            return False
+    return True
+
+
+def filter_window_feasible(candidates, slots):
+    """剔除 F(c)=∅：单注无任何 stake ∈ [2..154] 能让 stake*odds 落入 [WIN_LO, WIN_HI]"""
+    out = []
+    for c in candidates:
+        odds = combo_odds(c, slots)
+        c["odds"] = odds
+        # 至少存在 stake = ceil(WIN_LO/odds) 向上取偶数 ≤ min(154, ai or total)
+        min_stake = WIN_LO / odds
+        max_stake = WIN_HI / odds
+        # 偶数格点上要存在 x 使 2*odds <= 2700 且 154*odds >= 900
+        if STAKE_STEP * odds > WIN_HI:
+            continue  # odds 太高，最小 2 元就越上限
+        if BUDGET_UB * odds < WIN_LO:
+            continue  # odds 太低，全押也达不到下限
+        out.append(c)
+    return out
+
+
+# ---------- ILP 求解（三阶段 lex） ----------
+
+def solve_ilp(candidates, slots, omegas, stage_label, fix_p_eff=None, fix_n_cov=None):
+    """
+    单阶段求解。
+    - 阶段 1：max P_eff
+    - 阶段 2：固定 P_eff = best1，max N_cov
+    - 阶段 3：固定 P_eff/N_cov = best1/best2，max N_user
+    """
+    K = len(candidates)
+    M_max = 154
+
+    prob = pulp.LpProblem(f"plan_{stage_label}", pulp.LpMaximize)
+
+    # 整数 stake = step * y_c，y_c ∈ {0..77}
+    y = [pulp.LpVariable(f"y_{i}", lowBound=0, upBound=M_max // STAKE_STEP, cat="Integer") for i in range(K)]
+    stake = [STAKE_STEP * y[i] for i in range(K)]
+
+    # 每注是否参与（z_c = 1 ⇔ y_c >= 1）
+    z = [pulp.LpVariable(f"z_{i}", cat="Binary") for i in range(K)]
+    for i in range(K):
+        prob += y[i] <= (M_max // STAKE_STEP) * z[i]
+        prob += y[i] >= z[i]  # z=1 ⇒ y>=1 (即 stake>=2)
+
+    # ω 命中指示 e_w
+    e = [pulp.LpVariable(f"e_{j}", cat="Binary") for j in range(len(omegas))]
+    # payoff_w = ∑ x_c * odds_c * 1[c hits ω]
+    BIG = 5000
+    for j, omega in enumerate(omegas):
+        hit_terms = [stake[i] * candidates[i]["odds"] for i in range(K) if combo_hits(candidates[i], omega, slots)]
+        if not hit_terms:
+            prob += e[j] == 0
+            continue
+        payoff = pulp.lpSum(hit_terms)
+        # e=1 ⇔ WIN_LO <= payoff <= WIN_HI
+        # payoff >= WIN_LO * e ; payoff <= WIN_HI + BIG*(1-e) ; payoff <= BIG (when e=0 anyway harmless)
+        # To enforce e=1 only when in window: use two-side big-M
+        # If e=0: no constraint forced (but we want e=0 if out of window)
+        # If e=1: WIN_LO<=payoff<=WIN_HI
+        prob += payoff >= WIN_LO * e[j]
+        prob += payoff <= WIN_HI + BIG * (1 - e[j])
+        # 反向：若 payoff 在窗口内则可以选 e=1（最大化目标会自动选），不需强制 e=1，因为目标里 e_j 系数为正
+
+    # 用户 leg 覆盖（按 (match_id, market, line, pick) 维度）
+    user_leg_keys = []  # list of (slot_idx, pick) where picked
+    for si, slot in enumerate(slots):
+        for pk in slot["picked"]:
+            user_leg_keys.append((si, pk))
+
+    u_cov = [pulp.LpVariable(f"u_{idx}", cat="Binary") for idx in range(len(user_leg_keys))]
+    for idx, (si, pk) in enumerate(user_leg_keys):
+        # u=1 ⇔ ∃ candidate 含此 leg 且 z_c=1
+        related = [z[i] for i, c in enumerate(candidates) if any(s == si and p == pk for s, p in c["legs"])]
+        if not related:
+            prob += u_cov[idx] == 0
+            continue
+        prob += u_cov[idx] <= pulp.lpSum(related)
+        for zi in related:
+            prob += u_cov[idx] >= zi - (1 - 1)  # 单向也行，让 max 推上去
+
+    # 约束
+    prob += pulp.lpSum(stake) >= BUDGET_LB
+    prob += pulp.lpSum(stake) <= BUDGET_UB
+    ai_idx = [i for i in range(K) if not candidates[i]["is_user"]]
+    if ai_idx:
+        prob += pulp.lpSum(stake[i] for i in ai_idx) <= AI_BUDGET
+
+    # 目标
+    P_w = [world_state_prob(om, slots) for om in omegas]
+    p_eff_expr = pulp.lpSum(P_w[j] * e[j] for j in range(len(omegas)))
+    n_cov_expr = pulp.lpSum(e[j] for j in range(len(omegas)) if P_w[j] > 0)
+    n_user_expr = pulp.lpSum(u_cov)
+
+    if stage_label == "p_eff":
+        prob += p_eff_expr
+    elif stage_label == "n_cov":
+        prob += p_eff_expr >= fix_p_eff - 1e-7
+        prob += n_cov_expr
+    elif stage_label == "n_user":
+        prob += p_eff_expr >= fix_p_eff - 1e-7
+        prob += n_cov_expr >= fix_n_cov - 1e-7
+        prob += n_user_expr
+
+    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=120)
+    status = prob.solve(solver)
+    if pulp.LpStatus[status] != "Optimal":
+        prob.writeLP(f"/tmp/plan_{stage_label}.lp")
+        raise RuntimeError(f"ILP {stage_label} 未求得最优解：{pulp.LpStatus[status]} (LP saved to /tmp/plan_{stage_label}.lp)")
+
+    stakes_val = [int(round(pulp.value(stake[i]))) for i in range(K)]
+    p_eff_val = sum(P_w[j] for j in range(len(omegas)) if pulp.value(e[j]) > 0.5)
+    n_cov_val = int(round(pulp.value(n_cov_expr)))
+    n_user_val = int(round(pulp.value(n_user_expr)))
+    return {
+        "stakes": stakes_val,
+        "p_eff": p_eff_val,
+        "n_cov": n_cov_val,
+        "n_user": n_user_val,
+        "user_leg_keys": user_leg_keys,
+    }
+
+
+# ---------- 装配 plan ----------
+
+def make_match_code_sort_key(code):
+    return code  # 周一/二/三 字面排序基本可用，前端原样保留
+
+
+def assemble_plan(passphrase, user, c, slots, candidates, sol, match_idx, source_rec):
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    bets = []
+    user_idx = ai_idx = 0
+    for i, cand in enumerate(candidates):
+        st = sol["stakes"][i]
+        if st < STAKE_STEP:
+            continue
+        legs_out = []
+        for si, pk in cand["legs"]:
+            slot = slots[si]
+            m = slot["match"]
+            if slot["market"] == "handicap":
+                line = slot["line"]
+                pick_desc = {"home_win": "让球胜", "draw": "让球平", "away_win": "让球负"}[pk]
+            else:
+                pick_desc = {"home_win": f"{m['home']}胜", "draw": "平", "away_win": f"{m['away']}胜"}[pk]
+            leg_obj = {
+                "match_id": m["id"],
+                "match_desc": f"{m['home']}vs{m['away']}",
+                "code": m["code"],
+                "market": slot["market"],
+                "pick": pk,
+                "pick_desc": pick_desc,
+                "odds": slot["outcomes"][pk]["odds"],
+            }
+            # note: 仅 AI 组合的 leg 才需要批注（用户主选不加 note）
+            if not cand["is_user"]:
+                if pk in slot["picked"]:
+                    # AI 用的 leg 仍在用户勾选集里 → 替用户保留另一勾选
+                    leg_obj["note"] = f"← 替你保留 {m['code']} 第二勾选"
+                else:
+                    # AI 用了用户没勾的 outcome
+                    leg_obj["note"] = "（AI 引入）"
+            legs_out.append(leg_obj)
+        if cand["is_user"]:
+            user_idx += 1
+            combo_id = f"U{user_idx}"
+        else:
+            ai_idx += 1
+            combo_id = f"A{ai_idx}"
+        odds = cand["odds"]
+        bets.append({
+            "combo_id": combo_id,
+            "stake": st,
+            "combined_odds": round(odds, 4),
+            "potential_return": int(round(st * odds)),
+            "p_hit": round(_combo_p(cand, slots), 4),
+            "is_user_combo": cand["is_user"],
+            "legs": legs_out,
+            "hit": None,
+            "actual_return": None,
+        })
+
+    total_stake = sum(b["stake"] for b in bets)
+    user_stake = sum(b["stake"] for b in bets if b["is_user_combo"])
+    ai_stake = total_stake - user_stake
+
+    # E[收益] = ∑ P(ω) Payoff(ω, x)；直接遍历 candidates+stakes，避免从 bet 反查
+    omegas = enumerate_omegas(slots)
+    e_value = 0.0
+    for omega in omegas:
+        pw = world_state_prob(omega, slots)
+        if pw <= 0:
+            continue
+        payoff = 0.0
+        for i, cand in enumerate(candidates):
+            st = sol["stakes"][i]
+            if st < STAKE_STEP:
+                continue
+            if combo_hits(cand, omega, slots):
+                payoff += st * cand["odds"]
+        e_value += pw * payoff
+
+    # 舍弃的用户 leg
+    used_user_legs = set()
+    for b in bets:
+        if not b["is_user_combo"]:
+            # AI 组合也可能含某些 user picks
+            pass
+        for leg in b["legs"]:
+            mid = leg["match_id"]
+            mkt = leg["market"]
+            line = match_idx[mid].get("handicap", {}).get("line") if mkt == "handicap" else None
+            used_user_legs.add((mid, mkt, line, leg["pick"]))
+
+    dropped = []
+    for slot in slots:
+        for pk in slot["picked"]:
+            key = (slot["match_id"], slot["market"], slot["line"], pk)
+            if key not in used_user_legs:
+                m = slot["match"]
+                dropped.append({
+                    "code": m["code"],
+                    "match_desc": f"{m['home']}vs{m['away']}",
+                    "market": slot["market"],
+                    "line": slot["line"],
+                    "pick": pk,
+                    "pick_desc": _pick_desc(slot, pk),
+                    "odds": slot["outcomes"][pk]["odds"],
+                    "reason": "未进入最优分配",
+                })
+
+    n_user_actual = sum(1 for s in slots for pk in s["picked"]
+                        if (s["match_id"], s["market"], s["line"], pk) in used_user_legs)
+
+    # original_odds_grid
+    grid = build_original_odds_grid(slots, match_idx)
+
+    # narrative
+    narrative = build_narrative(bets, sol["p_eff"], sol["n_cov"], n_user_actual, dropped, e_value, total_stake, c)
+
+    plan = {
+        "date": today,
+        "period": today,
+        "passphrase": passphrase,
+        "source": "plan",
+        "submitted_by": user,
+        "submitted_at": datetime.now().astimezone().isoformat(),
+        "algorithm_version": ALGO_VERSION,
+        "confidence_factor_c": c,
+        "total_stake": total_stake,
+        "user_stake": user_stake,
+        "ai_stake": ai_stake,
+        "p_eff": round(sol["p_eff"], 6),
+        "n_cov": sol["n_cov"],
+        "n_user": n_user_actual,
+        "expected_value": round(e_value, 2),
+        "selected_tier": "progressive",
+        "bets": bets,
+        "dropped_user_legs": dropped,
+        "naive_baseline": _naive_baseline(slots, source_rec, total_stake),
+        "status": "pending",
+        "optimization_narrative": narrative,
+        "original_odds_grid": grid,
+    }
+    return plan
+
+
+def _combo_p(cand, slots):
+    p = 1.0
+    for si, pk in cand["legs"]:
+        p *= slots[si]["outcomes"][pk]["p_user"]
+    return p
+
+
+def _pick_desc(slot, pk):
+    m = slot["match"]
+    if slot["market"] == "handicap":
+        return {"home_win": "让球胜", "draw": "让球平", "away_win": "让球负"}[pk]
+    return {"home_win": f"{m['home']}胜", "draw": "平", "away_win": f"{m['away']}胜"}[pk]
+
+
+def build_original_odds_grid(slots, match_idx):
+    """每场两行（1x2 + handicap），每行 3 cells"""
+    by_match = defaultdict(dict)  # mid -> {market_line: slot}
+    for s in slots:
+        key = f"{s['market']}@{s['line']}" if s["market"] == "handicap" else "1x2"
+        by_match[s["match_id"]][key] = s
+
+    grid = []
+    for mid, slot_map in by_match.items():
+        m = match_idx[mid]
+        rows = []
+        # 1x2 行
+        if "1x2" in slot_map:
+            slot = slot_map["1x2"]
+            cells = []
+            for pk in PICK_KEYS:
+                desc = {"home_win": m["home"], "draw": "平", "away_win": m["away"]}[pk]
+                cells.append({
+                    "pick": pk,
+                    "desc": desc,
+                    "odds": slot["outcomes"][pk]["odds"],
+                    "picked": pk in slot["picked"],
+                })
+            rows.append({"market": "1x2", "line": None, "cells": cells})
+        # handicap 行
+        for k, slot in slot_map.items():
+            if not k.startswith("handicap"):
+                continue
+            cells = []
+            line = slot["line"]
+            for pk in PICK_KEYS:
+                desc = {"home_win": "让胜", "draw": "让平", "away_win": "让负"}[pk]
+                cells.append({
+                    "pick": pk,
+                    "desc": desc,
+                    "odds": slot["outcomes"][pk]["odds"],
+                    "picked": pk in slot["picked"],
+                })
+            rows.append({"market": "handicap", "line": line, "cells": cells})
+        grid.append({
+            "code": m["code"],
+            "home": m["home"],
+            "away": m["away"],
+            "rows": rows,
+        })
+    return grid
+
+
+def build_narrative(bets, p_eff, n_cov, n_user, dropped, e_value, total_stake, c):
+    lines = []
+    lines.append(f"算法 {ALGO_VERSION}（c={c}）枚举候选 3 串 1 后做 ILP 分配。")
+    lines.append(f"主目标 P(有效命中)={p_eff*100:.2f}%，次目标 ω 覆盖={n_cov} 个状态，第三优先级用户 leg 覆盖={n_user}/{n_user+len(dropped)}。")
+    user_bets = [b for b in bets if b["is_user_combo"]]
+    ai_bets = [b for b in bets if not b["is_user_combo"]]
+    if user_bets:
+        ub = user_bets[0]
+        lines.append(f"主注 {ub['combo_id']} 押 {ub['stake']} 元在用户勾选组合（赔率 {ub['combined_odds']}，到手 {ub['potential_return']} 元），落入 [900,2700] 中段——这是策略灵魂。")
+    if ai_bets:
+        ab = ai_bets[0]
+        lines.append(f"AI 用 {ab['stake']} 元（{ab['combo_id']}）补一注偏离用户勾选的高赔组合（赔率 {ab['combined_odds']}，到手 {ab['potential_return']} 元），扩大 ω 覆盖。")
+    if dropped:
+        lines.append(f"舍弃 {len(dropped)} 条用户勾选：" + "、".join(f"{d['code']}{d['pick_desc']}" for d in dropped) + "（资金集中在 P_eff 更高的组合）。")
+    else:
+        lines.append("用户勾选全保留。")
+    lines.append(f"E[收益]={e_value:.2f} 元，总投入 {total_stake} 元，预期净收益 {e_value-total_stake:+.2f} 元（仅描述指标，不作为决策依据）。")
+    return "\n".join(lines)
+
+
+def _naive_baseline(slots, source_rec, total_stake):
+    """复式 baseline（仅描述用）"""
+    # 取第一个用户勾选 leg 的 stake_each = total/n
+    n = sum(len(s["picked"]) for s in slots)
+    if n == 0:
+        return None
+    each = total_stake // n if n else 0
+    return {
+        "description": f"用户勾选 {n} 注复式，每注 {each} 元",
+        "stake_each": each,
+        "p_eff": 0,
+        "n_cov": 0,
+        "note": "naive 复式落窗概率取决于实际赔率，仅供对比",
+    }
+
+
+# ---------- 主流程 ----------
+
+def main():
+    ap = argparse.ArgumentParser(description="生成 v2.0 投注方案")
+    ap.add_argument("--passphrase", required=True, help="预备方案口令")
+    ap.add_argument("--user", default="jack", help="登录用户名")
+    ap.add_argument("--password", help="密码（默认提示输入）")
+    ap.add_argument("--c", type=float, default=DEFAULT_C, help="信心放大因子（默认 0.6）")
+    ap.add_argument("--date", help="数据日期 YYYY-MM-DD（默认今天）")
+    ap.add_argument("--dry-run", action="store_true", help="只打印 plan，不 POST")
+    ap.add_argument("--matches-file", help="本地 matches JSON（dry-run 复盘用，绕过 /api/matches 已重置赔率的问题）")
+    args = ap.parse_args()
+
+    if not args.password:
+        args.password = os.environ.get("WORLDMONEY_PASSWORD") or getpass.getpass(f"[{args.user}] password: ")
+
+    date = args.date or datetime.now().strftime("%Y-%m-%d")
+
+    print(f"[1/7] 登录 {args.user} ...")
+    token = login(args.user, args.password)
+
+    print(f"[2/7] 拉取 picks date={date} ...")
+    picks = fetch_picks(token, date)
+
+    print(f"[3/7] 定位 passphrase='{args.passphrase}' 的预备方案 ...")
+    pending = find_pending_plan(picks, args.passphrase)
+    source_rec = find_source_recommendation(picks, pending)
+
+    # 用 source_rec.legs 作为「用户全部原始勾选」（含同场多选）；fallback 到 pending.legs
+    rec_for_picks = source_rec if source_rec else pending
+
+    # period 取首场赛事的 period（recommendation 数据里没有 period 字段，从 leg→match 反查）
+    sample_leg = rec_for_picks["legs"][0]
+    sample_mid = sample_leg["match_id"]
+
+    # 拿 matches：优先使用 --matches-file（dry-run 复盘）
+    matches = None
+    period = date
+    if args.matches_file:
+        print(f"[4/7] 从本地文件 {args.matches_file} 加载 matches ...")
+        with open(args.matches_file) as f:
+            matches = json.load(f)
+            if isinstance(matches, dict) and "matches" in matches:
+                matches = matches["matches"]
+    else:
+        # date 优先，再向前/后 ±2 天容错（赛程 period 可能与单据日期不同）
+        from datetime import timedelta
+        base = datetime.strptime(date, "%Y-%m-%d")
+        for delta in [0, -1, 1, -2, 2]:
+            p = (base + timedelta(days=delta)).strftime("%Y-%m-%d")
+            print(f"[4/7] 拉取 matches period={p} ...")
+            try:
+                matches = fetch_matches(p)
+                period = p
+                break
+            except RuntimeError:
+                continue
+    if not matches:
+        raise RuntimeError(f"无法获取 matches 数据（尝试 {date} ±2 天）")
+
+    match_idx = build_match_index(matches)
+
+    # 校验：legs 引用的 match_id 全部存在
+    legs = rec_for_picks["legs"]
+    missing = [l["match_id"] for l in legs if l["match_id"] not in match_idx]
+    if missing:
+        raise RuntimeError(f"matches 缺失：{missing}（period={period}）")
+
+    print(f"[5/7] 构建 slots / 候选 / 世界状态（c={args.c}）...")
+    user_picks = collect_user_picks(rec_for_picks, match_idx)
+    slots = build_legs_universe(user_picks, match_idx, args.c)
+    print(f"  slots = {len(slots)}, |Ω| = {3**len(slots)}")
+    if len(slots) > 6:
+        print(f"  ⚠️  slots>6，|Ω|={3**len(slots)} 偏大，求解可能慢")
+
+    candidates = build_candidates(slots)
+    print(f"  raw candidates = {len(candidates)}")
+    candidates = filter_window_feasible(candidates, slots)
+    print(f"  window-feasible = {len(candidates)}")
+    if not candidates:
+        raise RuntimeError("窗口剔除后无可行候选——请调整本金或勾选")
+
+    omegas = enumerate_omegas(slots)
+    print(f"  Ω = {len(omegas)}")
+
+    print("[6/7] ILP 求解（三阶段 lex）...")
+    sol1 = solve_ilp(candidates, slots, omegas, "p_eff")
+    print(f"  阶段 1 P_eff = {sol1['p_eff']*100:.4f}%")
+    sol2 = solve_ilp(candidates, slots, omegas, "n_cov", fix_p_eff=sol1["p_eff"])
+    print(f"  阶段 2 N_cov = {sol2['n_cov']}")
+    sol3 = solve_ilp(candidates, slots, omegas, "n_user", fix_p_eff=sol1["p_eff"], fix_n_cov=sol2["n_cov"])
+    print(f"  阶段 3 N_user = {sol3['n_user']}")
+
+    print("[7/7] 装配 plan ...")
+    plan = assemble_plan(args.passphrase, args.user, args.c, slots, candidates, sol3, match_idx, source_rec)
+
+    bet_summary = ", ".join(f"{b['combo_id']}={b['stake']}元@{b['combined_odds']:.2f}" for b in plan["bets"])
+    print(f"  bets: {bet_summary}")
+    print(f"  P_eff={plan['p_eff']*100:.2f}%, N_cov={plan['n_cov']}, n_user={plan['n_user']}, total={plan['total_stake']}")
+
+    if args.dry_run:
+        print("\n--- DRY RUN: plan JSON ---")
+        print(json.dumps(plan, ensure_ascii=False, indent=2))
+        return
+
+    print("\n提交 plan 到 /api/submit ...")
+    plan["passphrase"] = args.passphrase
+    plan["source"] = "plan"
+    code, body = http_post(f"{API_BASE}/api/submit", plan, token)
+    print(f"  HTTP {code}: {body}")
+    if code == 409:
+        print("⚠️  口令已存在，未写入 KV。")
+        sys.exit(2)
+    if code != 200 or not body.get("success"):
+        raise RuntimeError(f"提交失败：{body}")
+    print("✅ 已写入 KV。")
+
+
+if __name__ == "__main__":
+    main()

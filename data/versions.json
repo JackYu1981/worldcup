@@ -107,6 +107,12 @@
       "date": "2026-05-18T22:15:31+08:00",
       "summary": "v2.0 plan schema 统一为 bets[] 多注格式：新增 plan-adapter（前后端）归一处理 v2.0/v1.x/v1.0 三种格式；result/recommend/dashboard/evaluate 重构使用 adapter；41 项单元测试通过",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.1",
+      "date": "2026-05-20T16:48:19+08:00",
+      "summary": "修复开奖参数：buildKaijiangUrl ?date= → ?d=（500.com 实际只认 d，旧参数被忽略并回落当前期次，导致跨期次/延期补赛漏抓比分）；snapshot 防御无效赔率覆盖（500.com 赛后 odds=1/null 占位不再覆盖赛前快照）+ 排序改用 code；plan 提交链路 P_eff/N_cov logger + 409 dedup + 不静默吞错；scripts/generate-plan.py 作为方案生成唯一入口（PuLP CBC 三阶段 lex ILP，走 API）",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
