@@ -137,6 +137,12 @@
       "date": "2026-05-20T21:09:24+08:00",
       "summary": "v2.2 narrative 文案升级：自动识别 3+4 串混合结构，描述 lex 优先级 N_user→P_eff→N_cov，主注按 stake 排序，AI 注区分兜底/扩散语义",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.6",
+      "date": "2026-05-20T21:21:19+08:00",
+      "summary": "recommend.html 算法介绍卡同步 v2.2：modal 完整改写为 lex N_user→P_eff→N_cov 三阶段、3+4 串候选分支、用户注[900,2700]/AI注[600,3000]双窗口；底部短介绍卡同步",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

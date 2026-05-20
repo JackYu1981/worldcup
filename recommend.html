@@ -262,11 +262,12 @@
 
     <div class="ai-modal-overlay" id="aiModalOverlay" onclick="if(event.target===this)hideAiAlgorithm()">
         <div class="ai-modal">
-            <h3>🤖 AI 投注优化算法 v2.0</h3>
+            <h3>🤖 AI 投注优化算法 v2.2</h3>
             <div class="modal-poweredby">Powered by Claude Opus 4.7</div>
 
             <h4>核心哲学</h4>
-            <p>世界杯样本有限（72 场），爆冷常发生，胜率估计在小样本下不稳定。<strong>AI 不在 EV 维度做剔除或加权</strong>，只做"格点最优分配 + 落窗优化 + 多状态覆盖"。让 150 元本金的中奖收益落在<strong>概率与奖金的中间地带</strong>。</p>
+            <p>世界杯样本有限（72 场），爆冷常发生，胜率估计在小样本下不稳定。<strong>AI 不在 EV 维度做剔除或加权</strong>，只做"格点最优分配 + 落窗优化 + 多状态覆盖 + 忠实执行用户勾选"。让 150 元本金的中奖收益落在<strong>概率与奖金的中间地带</strong>。</p>
+            <p><strong>v2.2 关键升级</strong>：用户的勾选行为本身携带信心信号——只勾 1 cell 是强信心，多勾是对冲意图。lex 优先级把"用户勾选 leg 全覆盖"提到第一优先级，<strong>尊重用户勾选意图先于数学 P_eff 最大化</strong>。</p>
             <p><strong>不要求用户量化胜率</strong>：通过"信心放大因子 c（默认 0.6）"从赔率反推 + 用户勾选信号合成 p_user：</p>
             <ul>
                 <li>用户勾选某结果时：p_user(勾选) = c·1 + (1-c)·p_market_norm(勾选)，其余按市场比例分配</li>
@@ -278,40 +279,48 @@
             <table class="param-table">
                 <tr><td>总本金</td><td>150 元（允许 ±4 元浮动，146~154）</td></tr>
                 <tr><td>AI 自主预算上限</td><td>30 元</td></tr>
-                <tr><td>目标收益窗口</td><td>900 ~ 2700 元（6~18 倍）</td></tr>
+                <tr><td>用户注收益窗口</td><td>900 ~ 2700 元（6~18 倍）</td></tr>
+                <tr><td>AI 注收益窗口</td><td>600 ~ 3000 元（v2.1+ 较宽，3 串补窗口）</td></tr>
                 <tr><td>最小投注单位</td><td>2 元</td></tr>
             </table>
 
-            <h4>主目标 vs 次目标 vs 第三优先级</h4>
-            <p><strong>主目标</strong>：max P(有效命中) = ∑_ω P(ω) · 𝟙[Payoff(ω,x) ∈ [900,2700]]</p>
-            <p><strong>次目标</strong>（主目标平局时）：max 覆盖 ω 数 = |{ω : P(ω)>0 ∧ Payoff(ω,x) 落窗}|</p>
-            <p><strong>第三优先级（软偏好）</strong>：在前两者都最优时，覆盖更多用户勾选 leg</p>
-            <p style="font-size:12px;color:#666;">(P(有效命中)：能产生一次落入策略窗口胜利的概率；覆盖 ω 数：在多少种世界状态下能有效胜利；用户覆盖：尊重用户勾选的程度)</p>
+            <h4>lex 三阶段优先级（v2.2）</h4>
+            <p><strong>第一优先级</strong>：max N_user = 用户勾选 leg 被覆盖数量（"勾的就要押"）</p>
+            <p><strong>第二优先级</strong>（在阶段 1 解集中）：max P_eff = ∑_ω P(ω) · 𝟙[Payoff(ω,x) ∈ [900,2700]]</p>
+            <p><strong>第三优先级</strong>（在阶段 1+2 解集中）：max N_cov = 覆盖 ω 状态数</p>
+            <p style="font-size:12px;color:#666;">(N_user：尊重用户勾选意图；P_eff：能产生一次落入策略窗口胜利的概率；N_cov：在多少种世界状态下能有效胜利)</p>
+
+            <h4>候选组合（按用户勾选场数 N 分支）</h4>
+            <ul>
+                <li><strong>N=3</strong>：仅 3 串 1。U = 用户勾选笛卡尔积；A = 至少 1 leg 替换为未勾结果</li>
+                <li><strong>N=4</strong>：4 串 user + 3 串 AI 混合候选。U = 4 串（4 场各取 1 user picked leg）；A = 3 串（任选 3 场，每场任意 outcome），<strong>硬性规定不产 4 串 AI</strong></li>
+                <li>N&lt;3 或 N≥5：报错，暂不支持</li>
+            </ul>
 
             <h4>硬约束</h4>
             <ul>
                 <li>每注金额必须是 2 的倍数</li>
                 <li>总投入 ∈ [146, 154]（受 2 元最小单位约束的浮动区间）</li>
-                <li>AI 新增结果（用户未选）总金额 ≤ 30 元</li>
-                <li>任一可能中奖路径的总到手金额 ∈ [900, 2700]</li>
+                <li>AI 新增结果（is_user_combo=false）总金额 ≤ 30 元</li>
+                <li><strong>stake×odds 窗口硬约束</strong>（v2.1+）：用户注启用必须落 [900,2700]，AI 注启用必须落 [600,3000]，杜绝 2 元退化注</li>
             </ul>
 
-            <h4>用户勾选处理</h4>
-            <p>v2.0 取消了"用户必保"硬约束（实践中常因预算与窗口几何冲突致无可行解）。改为<strong>第三优先级软偏好</strong>——AI 可自由舍弃用户勾选以追求更高 P(有效命中)，但必须在报告中明示舍弃的 leg 与数学理由。</p>
+            <h4>用户勾选处理（v2.2 关键变化）</h4>
+            <p>v2.0/v2.1 把 N_user 当软偏好，结果 ILP 常把所有注集中到高赔率单一 leg 上，忽略用户的对冲意图。<strong>v2.2 把 N_user 提到 lex 第一阶段最大化</strong>——能全覆盖用户 picked legs 就全覆盖；做不到再退而求次。算法只能优化分配方式，不能选择性忽略用户 leg，除非数学上确实做不到（窗口剔除让候选池里没合法 K）。</p>
 
             <h4>算法流程</h4>
-            <p><strong>1. 枚举候选组合</strong>：用户原选 U + AI 候选 A（用户场次内单场切换未选结果）</p>
-            <p><strong>2. 窗口剔除</strong>：对每个 c，F(c) = { x ∈ {2,4,6,...} : 900 ≤ x·odds_c ≤ 2700, x ≤ 剩余预算 }；F(c)=∅ 则剔除（高赔率不可达 odds>1350，或低赔率不可达 budget·odds<900）</p>
-            <p><strong>3. 世界状态枚举</strong>：ω ∈ {主胜,平,客胜}³（≤27 种），P(ω) = ∏ p_{i,r_i}</p>
-            <p><strong>4. 整数线性规划</strong>：变量 x_c ∈ {0,2,4,...}，按主目标→次目标依序优化</p>
+            <p><strong>1. 枚举候选组合</strong>：按 N 分支构造 C = U ∪ A</p>
+            <p><strong>2. 窗口剔除</strong>：对每个 c，F(c) = { x ∈ {2,4,6,...} : lo ≤ x·odds_c ≤ hi, x ≤ 剩余预算 }；用户注 [lo,hi]=[900,2700]，AI 注 [600,3000]；F(c)=∅ 则剔除</p>
+            <p><strong>3. 世界状态枚举</strong>：Ω = ∏ (R_{i,1x2} × R_{i,h})，|Ω| ≤ 3^6=729，P(ω) = ∏ p_{i,m,r}</p>
+            <p><strong>4. 三阶段 ILP</strong>：依次最大化 N_user → P_eff → N_cov，每阶段把上阶段最优值固定为约束</p>
             <p><strong>5. 自救机制</strong>：若不可行，AI 在 30 元预算内枚举更多 A 候选；仍不可行则 fail，提示用户调整勾选（不擅自放宽窗口或本金）</p>
 
             <h4>输出</h4>
             <ul>
                 <li>每注的具体金额、组合、odds、命中概率</li>
-                <li>P(有效命中)（主目标值）+ 覆盖 ω 数（次目标值）</li>
+                <li>N_user（用户 leg 覆盖数）+ P_eff（落窗概率）+ N_cov（覆盖 ω 数）</li>
                 <li>E[收益] 仅作描述指标，与 naive 复式 E[收益] 对比</li>
-                <li>被舍弃的用户勾选 + 舍弃理由</li>
+                <li>被舍弃的用户勾选 + 舍弃理由（v2.2 仅在数学不可行时才会出现）</li>
             </ul>
 
             <button class="ai-modal-close" onclick="hideAiAlgorithm()">关闭</button>
@@ -622,7 +631,7 @@
                     <span>🤖 AI 优化方案</span>
                     <span class="ai-hint">点击查看算法 ›</span>
                 </div>
-                <div class="ai-desc">150元本金（±4元浮动）+ AI 30元预算，主目标 max P(有效命中)、次目标 max ω 覆盖数；不引入 EV 维度，目标收益区间 900-2700 元。</div>
+                <div class="ai-desc">150元本金（±4元浮动）+ AI 30元预算，lex 三阶段 max N_user → max P_eff → max N_cov（v2.2 把"用户勾选全覆盖"提到第一优先级）；不引入 EV 维度，用户注落 [900,2700]、AI 注落 [600,3000]。</div>
                 <div class="ai-poweredby">Powered by Claude Opus 4.7</div>
             </div>`;
         }
