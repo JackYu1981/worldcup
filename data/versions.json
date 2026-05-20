@@ -131,6 +131,12 @@
       "date": "2026-05-20T20:55:18+08:00",
       "summary": "算法升级 v2.2：lex 优先级重排为 N_user→P_eff→N_cov，硬性保证用户勾选 leg 全覆盖；支持 3+4 串混合候选；AI 注启用 [600,3000] 收益窗口",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.5",
+      "date": "2026-05-20T21:09:24+08:00",
+      "summary": "v2.2 narrative 文案升级：自动识别 3+4 串混合结构，描述 lex 优先级 N_user→P_eff→N_cov，主注按 stake 排序，AI 注区分兜底/扩散语义",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

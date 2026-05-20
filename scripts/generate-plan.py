@@ -684,21 +684,63 @@ def build_original_odds_grid(slots, match_idx):
 
 def build_narrative(bets, p_eff, n_cov, n_user, dropped, e_value, total_stake, c):
     lines = []
-    lines.append(f"算法 {ALGO_VERSION}（c={c}）枚举候选 3 串 1 后做 ILP 分配。")
-    lines.append(f"主目标 P(有效命中)={p_eff*100:.2f}%，次目标 ω 覆盖={n_cov} 个状态，第三优先级用户 leg 覆盖={n_user}/{n_user+len(dropped)}。")
     user_bets = [b for b in bets if b["is_user_combo"]]
     ai_bets = [b for b in bets if not b["is_user_combo"]]
+
+    # 推断本次的串关结构（看 user 注的 legs 数）
+    user_k = max((len(b["legs"]) for b in user_bets), default=0)
+    ai_k = max((len(b["legs"]) for b in ai_bets), default=0)
+    if user_k and ai_k and user_k != ai_k:
+        struct_desc = f"{user_k} 串 user 注 + {ai_k} 串 AI 兜底注"
+    elif user_k:
+        struct_desc = f"{user_k} 串 1"
+    else:
+        struct_desc = "混合候选"
+
+    lines.append(
+        f"算法 {ALGO_VERSION}（c={c}）枚举 {struct_desc} 候选后做 ILP 分配，"
+        f"lex 优先级 N_user → P_eff → N_cov。"
+    )
+    n_user_total = n_user + len(dropped)
+    cov_desc = "全覆盖" if not dropped else f"{n_user}/{n_user_total}"
+    lines.append(
+        f"用户勾选 leg 覆盖={cov_desc}，"
+        f"P(有效命中)={p_eff*100:.2f}%，ω 覆盖={n_cov} 个状态。"
+    )
+
+    # 按 stake 由高到低描述 user 注，最大 stake 那注才叫"主注"
     if user_bets:
-        ub = user_bets[0]
-        lines.append(f"主注 {ub['combo_id']} 押 {ub['stake']} 元在用户勾选组合（赔率 {ub['combined_odds']}，到手 {ub['potential_return']} 元），落入 [900,2700] 中段——这是策略灵魂。")
+        sorted_users = sorted(user_bets, key=lambda b: -b["stake"])
+        main = sorted_users[0]
+        lines.append(
+            f"主注 {main['combo_id']} 押 {main['stake']} 元（{user_k} 串 1，赔率 {main['combined_odds']}，到手 {main['potential_return']} 元），"
+            f"落入 [900,2700] 用户窗口——尊重用户勾选意图为最高优先级。"
+        )
+        if len(sorted_users) > 1:
+            others = "、".join(f"{b['combo_id']}={b['stake']}元@{b['combined_odds']}" for b in sorted_users[1:])
+            lines.append(f"其余 user 注：{others}（同为 {user_k} 串 1，覆盖不同 ω 状态）。")
+
     if ai_bets:
         ab = ai_bets[0]
-        lines.append(f"AI 用 {ab['stake']} 元（{ab['combo_id']}）补一注偏离用户勾选的高赔组合（赔率 {ab['combined_odds']}，到手 {ab['potential_return']} 元），扩大 ω 覆盖。")
+        purpose = "兜底覆盖" if user_k > ai_k else "扩大 ω 覆盖"
+        lines.append(
+            f"AI 用 {ab['stake']} 元（{ab['combo_id']}，{ai_k} 串 1，赔率 {ab['combined_odds']}，到手 {ab['potential_return']} 元）"
+            f"做{purpose}，落入 [600,3000] AI 窗口。"
+        )
+
     if dropped:
-        lines.append(f"舍弃 {len(dropped)} 条用户勾选：" + "、".join(f"{d['code']}{d['pick_desc']}" for d in dropped) + "（资金集中在 P_eff 更高的组合）。")
+        lines.append(
+            f"未覆盖 {len(dropped)} 条用户勾选："
+            + "、".join(f"{d['code']}{d['pick_desc']}" for d in dropped)
+            + "（数学约束下含此 leg 的所有候选都进不了对应窗口）。"
+        )
     else:
-        lines.append("用户勾选全保留。")
-    lines.append(f"E[收益]={e_value:.2f} 元，总投入 {total_stake} 元，预期净收益 {e_value-total_stake:+.2f} 元（仅描述指标，不作为决策依据）。")
+        lines.append("用户勾选 leg 全部被覆盖（含主注 + AI 兜底）。")
+
+    lines.append(
+        f"E[收益]={e_value:.2f} 元，总投入 {total_stake} 元，预期净收益 {e_value-total_stake:+.2f} 元"
+        f"（仅描述指标，不作为决策依据）。"
+    )
     return "\n".join(lines)
 
 
