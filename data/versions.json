@@ -119,6 +119,12 @@
       "date": "2026-05-20T18:12:13+08:00",
       "summary": "看板修复 + 管理页改名 + 日志精简：(1) dashboard.html 修 auth.js 加载时序——之前 AUTH 在内联块之后加载导致资金曲线/日历空白；(2) design.html → admin.html 重命名（管理员入口路径专业化），nav-tab 全局同步；(3) admin 系统日志默认折叠，只显示当天日志（en-CA ISO 格式过滤稳定跨 iOS Safari）",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.3",
+      "date": "2026-05-20T18:55:32+08:00",
+      "summary": "修复方案生成 lex ILP 数值不稳定：scripts/generate-plan.py 第三阶段 fix 约束容差从 1e-7 放宽到 P_eff 1e-4 / N_cov 0.5（吸收 PuLP writeMPS 13 位浮点输出 vs writeLP 12 位的差异，及 CBC 内部 ULP 累积，避免阶段 1/2 同时锁定时 Infeasible）；失败时同时落 LP+MPS 便于诊断",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

@@ -390,18 +390,22 @@ def solve_ilp(candidates, slots, omegas, stage_label, fix_p_eff=None, fix_n_cov=
     if stage_label == "p_eff":
         prob += p_eff_expr
     elif stage_label == "n_cov":
-        prob += p_eff_expr >= fix_p_eff - 1e-7
+        # 容差 1e-4：吸收 PuLP writeMPS 浮点输出位数差与 CBC 内部 ULP 累积
+        # 对 P_eff（典型 0.3-0.7）的实际语义影响 < 0.01%
+        prob += p_eff_expr >= fix_p_eff - 1e-4
         prob += n_cov_expr
     elif stage_label == "n_user":
-        prob += p_eff_expr >= fix_p_eff - 1e-7
-        prob += n_cov_expr >= fix_n_cov - 1e-7
+        prob += p_eff_expr >= fix_p_eff - 1e-4
+        # N_cov 是整数（e_j Binary 求和），0.5 容差等价于不变
+        prob += n_cov_expr >= fix_n_cov - 0.5
         prob += n_user_expr
 
     solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=120)
     status = prob.solve(solver)
     if pulp.LpStatus[status] != "Optimal":
         prob.writeLP(f"/tmp/plan_{stage_label}.lp")
-        raise RuntimeError(f"ILP {stage_label} 未求得最优解：{pulp.LpStatus[status]} (LP saved to /tmp/plan_{stage_label}.lp)")
+        prob.writeMPS(f"/tmp/plan_{stage_label}.mps")
+        raise RuntimeError(f"ILP {stage_label} 未求得最优解：{pulp.LpStatus[status]} (LP saved to /tmp/plan_{stage_label}.lp, MPS to /tmp/plan_{stage_label}.mps)")
 
     stakes_val = [int(round(pulp.value(stake[i]))) for i in range(K)]
     p_eff_val = sum(P_w[j] for j in range(len(omegas)) if pulp.value(e[j]) > 0.5)
