@@ -527,7 +527,7 @@
         <a class="nav-tab" href="recommend.html">推荐</a>
         <a class="nav-tab" href="result.html">方案</a>
         <a class="nav-tab" href="dashboard.html">看板</a>
-        <a class="nav-tab active" href="design.html">管理</a>
+        <a class="nav-tab active" href="admin.html">管理</a>
     </div>
 
     <div style="padding: 0 12px;">
@@ -536,8 +536,8 @@
     </div>
 
     <div class="section" id="section-system-logs">
-        <h2 class="collapsible open" onclick="toggleSection(this)">📊 系统日志 <span class="toggle-icon">▲</span></h2>
-        <div class="section-body" id="logList">加载中...</div>
+        <h2 class="collapsible" onclick="toggleSection(this)">📊 系统日志 <span class="toggle-icon">▼</span></h2>
+        <div class="section-body collapsed" id="logList">加载中...</div>
     </div>
 
     <div class="section" id="section-release-notes">
@@ -943,7 +943,15 @@
                 const resp = await fetch('/api/logs', { headers });
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
-                const logs = data.logs || [];
+                const allLogs = data.logs || [];
+                // 只保留当天（北京时间 YYYY-MM-DD）的日志
+                // 用 en-CA locale 直接拿 ISO 格式，避免 iOS Safari 对 zh-CN 2-digit 不稳定输出
+                const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+                const logs = allLogs.filter(l => {
+                    if (!l.time) return false;
+                    const d = new Date(l.time).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+                    return d === today;
+                });
                 renderLogs(logs);
             } catch (e) {
                 document.getElementById('logList').innerHTML = '<div class="empty-state">日志加载失败</div>';
@@ -953,7 +961,7 @@
         function renderLogs(logs) {
             const container = document.getElementById('logList');
             if (logs.length === 0) {
-                container.innerHTML = '<div class="empty-state">暂无日志</div>';
+                container.innerHTML = '<div class="empty-state">今日暂无日志</div>';
                 return;
             }
             container.innerHTML = logs.map(l => {

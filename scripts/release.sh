@@ -94,7 +94,7 @@ step "6/7 Git commit + push"
 # 用 ls 过滤存在的路径，避免 git add 因不存在的路径而报错跳过其他文件。
 PATHS=()
 for p in data/versions.json docs functions lib workers scripts \
-         index.html design.html recommend.html result.html dashboard.html login.html \
+         index.html admin.html recommend.html result.html dashboard.html login.html \
          auth.js pull-refresh.js wrangler.toml package.json README.md; do
   [ -e "$p" ] && PATHS+=("$p")
 done

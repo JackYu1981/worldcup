@@ -113,6 +113,12 @@
       "date": "2026-05-20T16:48:19+08:00",
       "summary": "修复开奖参数：buildKaijiangUrl ?date= → ?d=（500.com 实际只认 d，旧参数被忽略并回落当前期次，导致跨期次/延期补赛漏抓比分）；snapshot 防御无效赔率覆盖（500.com 赛后 odds=1/null 占位不再覆盖赛前快照）+ 排序改用 code；plan 提交链路 P_eff/N_cov logger + 409 dedup + 不静默吞错；scripts/generate-plan.py 作为方案生成唯一入口（PuLP CBC 三阶段 lex ILP，走 API）",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.2",
+      "date": "2026-05-20T18:12:13+08:00",
+      "summary": "看板修复 + 管理页改名 + 日志精简：(1) dashboard.html 修 auth.js 加载时序——之前 AUTH 在内联块之后加载导致资金曲线/日历空白；(2) design.html → admin.html 重命名（管理员入口路径专业化），nav-tab 全局同步；(3) admin 系统日志默认折叠，只显示当天日志（en-CA ISO 格式过滤稳定跨 iOS Safari）",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
