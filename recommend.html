@@ -421,14 +421,15 @@
                 const confirmedPlans = plansData.plans || [];
                 const confirmedPassphrases = new Set(confirmedPlans.map(p => p.passphrase));
 
-                plans = [...allPicks.filter(p => p.source === 'plan'), ...confirmedPlans];
-                const seen = new Set();
-                plans = plans.filter(p => {
+                const merged = new Map();
+                for (const p of [...allPicks.filter(p => p.source === 'plan'), ...confirmedPlans]) {
                     const key = p.passphrase || p.submitted_at;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                });
+                    const prev = merged.get(key);
+                    if (!prev || (p.submitted_at || '') > (prev.submitted_at || '')) {
+                        merged.set(key, p);
+                    }
+                }
+                plans = Array.from(merged.values());
 
                 pendingPlans = allPicks
                     .filter(p => p.source === 'pending_plan')
