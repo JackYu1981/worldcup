@@ -71,7 +71,9 @@ EOF
 
 # === 4. 部署到 Cloudflare Pages ===
 step "4/7 部署 Cloudflare Pages"
-npx wrangler pages deploy . --project-name=worldmoney --branch=main --commit-dirty=true 2>&1 | tail -3
+# 显式传 ASCII commit message：wrangler 自动从 git 取的字段经 Cloudflare API
+# 校验时偶发触发 "Invalid commit message UTF-8" (code 8000111)，强制 ASCII 绕过
+npx wrangler pages deploy . --project-name=worldmoney --branch=main --commit-dirty=true --commit-message="$VERSION release" 2>&1 | tail -3
 
 # === 5. 同步 KV cr:current_version ===
 step "5/7 更新 KV cr:current_version"
