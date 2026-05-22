@@ -791,11 +791,10 @@
                 ? `${bets.length}注 ¥${totalStake} → ¥${maxR.toLocaleString()}`
                 : `${bets.length}注 ¥${totalStake} → ¥${minR.toLocaleString()}~¥${maxR.toLocaleString()}`;
 
-            // 复制按钮：v2.0 多注合并所有 leg；v1.0 单注用 plan.legs
-            const copyLegs = bets.length > 0
-                ? bets.flatMap(b => b.legs || [])
-                : (plan.legs || []);
-            const copyLegsJson = JSON.stringify(copyLegs).replace(/"/g, '&quot;');
+            const copyPayload = bets.length > 0
+                ? bets.map(b => ({ stake: b.stake, legs: b.legs || [] }))
+                : (plan.legs ? [{ stake: plan.stake || plan.total_stake || 0, legs: plan.legs }] : []);
+            const copyPayloadJson = JSON.stringify(copyPayload).replace(/"/g, '&quot;');
 
             const planJson = JSON.stringify(plan).replace(/"/g, '&quot;');
 
@@ -813,7 +812,7 @@
                 </div>
                 <div class="plan-actions">
                     <button class="plan-opt-btn" onclick="showOptResult(${planJson})">🤖 优化结果</button>
-                    <button class="plan-copy-btn" onclick="copyLegs(${copyLegsJson})">📋 复制竞彩格式</button>
+                    <button class="plan-copy-btn" onclick="copyBets(${copyPayloadJson})">📋 复制竞彩格式</button>
                 </div>
                 </div>
             </div>`;
@@ -934,6 +933,16 @@
                 return `${code} ${l.match_desc} ${l.pick_desc}`;
             });
             navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+        }
+
+        function copyBets(bets) {
+            const SEP = '————————————';
+            const blocks = bets.map(b => {
+                const legLines = (b.legs || []).map(l => `${l.code || '000'} ${l.match_desc} ${l.pick_desc}`);
+                legLines.push(`¥${b.stake}`);
+                return legLines.join('\n');
+            });
+            navigator.clipboard.writeText(blocks.join(`\n${SEP}\n`)).catch(() => {});
         }
 
         function showToast(msg) {
