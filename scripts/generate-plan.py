@@ -263,6 +263,139 @@ def is_user_combo(combo, slots):
     return True
 
 
+# N=2 专用窗口下沿（区别于 N≥3 的 WIN_LO=900）
+# 原因：2 串 odds 通常较低，900 元下沿在 154 元预算内常常数学不可行；
+# 用户明确要求 N=2 把窗口下沿放宽到 700。
+N2_WIN_LO = 600
+N2_WIN_HI = WIN_HI  # 上沿仍为 2700
+
+
+def build_n2_candidates(slots):
+    """
+    N=2 直通路径：每场只取「用户勾选的 leg」做 2 串笛卡尔积。
+    同场多选（1x2 + handicap，或同 market 多 outcome）= 该场的多个候选 leg，独立参与笛卡尔。
+    返回 list of {legs:[(slot_idx, pick), (slot_idx, pick)], is_user:True, k_str:2}
+    """
+    by_match = defaultdict(list)  # match_id -> [(slot_idx, pick), ...]，仅用户勾选过的 (slot, outcome)
+    for si, s in enumerate(slots):
+        for pk in s["picked"]:
+            by_match[s["match_id"]].append((si, pk))
+
+    match_ids = list(by_match.keys())
+    if len(match_ids) != 2:
+        raise RuntimeError(f"build_n2_candidates 仅支持 N=2（当前 {len(match_ids)} 场）")
+
+    a_legs = by_match[match_ids[0]]
+    b_legs = by_match[match_ids[1]]
+    candidates = []
+    for la in a_legs:
+        for lb in b_legs:
+            candidates.append({"legs": [la, lb], "is_user": True, "k_str": 2})
+    return candidates
+
+
+def filter_n2_window(candidates, slots):
+    """N=2 候选过滤：单注必须存在合法 stake 使 stake*odds ∈ [N2_WIN_LO, N2_WIN_HI]。"""
+    out = []
+    for c in candidates:
+        odds = combo_odds(c, slots)
+        c["odds"] = odds
+        if STAKE_STEP * odds > N2_WIN_HI:
+            continue
+        if BUDGET_UB * odds < N2_WIN_LO:
+            continue
+        out.append(c)
+    return out
+
+
+def solve_n2_stakes(candidates):
+    """
+    N=2 stake 分配：每注预期回报尽量接近 ——
+    1. 取窗口中点 target = (WIN_LO + WIN_HI) / 2 = 1800 作初始目标
+    2. 每注 stake_raw = target / odds；按 STAKE_STEP=2 取偶数
+    3. clip 到使 stake*odds ∈ [WIN_LO, WIN_HI]
+    4. 总和缩放到 [BUDGET_LB, BUDGET_UB]，缩放后再次 clip 窗口
+    5. 仍不满足 → RuntimeError
+    返回 stakes 列表（与 candidates 等长，未启用置 0）
+    """
+    K = len(candidates)
+    if K == 0:
+        raise RuntimeError("N=2：窗口剔除后无可行候选")
+
+    target = (N2_WIN_LO + N2_WIN_HI) / 2  # 1700
+
+    def stake_for(odds, t):
+        s = round(t / odds / STAKE_STEP) * STAKE_STEP
+        if s < STAKE_STEP:
+            s = STAKE_STEP
+        # clip 到窗口
+        max_s = int(N2_WIN_HI / odds / STAKE_STEP) * STAKE_STEP
+        import math
+        min_s = math.ceil(N2_WIN_LO / odds / STAKE_STEP) * STAKE_STEP
+        if min_s < STAKE_STEP:
+            min_s = STAKE_STEP
+        if max_s < min_s:
+            return None
+        if s < min_s:
+            s = min_s
+        elif s > max_s:
+            s = max_s
+        return s
+
+    stakes = []
+    for c in candidates:
+        s = stake_for(c["odds"], target)
+        if s is None:
+            raise RuntimeError(f"N=2：候选 odds={c['odds']:.2f} 找不到合法 stake")
+        stakes.append(s)
+
+    total = sum(stakes)
+
+    # 缩放到 [BUDGET_LB, BUDGET_UB]
+    if total < BUDGET_LB or total > BUDGET_UB:
+        new_target = target * (TOTAL_BUDGET / total) if total > 0 else target
+        # 用 new_target 重算，再做 ±2 微调
+        stakes = []
+        for c in candidates:
+            s = stake_for(c["odds"], new_target)
+            if s is None:
+                raise RuntimeError(f"N=2：缩放后候选 odds={c['odds']:.2f} 找不到合法 stake")
+            stakes.append(s)
+        total = sum(stakes)
+
+    # 微调（±STAKE_STEP）使 total 落入 [BUDGET_LB, BUDGET_UB]
+    safety = 200
+    while (total < BUDGET_LB or total > BUDGET_UB) and safety > 0:
+        safety -= 1
+        if total < BUDGET_LB:
+            # 选「odds 最低」（提升空间最大、还在窗口内）的注 +2
+            best_idx = None
+            for i, c in enumerate(candidates):
+                new_s = stakes[i] + STAKE_STEP
+                if new_s * c["odds"] <= N2_WIN_HI:
+                    if best_idx is None or c["odds"] < candidates[best_idx]["odds"]:
+                        best_idx = i
+            if best_idx is None:
+                raise RuntimeError(f"N=2：total={total} < {BUDGET_LB}，所有注已触及窗口上限，无法补足")
+            stakes[best_idx] += STAKE_STEP
+        else:  # total > BUDGET_UB
+            best_idx = None
+            for i, c in enumerate(candidates):
+                new_s = stakes[i] - STAKE_STEP
+                if new_s >= STAKE_STEP and new_s * c["odds"] >= N2_WIN_LO:
+                    if best_idx is None or c["odds"] > candidates[best_idx]["odds"]:
+                        best_idx = i
+            if best_idx is None:
+                raise RuntimeError(f"N=2：total={total} > {BUDGET_UB}，所有注已触及窗口下限，无法削减")
+            stakes[best_idx] -= STAKE_STEP
+        total = sum(stakes)
+
+    if total < BUDGET_LB or total > BUDGET_UB:
+        raise RuntimeError(f"N=2：微调后 total={total} 仍不在 [{BUDGET_LB},{BUDGET_UB}]")
+
+    return stakes
+
+
 def build_candidates(slots):
     """
     生成串关候选。规则按用户勾选场数 N 分支：
@@ -280,6 +413,10 @@ def build_candidates(slots):
 
     match_ids = list(by_match.keys())
     N = len(match_ids)
+    if N == 1:
+        raise RuntimeError("N=1 不支持：单场无法做串关")
+    if N == 2:
+        raise RuntimeError("N=2 应走 build_n2_candidates 直通路径，不应进入 build_candidates")
     if N < 3 or N > 4:
         raise RuntimeError(f"build_candidates 仅支持 3 或 4 场用户勾选（当前 {N} 场）")
 
@@ -835,23 +972,66 @@ def main():
     if len(slots) > 6:
         print(f"  ⚠️  slots>6，|Ω|={3**len(slots)} 偏大，求解可能慢")
 
-    candidates = build_candidates(slots)
-    print(f"  raw candidates = {len(candidates)}")
-    candidates = filter_window_feasible(candidates, slots)
-    print(f"  window-feasible = {len(candidates)}")
-    if not candidates:
-        raise RuntimeError("窗口剔除后无可行候选——请调整本金或勾选")
+    # 按 match_id 数量分支：N=1 报错；N=2 直通；N=3/4 走 ILP
+    n_matches = len(set(s["match_id"] for s in slots))
+    if n_matches == 1:
+        raise RuntimeError("N=1 不支持：单场无法做串关")
 
-    omegas = enumerate_omegas(slots)
-    print(f"  Ω = {len(omegas)}")
+    if n_matches == 2:
+        print("  N=2 → 走直通路径（笛卡尔积 + 窗口过滤 + 等期望分配）...")
+        candidates = build_n2_candidates(slots)
+        print(f"  raw candidates (N=2) = {len(candidates)}")
+        candidates = filter_n2_window(candidates, slots)
+        print(f"  window-feasible (N=2) = {len(candidates)}")
+        if not candidates:
+            raise RuntimeError("N=2：窗口剔除后无可行候选——请调整本金或勾选")
+        stakes = solve_n2_stakes(candidates)
+        # 计算 p_eff / n_cov（同 ILP 语义：在窗口内的 ω 数与概率和）
+        omegas = enumerate_omegas(slots)
+        P_w = [world_state_prob(om, slots) for om in omegas]
+        p_eff_val = 0.0
+        n_cov_val = 0
+        for j, om in enumerate(omegas):
+            if P_w[j] <= 0:
+                continue
+            payoff = 0.0
+            for i, c in enumerate(candidates):
+                if stakes[i] >= STAKE_STEP and combo_hits(c, om, slots):
+                    payoff += stakes[i] * c["odds"]
+            if N2_WIN_LO <= payoff <= N2_WIN_HI:
+                p_eff_val += P_w[j]
+                n_cov_val += 1
+        # n_user：所有用户勾选 leg 应都被覆盖（笛卡尔覆盖完整）
+        user_leg_keys = [(si, pk) for si, s in enumerate(slots) for pk in s["picked"]]
+        n_user_val = sum(1 for si, pk in user_leg_keys if any(
+            stakes[i] >= STAKE_STEP and (si, pk) in c["legs"] for i, c in enumerate(candidates)
+        ))
+        sol3 = {
+            "stakes": stakes,
+            "p_eff": p_eff_val,
+            "n_cov": n_cov_val,
+            "n_user": n_user_val,
+            "user_leg_keys": user_leg_keys,
+        }
+        print(f"  N=2 stakes = {stakes}, P_eff={p_eff_val*100:.2f}%, N_cov={n_cov_val}, N_user={n_user_val}")
+    else:
+        candidates = build_candidates(slots)
+        print(f"  raw candidates = {len(candidates)}")
+        candidates = filter_window_feasible(candidates, slots)
+        print(f"  window-feasible = {len(candidates)}")
+        if not candidates:
+            raise RuntimeError("窗口剔除后无可行候选——请调整本金或勾选")
 
-    print("[6/7] ILP 求解（三阶段 lex）...")
-    sol1 = solve_ilp(candidates, slots, omegas, "n_user")
-    print(f"  阶段 1 N_user = {sol1['n_user']}")
-    sol2 = solve_ilp(candidates, slots, omegas, "p_eff", fix_n_user=sol1["n_user"])
-    print(f"  阶段 2 P_eff = {sol2['p_eff']*100:.4f}%")
-    sol3 = solve_ilp(candidates, slots, omegas, "n_cov", fix_n_user=sol1["n_user"], fix_p_eff=sol2["p_eff"])
-    print(f"  阶段 3 N_cov = {sol3['n_cov']}")
+        omegas = enumerate_omegas(slots)
+        print(f"  Ω = {len(omegas)}")
+
+        print("[6/7] ILP 求解（三阶段 lex）...")
+        sol1 = solve_ilp(candidates, slots, omegas, "n_user")
+        print(f"  阶段 1 N_user = {sol1['n_user']}")
+        sol2 = solve_ilp(candidates, slots, omegas, "p_eff", fix_n_user=sol1["n_user"])
+        print(f"  阶段 2 P_eff = {sol2['p_eff']*100:.4f}%")
+        sol3 = solve_ilp(candidates, slots, omegas, "n_cov", fix_n_user=sol1["n_user"], fix_p_eff=sol2["p_eff"])
+        print(f"  阶段 3 N_cov = {sol3['n_cov']}")
 
     print("[7/7] 装配 plan ...")
     plan = assemble_plan(args.passphrase, args.user, args.c, slots, candidates, sol3, match_idx, source_rec)
