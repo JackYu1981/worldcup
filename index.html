@@ -664,6 +664,7 @@
             const keys = Object.keys(combo);
             if (keys.length === 0) {
                 bar.classList.remove('visible');
+                document.body.style.paddingBottom = '';
                 return;
             }
             bar.classList.add('visible');
@@ -719,6 +720,10 @@
                 </div>`;
             }).join('');
             document.getElementById('comboLegs').innerHTML = legsHtml;
+            // 防止固定底栏遮挡最后一场比赛的赔率行
+            requestAnimationFrame(() => {
+                document.body.style.paddingBottom = bar.offsetHeight + 'px';
+            });
         }
 
         function clearCombo() {
