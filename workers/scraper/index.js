@@ -53,11 +53,23 @@ function bucketByPeriod(matches) {
   return buckets;
 }
 
+// 占位赔率检测：500.com 在比赛进行中/刚结束的过渡窗口可能把 data-sp 写成 "1"，
+// 整组 odds 全部 == 1 是无意义占位，必须丢弃，否则会覆盖之前已抓到的真实赔率。
+function isPlaceholderOdds(odds) {
+  if (!odds || typeof odds !== 'object') return true;
+  const vals = ['home_win', 'draw', 'away_win']
+    .map(k => odds[k])
+    .filter(v => v !== null && v !== undefined);
+  if (vals.length === 0) return true;
+  return vals.every(v => v <= 1.01);
+}
+
 // 合并新旧 match 列表：按 id 去重
 // 同一 id 的旧 match：只更新赔率（odds + handicap），其他字段一律保留旧值
 //   原因：500.com 同一 code（周X001 等）一旦发布，对阵/code/kickoff 都不再变，
 //   赔率会随调盘变化。score/status 仅由 updateScores（kaijiang 路径）维护，
 //   snapshotMatches 不能写入这两个字段。
+//   已 finished 的比赛跳过 odds 更新（竞猜已结束，再抓也无意义且易被占位污染）。
 // 在售页新出现的 → 整条新增
 // 在售页消失的 → KV 中保留
 function mergeMatches(oldMatches, newMatches) {
@@ -69,10 +81,11 @@ function mergeMatches(oldMatches, newMatches) {
     if (!fresh || !fresh.id) continue;
     const old = map.get(fresh.id);
     if (old) {
-      // 只更新赔率，其他保留旧值
       const merged = { ...old };
-      if (fresh.odds) merged.odds = fresh.odds;
-      if (fresh.handicap) merged.handicap = fresh.handicap;
+      if (old.status !== 'finished') {
+        if (fresh.odds && !isPlaceholderOdds(fresh.odds)) merged.odds = fresh.odds;
+        if (fresh.handicap && !isPlaceholderOdds(fresh.handicap)) merged.handicap = fresh.handicap;
+      }
       map.set(fresh.id, merged);
     } else {
       map.set(fresh.id, fresh);
