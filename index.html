@@ -274,13 +274,13 @@
         let currentPeriod = '';
         let matches = [];
         let combo = {};
-        let activeLeague = 'all';
+        let activeLeague = '世界杯';
 
         function generateDates() {
             const dates = [];
             const now = new Date();
             const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-            for (let i = -7; i <= 3; i++) {
+            for (let i = -7; i <= 5; i++) {
                 const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
                 const y = d.getFullYear();
@@ -319,7 +319,7 @@
 
         function switchPeriod(period) {
             currentPeriod = period;
-            activeLeague = 'all';
+            activeLeague = '世界杯';
             renderPeriodTabs();
             loadMatches(period);
         }
