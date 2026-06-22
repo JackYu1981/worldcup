@@ -250,11 +250,13 @@
         .lineup-team-info.home { text-align: center; }
         .lineup-team-info.away { text-align: center; }
         .lineup-team-flag {
-            width: 36px; height: 36px; border-radius: 50%;
+            width: 48px; height: 32px; border-radius: 4px;
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 16px; font-weight: 700; color: white; background: #1a73e8;
-            border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            font-size: 12px; font-weight: 700; color: white; background: #1a73e8;
+            border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
+        .lineup-team-flag img { width: 100%; height: 100%; object-fit: cover; }
         .lineup-team-name { font-size: 14px; font-weight: 600; color: #333; }
         .lineup-team-tactics { font-size: 11px; color: #888; }
         .lineup-center-block { text-align: center; padding: 0 10px; }
@@ -304,6 +306,8 @@
             width: 40px; height: 40px; border-radius: 50%;
             background: #e0e0e0;
             object-fit: cover; flex-shrink: 0;
+            /* FIFA player photos are full-body — focus on head/upper-body */
+            object-position: center top;
         }
         .lineup-player-photo.placeholder {
             display: inline-flex; align-items: center; justify-content: center;
@@ -1082,17 +1086,21 @@
 
             const homeAbbr = (home.country_code || '?').slice(0, 3);
             const awayAbbr = (away.country_code || '?').slice(0, 3);
+            const flagImg = (code) => {
+                if (!code || code.length !== 3) return `<span>?</span>`;
+                return `<img src="/api/fifa/flag/${code}" alt="${code}" loading="lazy" onerror="this.outerHTML='<span>${code}</span>'">`;
+            };
 
             const headerHtml = `
               <div class="lineup-match-header">
                 <div class="lineup-team-info home">
-                    <div class="lineup-team-flag">${homeAbbr}</div>
+                    <div class="lineup-team-flag">${flagImg(homeAbbr)}</div>
                     <div class="lineup-team-name">${home.country_zh || home.country_code}</div>
                     ${home.tactics ? `<div class="lineup-team-tactics">${home.tactics}</div>` : ''}
                 </div>
                 <div class="lineup-center-block">${centerHtml}</div>
                 <div class="lineup-team-info away">
-                    <div class="lineup-team-flag">${awayAbbr}</div>
+                    <div class="lineup-team-flag">${flagImg(awayAbbr)}</div>
                     <div class="lineup-team-name">${away.country_zh || away.country_code}</div>
                     ${away.tactics ? `<div class="lineup-team-tactics">${away.tactics}</div>` : ''}
                 </div>
@@ -1227,40 +1235,57 @@
 
             document.getElementById('playerTitle').textContent = nameZh;
 
-            const statRow = (label, value) => `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f0;"><span style="color:#666">${label}</span><span style="font-weight:600;color:#333">${value ?? '—'}</span></div>`;
+            const statRow = (label, value, glossary) => {
+                const valDisplay = (value === null || value === undefined || value === '') ? '—' : value;
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f0;">
+                    <span style="color:#666">${label}${glossary ? ` <span title="${glossary}" style="color:#bbb;font-size:11px;cursor:help">ⓘ</span>` : ''}</span>
+                    <span style="font-weight:600;color:#333">${valDisplay}</span>
+                </div>`;
+            };
 
             const html = `
               <div style="background:white;border-radius:8px;padding:18px;text-align:center;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                ${photoUrl ? `<img src="${photoUrl}" style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;object-fit:cover;" loading="lazy" alt="">` : '<div style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#999">?</div>'}
+                ${photoUrl ? `<img src="${photoUrl}" style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;object-fit:cover;object-position:center 10%;" loading="lazy" alt="">` : '<div style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#999">?</div>'}
                 <div style="margin-top:12px;font-size:16px;font-weight:700;color:#333">${nameZh}</div>
                 ${nameEn !== nameZh ? `<div style="font-size:12px;color:#999;margin-top:2px">${nameEn}</div>` : ''}
                 <div style="margin-top:8px;font-size:12px;color:#666">${countryDisplay}${positionDisplay ? ' · ' + positionDisplay : ''}${p.shirt_number ? ' · #' + p.shirt_number : ''}</div>
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:12px;color:#999;margin-bottom:8px">本届世界杯累计</div>
-                ${statRow('出场场次', ts.matches_played ?? '—')}
-                ${statRow('出场时间（分钟）', ts.minutes_played ?? '—')}
+                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                    <span>🥇</span><span>adidas Golden Boot</span>
+                </div>
+                ${statRow('进球 Goals', att.goals_scored ?? att.goals, '球员将球攻入对方球门的总次数')}
+                ${statRow('助攻 Assists', att.assists, '球员在队友进球前最后触球（含意外触球，只要传球目标到达预期位置）')}
+                ${statRow('上场时间（分钟）', att.total_competition_minutes_played, '本届世界杯累计参与比赛的总分钟数')}
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:12px;color:#999;margin-bottom:8px">进攻</div>
-                ${statRow('进球', att.goals_scored ?? att.goals ?? 0)}
-                ${statRow('助攻', att.assists ?? 0)}
-                ${statRow('射正', att.attempts_on_target ?? att.attempt_at_goal_on_target ?? 0)}
-                ${statRow('总射门', att.attempt_at_goal ?? '—')}
-                ${statRow('点球进球', att.goals_scored_on_penalty ?? '—')}
-                ${statRow('头球进球', att.goals_scored_by_head ?? '—')}
-                ${statRow('xG（预期进球）', att.xg ?? '—')}
+                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                    <span>⚽</span><span>Attacking 进攻</span>
+                </div>
+                ${statRow('射正 On Target', att.attempt_at_goal_on_target, '射门命中球门框内（含进球和需门将扑救的射门）')}
+                ${statRow('总射门 Attempts', att.attempt_at_goal, '所有射门次数（包括被防守球员阻挡和门将扑救）')}
+                ${statRow('射正率 (%)', att.attempt_at_goal_conversion_rate, '射正占总射门的百分比')}
+                ${statRow('禁区内射门', att.attempt_at_goal_inside_the_penalty_area, '在禁区内的射门次数')}
+                ${statRow('禁区外射门', att.attempt_at_goal_outside_the_penalty_area, '在禁区外的射门次数')}
+                ${statRow('头球射门', att.headed_attempt_at_goal, '头球攻门次数')}
+                ${statRow('助攻 Assists', att.assists)}
+                ${statRow('xG（预期进球）', att.xg, '基于射门位置、角度、防守压力等估算的进球概率总和')}
+                ${statRow('xG 效率', att.xg_goal_effiency_rate, '进球数 / xG，衡量终结效率')}
+                ${statRow('角球 Corners', att.corners, '攻方获得的角球次数')}
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:12px;color:#999;margin-bottom:8px">纪律</div>
-                ${statRow('犯规对方', dis.fouls_for ?? 0)}
-                ${statRow('被犯规', dis.fouls_against ?? 0)}
-                ${statRow('黄牌', dis.yellow_cards ?? 0)}
-                ${statRow('红牌', dis.red_cards ?? 0)}
-                ${statRow('越位', dis.offsides ?? 0)}
+                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                    <span>🟨</span><span>Discipline 纪律</span>
+                </div>
+                ${statRow('犯规对方 Fouls For', dis.fouls_for, '球员对对手做出的犯规次数')}
+                ${statRow('被犯规 Fouls Against', dis.fouls_against, '球员被对手犯规的次数')}
+                ${statRow('黄牌 Yellow Cards', dis.yellow_cards)}
+                ${statRow('红牌 Red Cards', dis.red_cards)}
+                ${statRow('间接红牌', dis.indirect_red_cards, '累计两张黄牌后的红牌')}
+                ${statRow('越位 Offsides', dis.offsides)}
               </div>
 
               <div style="font-size:11px;color:#aaa;text-align:center;padding:8px;">
