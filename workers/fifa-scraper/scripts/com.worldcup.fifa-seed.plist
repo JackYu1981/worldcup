@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd config — runs FIFA tournament-stats seed 4x daily.
+  Beijing schedule: 00:30 / 06:30 / 12:30 / 18:30 → UTC 16:30 / 22:30 / 04:30 / 10:30.
+
+  Install:
+    cp scripts/com.worldcup.fifa-seed.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.worldcup.fifa-seed.plist
+    launchctl enable gui/$(id -u)/com.worldcup.fifa-seed
+    launchctl kickstart gui/$(id -u)/com.worldcup.fifa-seed   # run once now
+
+  Uninstall:
+    launchctl bootout gui/$(id -u)/com.worldcup.fifa-seed
+    rm ~/Library/LaunchAgents/com.worldcup.fifa-seed.plist
+
+  Tail logs:
+    tail -f /Users/I064337/ai/worldcup/workers/fifa-scraper/logs/seed-*.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.worldcup.fifa-seed</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>cd /Users/I064337/ai/worldcup/workers/fifa-scraper &amp;&amp; export CLOUDFLARE_API_TOKEN=$(security find-generic-password -s "cloudflare-api-token" -a "yujuntao1981" -w) &amp;&amp; export CLOUDFLARE_ACCOUNT_ID=0bf8afedf1e0b911f3c1733e93546b71 &amp;&amp; node scripts/seed-tournament-stats.js &gt;&gt; logs/seed-$(/bin/date +\%Y-\%m-\%d).log 2&gt;&amp;1</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key><integer>16</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>22</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>4</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>10</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/I064337/ai/worldcup/workers/fifa-scraper/logs/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/I064337/ai/worldcup/workers/fifa-scraper/logs/launchd-stderr.log</string>
+</dict>
+</plist>
