@@ -228,15 +228,20 @@
             background: #1a73e8; color: white;
             padding: 12px 14px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+            min-height: 0;
+            height: 48px; box-sizing: border-box;
         }
         .lineup-close, .lineup-refresh {
             background: transparent; border: none; color: white;
             font-size: 18px; padding: 0 6px; cursor: pointer; line-height: 1;
+            flex-shrink: 0;
         }
         .lineup-close:active, .lineup-refresh:active { opacity: 0.7; }
         .lineup-title {
             flex: 1; text-align: center; font-size: 15px; font-weight: 600;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px;
+            min-width: 0;
         }
         .lineup-body { flex: 1; overflow-y: auto; padding-bottom: 30px; }
 
@@ -348,14 +353,18 @@
             display: flex; align-items: center;
             background: #1a73e8; color: white;
             padding: 12px 14px;
+            flex-shrink: 0;
+            height: 48px; box-sizing: border-box;
         }
         .player-back {
             background: transparent; border: none; color: white;
             font-size: 14px; padding: 0 6px; cursor: pointer;
+            flex-shrink: 0;
         }
         .player-title {
             flex: 1; text-align: center; font-size: 14px; font-weight: 600;
             padding: 0 10px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .player-body { flex: 1; overflow-y: auto; padding: 14px; padding-bottom: 30px; }
 
@@ -372,14 +381,18 @@
             display: flex; align-items: center;
             background: #1a73e8; color: white;
             padding: 12px 14px;
+            flex-shrink: 0;
+            height: 48px; box-sizing: border-box;
         }
         .stats-back {
             background: transparent; border: none; color: white;
             font-size: 14px; padding: 0 6px; cursor: pointer;
+            flex-shrink: 0;
         }
         .stats-title {
             flex: 1; text-align: center; font-size: 14px; font-weight: 600;
             padding: 0 10px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .stats-category-tabs {
             display: flex; background: white; border-bottom: 1px solid #f0f0f0;
@@ -395,59 +408,65 @@
             color: #1a73e8; font-weight: 600;
             border-bottom-color: #1a73e8; background: #f4f8ff;
         }
+        /* === Stats table (two-panel: fixed Player column + scrollable stats) === */
         .stats-table-wrap {
-            flex: 1; overflow: auto;
+            flex: 1; overflow-y: auto; overflow-x: hidden;
             background: white;
             -webkit-overflow-scrolling: touch;
+            position: relative;
         }
-        .stats-table {
-            border-collapse: separate; border-spacing: 0;
-            font-size: 12px;
+        .stats-row {
+            display: flex; align-items: stretch;
+            border-bottom: 1px solid #f5f5f5;
+            min-height: 38px;
         }
-        .stats-table thead {
-            position: sticky; top: 0; z-index: 3;
+        .stats-row.header {
+            position: sticky; top: 0; z-index: 5;
             background: #f9fafc;
-        }
-        .stats-table thead th {
-            padding: 10px 8px; text-align: left;
-            font-size: 11px; color: #666; font-weight: 600;
-            white-space: nowrap; user-select: none;
             border-bottom: 1px solid #e0e0e0;
-            background: #f9fafc;
+            font-size: 11px; color: #666; font-weight: 600;
         }
-        .stats-table thead th.sort-asc::after { content: ' ↑'; color: #1a73e8; }
-        .stats-table thead th.sort-desc::after { content: ' ↓'; color: #1a73e8; }
-        .stats-table thead th.sortable { cursor: pointer; }
-        .stats-table thead th.sortable:hover { background: #eef3fa; }
-        /* Left frozen columns: # + Player. They stay visible when horizontally scrolling stats. */
-        .stats-table th.col-rank, .stats-table td.col-rank {
-            position: sticky; left: 0; z-index: 2;
-            width: 32px; text-align: center;
-            background: inherit;
-        }
-        .stats-table thead th.col-rank { background: #f9fafc; }
-        .stats-table tbody td.col-rank { background: white; color: #999; font-size: 11px; }
-        .stats-table th.col-player, .stats-table td.col-player {
-            position: sticky; left: 32px; z-index: 2;
-            min-width: 170px; max-width: 200px;
-            background: inherit;
-            box-shadow: 1px 0 0 #e0e0e0;
-        }
-        .stats-table thead th.col-player { background: #f9fafc; }
-        .stats-table tbody td.col-player { background: white; }
-        .stats-table thead th.col-stat { text-align: right; min-width: 64px; }
+        .stats-row.header .stats-cell { padding: 10px 8px; }
 
-        .stats-table tbody tr { border-bottom: 1px solid #f5f5f5; }
-        .stats-table tbody tr:active td { background: #f4f8ff !important; }
-        .stats-table tbody td { padding: 8px; vertical-align: middle; }
-        .stats-table td.col-player {
-            display: flex; align-items: center; gap: 6px; padding-right: 6px;
+        /* Left fixed player block — never scrolls horizontally */
+        .stats-row .stats-player-block {
+            flex: 0 0 180px;
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 8px;
+            background: inherit;
+            border-right: 1px solid #e0e0e0;
+            overflow: hidden;
         }
-        .stats-table td.col-stat {
-            text-align: right; font-weight: 600; color: #333;
+        .stats-row.header .stats-player-block { padding: 10px 8px; }
+
+        /* Right stats block — horizontal scroll within row */
+        .stats-row .stats-data-block {
+            flex: 1 1 auto;
+            overflow-x: auto; overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            display: flex; align-items: stretch;
+            /* hide scrollbars on the per-row blocks; we sync them via JS */
+            scrollbar-width: none;
+        }
+        .stats-row .stats-data-block::-webkit-scrollbar { display: none; }
+
+        .stats-cell {
+            flex: 0 0 70px;
+            display: flex; align-items: center; justify-content: flex-end;
+            padding: 6px 8px;
+            font-weight: 600; color: #333;
             font-variant-numeric: tabular-nums;
+            white-space: nowrap;
         }
-        .stats-table td.col-stat.zero { color: #ccc; font-weight: 400; }
+        .stats-cell.zero { color: #ccc; font-weight: 400; }
+        .stats-row.header .stats-cell {
+            cursor: pointer; user-select: none;
+            color: #666; font-weight: 600;
+        }
+        .stats-row.header .stats-cell.sort-asc::after { content: ' ↑'; color: #1a73e8; }
+        .stats-row.header .stats-cell.sort-desc::after { content: ' ↓'; color: #1a73e8; }
+        .stats-row.header .stats-cell:hover { background: #eef3fa; }
+
         .stats-player-flag {
             width: 20px; height: 14px; border-radius: 2px;
             object-fit: cover; flex-shrink: 0;
@@ -1535,19 +1554,15 @@
             const cat = STATS_CATEGORIES.find(c => c.key === currentStatsCategory);
             const cols = cat.cols;
             const section = cat.section;
-
-            // Show all columns regardless of data availability — when stats are
-            // not yet populated by mangodev refresh, '—' placeholders make it
-            // clear what fields exist and will appear later.
             const finalCols = cols;
 
-            // Filter to starters only when lineup is locked (otherwise show everyone)
+            // Only show starters when lineup is locked (22 players)
             const allPlayers = currentStatsData.players || [];
             const starters = allPlayers.filter(p => p.lineup_role === 'starter');
-            const lineupLocked = starters.length === 22;   // 11+11 means FIFA published
+            const lineupLocked = starters.length === 22;
             const playersToShow = lineupLocked ? starters : allPlayers;
 
-            // Sort players by current sort col
+            // Sort by current sort col
             const sortCol = finalCols.find(c => c.key === currentStatsSort.col) || finalCols[0];
             const sorted = [...playersToShow].sort((a, b) => {
                 const va = getStatValue(a, sortCol, section);
@@ -1555,55 +1570,69 @@
                 const aNull = va === null || va === undefined;
                 const bNull = vb === null || vb === undefined;
                 if (aNull && bNull) return 0;
-                if (aNull) return 1;   // nulls always last
+                if (aNull) return 1;
                 if (bNull) return -1;
                 return currentStatsSort.dir === 'desc' ? (vb - va) : (va - vb);
             });
 
-            // Build table
-            let html = '<table class="stats-table"><thead><tr>';
-            html += '<th class="col-rank">#</th>';
-            html += `<th class="col-player">Player</th>`;
+            // Build div-based table (avoids iOS Safari sticky-in-table bug)
+            // Each row: <player block (fixed left)> + <data block (horizontal scroll)>
+            // Per-row horizontal scroll is synced across rows via JS.
+
+            // Header row
+            let html = `<div class="stats-row header">
+                <div class="stats-player-block">Player</div>
+                <div class="stats-data-block">`;
             for (const col of finalCols) {
                 const sortCls = currentStatsSort.col === col.key
                     ? (currentStatsSort.dir === 'desc' ? 'sort-desc' : 'sort-asc')
                     : '';
                 const title = col.glossary || col.label;
-                html += `<th class="col-stat sortable ${sortCls}" title="${title}" onclick="switchStatsSort('${col.key}')">${col.label}</th>`;
+                html += `<div class="stats-cell ${sortCls}" title="${title}" onclick="switchStatsSort('${col.key}')">${col.label}</div>`;
             }
-            html += '</tr></thead><tbody>';
+            html += `</div></div>`;
 
-            sorted.forEach((p, idx) => {
-                const sortValue = getStatValue(p, sortCol, section);
-                const rankDisplay = (sortValue === null || sortValue === undefined) ? '-' : (idx + 1);
+            // Data rows
+            sorted.forEach(p => {
                 const home = currentStatsData.home, away = currentStatsData.away;
                 const teamSide = p.side === 'home' ? home : away;
                 const flagUrl = `/api/fifa/flag/${teamSide.country_code}`;
-                // English name only
                 const nameDisplay = p.name?.eng || p.name_default || `Player ${p.player_id}`;
                 const shirt = p.shirt_number != null ? p.shirt_number : '';
                 const roleBadge = (!lineupLocked && p.lineup_role !== 'starter')
                     ? '<span style="font-size:9px;color:#bbb;margin-left:3px">SUB</span>'
                     : '';
 
-                html += '<tr>';
-                html += `<td class="col-rank">${rankDisplay}</td>`;
-                html += `<td class="col-player">
-                    <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
-                    <span class="stats-player-shirt">${shirt}</span>
-                    <span class="stats-player-name">${nameDisplay}${roleBadge}</span>
-                </td>`;
+                html += `<div class="stats-row">
+                    <div class="stats-player-block">
+                        <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
+                        <span class="stats-player-shirt">${shirt}</span>
+                        <span class="stats-player-name">${nameDisplay}${roleBadge}</span>
+                    </div>
+                    <div class="stats-data-block">`;
                 for (const col of finalCols) {
                     const v = getStatValue(p, col, section);
                     const display = (v === null || v === undefined) ? '—' : v;
                     const zeroCls = (v === 0) ? ' zero' : '';
-                    html += `<td class="col-stat${zeroCls}">${display}</td>`;
+                    html += `<div class="stats-cell${zeroCls}">${display}</div>`;
                 }
-                html += '</tr>';
+                html += `</div></div>`;
             });
-            html += '</tbody></table>';
 
             document.getElementById('statsTableWrap').innerHTML = html;
+
+            // Sync horizontal scroll across all data blocks
+            const blocks = document.querySelectorAll('.stats-row .stats-data-block');
+            let syncing = false;
+            blocks.forEach(blk => {
+                blk.addEventListener('scroll', () => {
+                    if (syncing) return;
+                    syncing = true;
+                    const left = blk.scrollLeft;
+                    blocks.forEach(other => { if (other !== blk) other.scrollLeft = left; });
+                    requestAnimationFrame(() => { syncing = false; });
+                });
+            });
         }
 
         AUTH.requireLogin(function(user) {
