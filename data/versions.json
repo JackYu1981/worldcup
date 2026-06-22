@@ -167,6 +167,12 @@
       "date": "2026-05-22T08:13:22+08:00",
       "summary": "复制竞彩格式按注分组：plan 卡片复制时按注输出 leg 列表 + 金额 ¥X，注间用长破折号分割线分隔；recommendation/pending 场景保持原平铺逻辑",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.11",
+      "date": "2026-06-22T14:02:35+08:00",
+      "summary": "赛程页默认显示世界杯 filter + period tabs 扩展到未来 5 天",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
