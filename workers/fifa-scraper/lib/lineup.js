@@ -186,7 +186,10 @@ export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCoun
         team_id: team.IdTeam,
         position: p.Position ?? existing.position ?? null,
         shirt_number: p.ShirtNumber ?? existing.shirt_number ?? null,
-        last_match_id: mapping.fifa_id_match,
+        // NOTE: last_match_id is owned by counters.js (watermark for matches_played
+        // accumulator). upsertPlayersFromLineup must NOT touch it, or counters'
+        // first-run isNewMatch detection breaks (causing matches_played to stay 0).
+        // ...(existing.last_match_id ? ... : ...)  — explicit no-op for clarity
         name: {
           ...(existing.name || {}),
           ...(enName ? { eng: enName } : {})
