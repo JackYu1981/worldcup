@@ -2,9 +2,11 @@ name = "worldcup-fifa-scraper"
 main = "index.js"
 compatibility_date = "2024-09-01"
 
+# Main cron temporarily disabled: CF KV daily write limit exceeded.
+# Re-enable */10 * * * * tomorrow after limit resets.
+# See commit message of THIS deploy + docs spec for re-enable steps.
 [triggers]
 crons = [
-  "*/10 * * * *",
   "0 */6 * * *"
 ]
 
