@@ -72,3 +72,32 @@ function pickEnglish(localized) {
   const en = localized.find(x => /^en/i.test(x.Locale || ''));
   return (en || localized[0]).Description || null;
 }
+
+/**
+ * Fetch FIFA live/football for a mapped fixture.
+ * Returns the full liveData object (caller normalizes downstream).
+ * Throws on non-OK responses.
+ */
+export async function fetchLiveFootball(mapping) {
+  const { fifa_id_competition: c, fifa_id_season: s, fifa_id_stage: st, fifa_id_match: m } = mapping;
+  if (!c || !s || !st || !m) {
+    throw new Error(`fetchLiveFootball: incomplete mapping (${JSON.stringify(mapping)})`);
+  }
+  const url = `https://api.fifa.com/api/v3/live/football/${c}/${s}/${st}/${m}?language=en`;
+  const r = await fetch(url, { headers: fifaBrowserHeaders() });
+  if (!r.ok) throw new Error(`live/football fetch failed: HTTP ${r.status}`);
+  return r.json();
+}
+
+/**
+ * Fetch fdh-api per-match player stats.
+ * Returns the players object { player_id: [[stat_name, value, flag], ...], ... }
+ * or null on non-OK (caller decides what to do).
+ */
+export async function fetchFdhPlayers(fdhMatchId) {
+  if (!fdhMatchId) return null;
+  const url = `https://fdh-api.fifa.com/v1/stats/match/${fdhMatchId}/players.json`;
+  const r = await fetch(url, { headers: fifaBrowserHeaders() });
+  if (!r.ok) return null;
+  return r.json();
+}

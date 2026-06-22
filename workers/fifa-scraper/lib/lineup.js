@@ -147,3 +147,89 @@ export function normalizeLineup(liveData, mapping) {
 export function matchLineupKey(fixture500Id) {
   return `match_lineups:${fixture500Id}`;
 }
+
+/**
+ * Upsert player archives + players_by_country roster from the lineup data.
+ *
+ * Strict §3.0 matrix discipline: this function (main cron) writes ONLY these fields:
+ *   players:{id}                — id, country_code, country_zh (best-effort), team_id,
+ *                                  position, shirt_number, last_match_id, name.eng,
+ *                                  name_default, last_updated
+ *   players_by_country:{code}   — union-upserts roster entry {player_id, name,
+ *                                  shirt_number, position}; preserves any
+ *                                  stats_summary written by tournament-wide cron.
+ *
+ * Fields NOT written by this function (owned by tournament-wide cron, never touch):
+ *   players:{id}.photo_url, name.{12 langs}, tournament_stats.attacking,
+ *   tournament_stats.discipline
+ */
+export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh) {
+  const sides = [
+    { team: liveData.HomeTeam, country_code: mapping.home_code },
+    { team: liveData.AwayTeam, country_code: mapping.away_code }
+  ];
+
+  const countryRosterPatch = {};   // country_code -> [{player_id, name, shirt, position, _team_id}]
+
+  for (const { team, country_code } of sides) {
+    if (!country_code) continue;
+    countryRosterPatch[country_code] = [];
+    for (const p of team?.Players || []) {
+      if (!p.IdPlayer) continue;
+      const existing = await env.MATCH_DATA.get(`players:${p.IdPlayer}`, 'json') || {};
+      const enName = pickEnglish(p.PlayerName) || pickEnglish(p.ShortName);
+      const updated = {
+        ...existing,
+        id: p.IdPlayer,
+        country_code,
+        country_zh: existing.country_zh || lookupCountryZh(country_code),
+        team_id: team.IdTeam,
+        position: p.Position ?? existing.position ?? null,
+        shirt_number: p.ShirtNumber ?? existing.shirt_number ?? null,
+        last_match_id: mapping.fifa_id_match,
+        name: {
+          ...(existing.name || {}),
+          ...(enName ? { eng: enName } : {})
+        },
+        name_default: enName || existing.name_default || `Player ${p.IdPlayer}`,
+        last_updated: new Date().toISOString().replace(/Z$/, '+00:00')
+      };
+      await env.MATCH_DATA.put(`players:${p.IdPlayer}`, JSON.stringify(updated));
+      countryRosterPatch[country_code].push({
+        player_id: p.IdPlayer,
+        name: updated.name_default,
+        shirt_number: p.ShirtNumber ?? null,
+        position: p.Position ?? null,
+        _team_id: team.IdTeam
+      });
+    }
+  }
+
+  // Union-upsert into players_by_country, preserving any stats_summary already there
+  for (const [code, newEntries] of Object.entries(countryRosterPatch)) {
+    if (newEntries.length === 0) continue;
+    const existing = await env.MATCH_DATA.get(`players_by_country:${code}`, 'json') || {
+      country_code: code,
+      country_zh: lookupCountryZh(code),
+      team_id: null,
+      roster: []
+    };
+    const byId = new Map(existing.roster.map(r => [r.player_id, r]));
+    for (const e of newEntries) {
+      const cur = byId.get(e.player_id) || {};
+      byId.set(e.player_id, {
+        player_id: e.player_id,
+        name: e.name,
+        shirt_number: e.shirt_number,
+        position: e.position,
+        // Preserve stats_summary written by tournament-wide cron — never touch it here.
+        stats_summary: cur.stats_summary
+      });
+    }
+    existing.roster = Array.from(byId.values());
+    existing.team_id = existing.team_id || newEntries[0]?._team_id || null;
+    existing.country_zh = existing.country_zh || lookupCountryZh(code);
+    existing.updated_at = new Date().toISOString().replace(/Z$/, '+00:00');
+    await env.MATCH_DATA.put(`players_by_country:${code}`, JSON.stringify(existing));
+  }
+}
