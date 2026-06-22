@@ -173,6 +173,12 @@
       "date": "2026-06-22T14:02:35+08:00",
       "summary": "赛程页默认显示世界杯 filter + period tabs 扩展到未来 5 天",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.12",
+      "date": "2026-06-23T00:03:41+08:00",
+      "summary": "新增 FIFA 阵容查看：世界杯比赛卡片支持点击查看双方首发+替补+球员个人 stats（弹出 modal 不离开赛程页）",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
