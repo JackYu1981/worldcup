@@ -3,6 +3,7 @@
 
 import { calendarCron } from './lib/calendar-cron.js';
 import { mainCron } from './lib/main-cron.js';
+import { tournamentWideCron } from './lib/tournament-cron.js';
 
 export default {
   async scheduled(event, env, ctx) {
@@ -17,7 +18,9 @@ export default {
         const r = await calendarCron(env);
         console.log(`[fifa-scraper] calendar cron tick: done`, r);
       } else if (cron === '0 17,21,1,5 * * *') {
-        console.log('[fifa-scraper] tournament-wide cron tick (not yet implemented)');
+        console.log('[fifa-scraper] tournament-wide cron tick: start');
+        const r = await tournamentWideCron(env);
+        console.log(`[fifa-scraper] tournament-wide cron tick: done`, r);
       } else {
         console.warn(`[fifa-scraper] unknown cron: ${cron}`);
       }
@@ -29,22 +32,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/trigger/calendar') {
-      try {
-        const r = await calendarCron(env);
-        return Response.json(r);
-      } catch (e) {
-        return Response.json({ error: e.message }, { status: 500 });
-      }
+      try { return Response.json(await calendarCron(env)); }
+      catch (e) { return Response.json({ error: e.message }, { status: 500 }); }
     }
     if (url.pathname === '/trigger/main') {
-      try {
-        const r = await mainCron(env);
-        return Response.json(r);
-      } catch (e) {
-        return Response.json({ error: e.message }, { status: 500 });
-      }
+      try { return Response.json(await mainCron(env)); }
+      catch (e) { return Response.json({ error: e.message }, { status: 500 }); }
     }
-    return new Response('worldcup-fifa-scraper alive (cron triggers + /trigger/{calendar,main})', { status: 200 });
+    if (url.pathname === '/trigger/tournament') {
+      try { return Response.json(await tournamentWideCron(env)); }
+      catch (e) { return Response.json({ error: e.message }, { status: 500 }); }
+    }
+    return new Response('worldcup-fifa-scraper alive (cron triggers + /trigger/{calendar,main,tournament})', { status: 200 });
   },
 };
 
