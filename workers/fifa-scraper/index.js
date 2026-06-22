@@ -9,7 +9,7 @@ export default {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     try {
-      if (cron === '*/2 * * * *') {
+      if (cron === '*/10 * * * *') {
         const r = await mainCron(env);
         console.log(`[fifa-scraper] main cron tick: done`, r);
       } else if (cron === '0 */6 * * *') {

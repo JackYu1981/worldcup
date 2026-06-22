@@ -50,16 +50,28 @@ export async function mainCron(env) {
       continue;
     }
 
-    // 2. Normalize + write match_lineups
+    // 2. Normalize + write match_lineups (skip if unchanged to save KV writes)
     const lineup = normalizeLineup(liveData, mapping);
-    await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup));
+    const existingLineup = await env.MATCH_DATA.get(matchLineupKey(fixture.id), 'json');
+    const lineupChanged = !existingLineup || lineupSignature(existingLineup) !== lineupSignature(lineup);
+    if (lineupChanged) {
+      await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup));
+    }
     lineupOk++;
 
-    // 3. Upsert player archives + players_by_country roster
-    await upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh);
+    // 3. Upsert player archives + roster ONLY when lineup just became available
+    //    or events changed (avoid 50 KV writes per cron tick when nothing's new).
+    if (lineupChanged && lineup.lineup_available) {
+      await upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh);
+    }
 
-    // 4. SLA log — fire warn if KO−60min and lineup still missing
-    await logSlaForLineup(env, fixture, lineup);
+    // 4. SLA log — only when lineup state CHANGED (avoid 8 SLA writes per cron
+    //    tick when nothing's new). Always log if KO−60min and still missing.
+    const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
+    const slaAtRisk = !lineup.lineup_available && minutesToKickoff <= 60 && minutesToKickoff > -120;
+    if (lineupChanged || slaAtRisk) {
+      await logSlaForLineup(env, fixture, lineup);
+    }
 
     // 5. Pull fdh-api per-match stats → match-played counters
     if (mapping.fdh_match_id && lineup.lineup_available) {
@@ -76,13 +88,36 @@ export async function mainCron(env) {
     }
   }
 
-  await logSla(env, {
-    level: 'info', event: 'main_cron_pass',
-    in_window: fixtures.length, lineup_ok: lineupOk, lineup_err: lineupErr,
-    stats_ok: statsOk, stats_err: statsErr
-  });
+  // Only log a summary entry when there was actual work — avoids ~144 entries/day
+  // when no fixtures are in window (most of the time).
+  if (fixtures.length > 0) {
+    await logSla(env, {
+      level: 'info', event: 'main_cron_pass',
+      in_window: fixtures.length, lineup_ok: lineupOk, lineup_err: lineupErr,
+      stats_ok: statsOk, stats_err: statsErr
+    });
+  }
 
   return { in_window: fixtures.length, lineup_ok: lineupOk, lineup_err: lineupErr, stats_ok: statsOk, stats_err: statsErr };
+}
+
+/**
+ * Compact signature for change detection — covers fields that materially affect
+ * what we surface to users. If signature unchanged, skip KV write.
+ */
+function lineupSignature(lineup) {
+  return JSON.stringify({
+    avail: lineup.lineup_available,
+    locked: lineup.fixture_locked,
+    status: lineup.match_status,
+    period: lineup.period,
+    time: lineup.match_time,
+    hs: lineup.home?.starting?.map(p => `${p.player_id}#${p.shirt_number}`).join(',') || '',
+    as: lineup.away?.starting?.map(p => `${p.player_id}#${p.shirt_number}`).join(',') || '',
+    g: lineup.events?.goals?.length || 0,
+    b: lineup.events?.bookings?.length || 0,
+    s: lineup.events?.substitutions?.length || 0
+  });
 }
 
 /**
