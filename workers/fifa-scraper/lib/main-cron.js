@@ -34,8 +34,49 @@ export async function mainCron(env) {
 
   let lineupOk = 0, lineupErr = 0, statsOk = 0, statsErr = 0;
 
+  // Lazy-load fifa_calendar if any fixture lacks mapping (only fetch once per cron tick)
+  let fifaCal = null;
+  const ensureFifaCal = async () => {
+    if (fifaCal) return fifaCal;
+    fifaCal = await env.MATCH_DATA.get('fifa_calendar', 'json');
+    if (!fifaCal) {
+      // Cache miss — fetch from FIFA. This happens on cold-start or after manual cache flush.
+      const { fetchFifaCalendar } = await import('./fifa-api.js');
+      const isoDay = (offsetDays) => {
+        const d = new Date(Date.now() + offsetDays * 86400_000);
+        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+          .toISOString().replace(/\.\d{3}Z$/, 'Z');
+      };
+      try {
+        fifaCal = await fetchFifaCalendar(17, isoDay(-14), isoDay(35));
+        await env.MATCH_DATA.put('fifa_calendar', JSON.stringify(fifaCal));
+        await logSla(env, {
+          level: 'info', event: 'fifa_calendar_lazy_fetched',
+          matches: fifaCal.matches.length
+        });
+      } catch (e) {
+        await logSla(env, { level: 'error', event: 'fifa_calendar_lazy_failed', error: e.message });
+        return null;
+      }
+    }
+    return fifaCal;
+  };
+
   for (const fixture of fixtures) {
-    const mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
+    let mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
+
+    // Lazy mapping: if missing or unmatched with expired retry, compute now
+    if (!mapping || (mapping.match_confidence === 'unmatched' &&
+                     mapping.unmatched_retry_after &&
+                     Date.now() > Date.parse(mapping.unmatched_retry_after))) {
+      const cal = await ensureFifaCal();
+      if (cal) {
+        const { tryAutoMap } = await import('./mapping.js');
+        mapping = await tryAutoMap(fixture, env, cal);
+        await env.MATCH_DATA.put(`fixture_mapping:${fixture.id}`, JSON.stringify(mapping));
+      }
+    }
+
     if (!mapping || (mapping.match_confidence !== 'exact' && mapping.match_confidence !== 'time_skew_5min')) {
       continue;
     }
