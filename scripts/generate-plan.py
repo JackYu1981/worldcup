@@ -941,23 +941,33 @@ def main():
             matches = json.load(f)
             if isinstance(matches, dict) and "matches" in matches:
                 matches = matches["matches"]
+        match_idx = build_match_index(matches)
     else:
-        # date 优先，再向前/后 ±2 天容错（赛程 period 可能与单据日期不同）
+        # 跨 period 合并：单据 leg 可能跨多个售期日（例如 brian 的预备方案
+        # 同时含周四001/周五003），所以扫 ±2 天把所有能拉到的 matches 累加
+        # 进 match_idx；同 fixture 后写覆盖前。
         from datetime import timedelta
         base = datetime.strptime(date, "%Y-%m-%d")
+        match_idx = {}
+        periods_used = []
         for delta in [0, -1, 1, -2, 2]:
             p = (base + timedelta(days=delta)).strftime("%Y-%m-%d")
             print(f"[4/7] 拉取 matches period={p} ...")
             try:
-                matches = fetch_matches(p)
-                period = p
-                break
-            except RuntimeError:
+                ms = fetch_matches(p)
+            except RuntimeError as e:
+                print(f"  跳过：{e}")
                 continue
-    if not matches:
-        raise RuntimeError(f"无法获取 matches 数据（尝试 {date} ±2 天）")
-
-    match_idx = build_match_index(matches)
+            if not ms:
+                continue
+            periods_used.append(p)
+            for m in ms:
+                match_idx[m["id"]] = m
+        if not match_idx:
+            raise RuntimeError(f"无法获取 matches 数据（尝试 {date} ±2 天）")
+        period = periods_used[0] if periods_used else date
+        print(f"  合并 periods={periods_used}，共 {len(match_idx)} 场赛事")
+        matches = list(match_idx.values())
 
     # 校验：legs 引用的 match_id 全部存在
     legs = rec_for_picks["legs"]
