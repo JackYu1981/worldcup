@@ -358,6 +358,104 @@
             padding: 0 10px;
         }
         .player-body { flex: 1; overflow-y: auto; padding: 14px; padding-bottom: 30px; }
+
+        /* === Stats compare sheet === */
+        .stats-sheet {
+            position: absolute; inset: 0;
+            background: #f5f5f5;
+            transform: translateY(100%); transition: transform 0.25s ease-out;
+            display: flex; flex-direction: column;
+            z-index: 1;
+        }
+        .stats-sheet.visible { transform: translateY(0); }
+        .stats-header {
+            display: flex; align-items: center;
+            background: #1a73e8; color: white;
+            padding: 12px 14px;
+        }
+        .stats-back {
+            background: transparent; border: none; color: white;
+            font-size: 14px; padding: 0 6px; cursor: pointer;
+        }
+        .stats-title {
+            flex: 1; text-align: center; font-size: 14px; font-weight: 600;
+            padding: 0 10px;
+        }
+        .stats-category-tabs {
+            display: flex; background: white; border-bottom: 1px solid #f0f0f0;
+            overflow-x: auto;
+        }
+        .stats-category-tab {
+            padding: 12px 18px; font-size: 13px; color: #666;
+            white-space: nowrap; cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .stats-category-tab.active {
+            color: #1a73e8; font-weight: 600;
+            border-bottom-color: #1a73e8; background: #f4f8ff;
+        }
+        .stats-table-wrap {
+            flex: 1; overflow: auto;
+            background: white;
+        }
+        .stats-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 12px; min-width: 100%;
+        }
+        .stats-table thead {
+            position: sticky; top: 0; z-index: 2;
+            background: #f9fafc;
+            box-shadow: 0 1px 0 #e0e0e0;
+        }
+        .stats-table thead th {
+            padding: 10px 8px; text-align: left;
+            font-size: 11px; color: #666; font-weight: 600;
+            white-space: nowrap; cursor: pointer; user-select: none;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .stats-table thead th.sort-asc::after { content: ' ↑'; color: #1a73e8; }
+        .stats-table thead th.sort-desc::after { content: ' ↓'; color: #1a73e8; }
+        .stats-table thead th.sortable:hover { background: #eef3fa; }
+        .stats-table thead th.col-rank { width: 30px; text-align: center; }
+        .stats-table thead th.col-player { min-width: 150px; }
+        .stats-table thead th.col-stat { text-align: right; min-width: 60px; }
+
+        .stats-table tbody tr { border-bottom: 1px solid #f5f5f5; }
+        .stats-table tbody tr:active { background: #f4f8ff; }
+        .stats-table tbody td { padding: 8px; vertical-align: middle; }
+        .stats-table td.col-rank {
+            text-align: center; color: #999; font-size: 11px;
+        }
+        .stats-table td.col-player {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .stats-table td.col-stat {
+            text-align: right; font-weight: 600; color: #333;
+            font-variant-numeric: tabular-nums;
+        }
+        .stats-table td.col-stat.zero { color: #ccc; font-weight: 400; }
+        .stats-player-flag {
+            width: 20px; height: 14px; border-radius: 2px;
+            object-fit: cover; flex-shrink: 0;
+            border: 1px solid #e0e0e0;
+        }
+        .stats-player-name-block {
+            display: flex; flex-direction: column; gap: 1px;
+            min-width: 0;
+        }
+        .stats-player-name {
+            font-size: 12px; color: #333; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 130px;
+        }
+        .stats-player-meta {
+            font-size: 10px; color: #999;
+            white-space: nowrap;
+        }
+        .stats-empty {
+            text-align: center; color: #999; padding: 60px 20px; font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -416,6 +514,7 @@
         <div class="lineup-header">
             <button class="lineup-close" onclick="closeLineupModal()">✕</button>
             <div class="lineup-title" id="lineupTitle">加载中…</div>
+            <button class="lineup-refresh" onclick="openStatsCompareSheet()" title="球员统计对比" style="font-size:16px;">📊</button>
             <button class="lineup-refresh" onclick="refreshLineupModal()" title="刷新">↻</button>
         </div>
         <div class="lineup-body" id="lineupBody">
@@ -428,6 +527,17 @@
                 <div class="player-title" id="playerTitle"></div>
             </div>
             <div class="player-body" id="playerBody"></div>
+        </div>
+        <!-- Stats compare sub-sheet (slides up over lineup) -->
+        <div class="stats-sheet" id="statsSheet">
+            <div class="stats-header">
+                <button class="stats-back" onclick="closeStatsCompareSheet()">‹ 返回</button>
+                <div class="stats-title" id="statsTitle">球员统计对比</div>
+            </div>
+            <div class="stats-category-tabs" id="statsCategoryTabs"></div>
+            <div class="stats-table-wrap" id="statsTableWrap">
+                <div class="stats-empty">加载中…</div>
+            </div>
         </div>
     </div>
 
@@ -1230,6 +1340,9 @@
 
             const nameZh = p.name?.zho || p.name_default || `Player ${p.id}`;
             const nameEn = p.name?.eng || p.name_default || '';
+            // Show English line whenever we have something to show (even if same as zh fallback)
+            const hasZhTranslation = !!p.name?.zho && p.name.zho !== nameEn;
+            const showBothLines = !!nameEn && (hasZhTranslation || nameEn !== p.name_default);
             const countryDisplay = `${p.country_zh || p.country_code || '?'}`;
             const positionDisplay = p.position_label || POS_LABEL[p.position] || '';
 
@@ -1247,7 +1360,7 @@
               <div style="background:white;border-radius:8px;padding:18px;text-align:center;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                 ${photoUrl ? `<img src="${photoUrl}" style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;object-fit:cover;object-position:center 10%;" loading="lazy" alt="">` : '<div style="width:120px;height:120px;border-radius:50%;background:#e0e0e0;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#999">?</div>'}
                 <div style="margin-top:12px;font-size:16px;font-weight:700;color:#333">${nameZh}</div>
-                ${nameEn !== nameZh ? `<div style="font-size:12px;color:#999;margin-top:2px">${nameEn}</div>` : ''}
+                ${nameEn && nameEn !== nameZh ? `<div style="font-size:12px;color:#888;margin-top:2px;letter-spacing:0.3px">${nameEn}</div>` : ''}
                 <div style="margin-top:8px;font-size:12px;color:#666">${countryDisplay}${positionDisplay ? ' · ' + positionDisplay : ''}${p.shirt_number ? ' · #' + p.shirt_number : ''}</div>
               </div>
 
@@ -1293,6 +1406,187 @@
               </div>
             `;
             document.getElementById('playerBody').innerHTML = html;
+        }
+
+        // === Stats compare sheet ===
+        // Categories define which columns to show + which stat each column reads from
+        // Players are filtered to BOTH teams of the current match (home + away starting + substitutes).
+        const STATS_CATEGORIES = [
+            {
+                key: 'attacking', label: 'Attacking',
+                cols: [
+                    { key: 'attempt_at_goal_on_target',     label: '射正',          glossary: '射门命中球门框内' },
+                    { key: 'attempt_at_goal',               label: '总射门',        glossary: '所有射门次数' },
+                    { key: 'attempt_at_goal_conversion_rate', label: '射正率 %',    glossary: '射正占总射门的百分比' },
+                    { key: 'attempt_at_goal_inside_the_penalty_area',  label: '禁区内' },
+                    { key: 'attempt_at_goal_outside_the_penalty_area', label: '禁区外' },
+                    { key: 'headed_attempt_at_goal',        label: '头球' },
+                    { key: 'assists',                       label: '助攻' },
+                    { key: 'xg',                            label: 'xG',           glossary: '预期进球' },
+                    { key: 'corners',                       label: '角球' }
+                ],
+                section: 'attacking',
+                defaultSort: 'attempt_at_goal_on_target'
+            },
+            {
+                key: 'golden_boot', label: 'adidas Golden Boot',
+                cols: [
+                    { key: 'goals_scored',                  label: '进球',          alt: 'goals' },   // try goals_scored then goals
+                    { key: 'assists',                       label: '助攻' },
+                    { key: 'total_competition_minutes_played', label: '出场分钟' }
+                ],
+                section: 'attacking',
+                defaultSort: 'goals_scored'
+            },
+            {
+                key: 'discipline', label: 'Discipline',
+                cols: [
+                    { key: 'fouls_for',          label: '犯规对方',    glossary: '对对手犯规次数' },
+                    { key: 'fouls_against',      label: '被犯规',      glossary: '被对手犯规次数' },
+                    { key: 'yellow_cards',       label: '黄牌' },
+                    { key: 'red_cards',          label: '红牌' },
+                    { key: 'indirect_red_cards', label: '间接红牌' },
+                    { key: 'offsides',           label: '越位' }
+                ],
+                section: 'discipline',
+                defaultSort: 'yellow_cards'
+            }
+        ];
+
+        let currentStatsData = null;   // batch API response cache
+        let currentStatsCategory = 'attacking';
+        let currentStatsSort = { col: 'attempt_at_goal_on_target', dir: 'desc' };
+
+        async function openStatsCompareSheet() {
+            if (!currentLineupFixtureId) return;
+            const sheet = document.getElementById('statsSheet');
+            sheet.classList.add('visible');
+            document.getElementById('statsTableWrap').innerHTML = '<div class="stats-empty">加载中…</div>';
+
+            // Reset to default category + sort
+            currentStatsCategory = 'attacking';
+            const cat = STATS_CATEGORIES.find(c => c.key === currentStatsCategory);
+            currentStatsSort = { col: cat.defaultSort, dir: 'desc' };
+            renderStatsCategoryTabs();
+
+            try {
+                const r = await fetch(`/api/fifa/match-players/${currentLineupFixtureId}`, { cache: 'no-store' });
+                if (!r.ok) {
+                    const err = await r.text();
+                    document.getElementById('statsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${err}</div>`;
+                    return;
+                }
+                currentStatsData = await r.json();
+                renderStatsTable();
+            } catch (e) {
+                document.getElementById('statsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function closeStatsCompareSheet() {
+            document.getElementById('statsSheet').classList.remove('visible');
+        }
+
+        function renderStatsCategoryTabs() {
+            const html = STATS_CATEGORIES.map(c =>
+                `<div class="stats-category-tab ${c.key === currentStatsCategory ? 'active' : ''}" onclick="switchStatsCategory('${c.key}')">${c.label}</div>`
+            ).join('');
+            document.getElementById('statsCategoryTabs').innerHTML = html;
+        }
+
+        function switchStatsCategory(key) {
+            currentStatsCategory = key;
+            const cat = STATS_CATEGORIES.find(c => c.key === key);
+            currentStatsSort = { col: cat.defaultSort, dir: 'desc' };
+            renderStatsCategoryTabs();
+            renderStatsTable();
+        }
+
+        function switchStatsSort(colKey) {
+            if (currentStatsSort.col === colKey) {
+                currentStatsSort.dir = currentStatsSort.dir === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentStatsSort = { col: colKey, dir: 'desc' };
+            }
+            renderStatsTable();
+        }
+
+        function getStatValue(player, col, section) {
+            const ts = player.tournament_stats || {};
+            const bucket = ts[section] || {};
+            // Try col.key first, then col.alt
+            const val = bucket[col.key] ?? (col.alt ? bucket[col.alt] : undefined);
+            return val;
+        }
+
+        function renderStatsTable() {
+            if (!currentStatsData) return;
+            const cat = STATS_CATEGORIES.find(c => c.key === currentStatsCategory);
+            const cols = cat.cols;
+            const section = cat.section;
+
+            // Show all columns regardless of data availability — when stats are
+            // not yet populated by mangodev refresh, '—' placeholders make it
+            // clear what fields exist and will appear later.
+            const finalCols = cols;
+
+            // Sort players by current sort col
+            const sortCol = finalCols.find(c => c.key === currentStatsSort.col) || finalCols[0];
+            const sorted = [...currentStatsData.players].sort((a, b) => {
+                const va = getStatValue(a, sortCol, section);
+                const vb = getStatValue(b, sortCol, section);
+                const aNull = va === null || va === undefined;
+                const bNull = vb === null || vb === undefined;
+                if (aNull && bNull) return 0;
+                if (aNull) return 1;   // nulls always last
+                if (bNull) return -1;
+                return currentStatsSort.dir === 'desc' ? (vb - va) : (va - vb);
+            });
+
+            // Build table
+            let html = '<table class="stats-table"><thead><tr>';
+            html += '<th class="col-rank">#</th>';
+            html += `<th class="col-player">球员</th>`;
+            for (const col of finalCols) {
+                const sortCls = currentStatsSort.col === col.key
+                    ? (currentStatsSort.dir === 'desc' ? 'sort-desc' : 'sort-asc')
+                    : '';
+                const title = col.glossary || col.label;
+                html += `<th class="col-stat sortable ${sortCls}" title="${title}" onclick="switchStatsSort('${col.key}')">${col.label}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            sorted.forEach((p, idx) => {
+                const sortValue = getStatValue(p, sortCol, section);
+                const rankDisplay = (sortValue === null || sortValue === undefined) ? '-' : (idx + 1);
+                const home = currentStatsData.home, away = currentStatsData.away;
+                const teamSide = p.side === 'home' ? home : away;
+                const flagUrl = `/api/fifa/flag/${teamSide.country_code}`;
+                const nameDisplay = p.name?.zho || p.name_default || `Player ${p.player_id}`;
+                const posLabel = p.position_label || POS_LABEL[p.position] || '';
+                const meta = `${teamSide.country_zh || teamSide.country_code}${posLabel ? ' · ' + posLabel : ''}`;
+                const roleBadge = p.lineup_role === 'starter' ? '' : '<span style="font-size:9px;color:#bbb;margin-left:3px">替补</span>';
+
+                html += '<tr>';
+                html += `<td class="col-rank">${rankDisplay}</td>`;
+                html += `<td class="col-player">
+                    <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
+                    <div class="stats-player-name-block">
+                        <span class="stats-player-name">${nameDisplay}${roleBadge}</span>
+                        <span class="stats-player-meta">${meta}</span>
+                    </div>
+                </td>`;
+                for (const col of finalCols) {
+                    const v = getStatValue(p, col, section);
+                    const display = (v === null || v === undefined) ? '—' : v;
+                    const zeroCls = (v === 0) ? ' zero' : '';
+                    html += `<td class="col-stat${zeroCls}">${display}</td>`;
+                }
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            document.getElementById('statsTableWrap').innerHTML = html;
         }
 
         AUTH.requireLogin(function(user) {
