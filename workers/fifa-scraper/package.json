@@ -1,0 +1,15 @@
+{
+  "name": "worldcup-fifa-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/",
+    "smoke-test": "node scripts/smoke-test.js",
+    "seed": "node scripts/seed-kv.js",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}

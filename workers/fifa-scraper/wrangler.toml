@@ -1,0 +1,14 @@
+name = "worldcup-fifa-scraper"
+main = "index.js"
+compatibility_date = "2024-09-01"
+
+[triggers]
+crons = [
+  "*/2 * * * *",
+  "0 */6 * * *",
+  "0 17,21,1,5 * * *"
+]
+
+[[kv_namespaces]]
+binding = "MATCH_DATA"
+id = "278f1209ffd84662bd51921370a2fbe9"
