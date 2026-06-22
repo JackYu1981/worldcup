@@ -9,8 +9,9 @@ export default {
     try {
       if (cron === '*/2 * * * *') {
         console.log('[fifa-scraper] main cron tick (not yet implemented)');
-      } else if (cron === '0 */6 * * *') {
-        console.log('[fifa-scraper] calendar cron tick: start');
+      } else if (cron === '0 */6 * * *' || cron === '* * * * *') {
+        // '* * * * *' is a temp testing override; '0 */6 * * *' is production.
+        console.log(`[fifa-scraper] calendar cron tick (${cron}): start`);
         const r = await calendarCron(env);
         console.log(`[fifa-scraper] calendar cron tick: done`, r);
       } else if (cron === '0 17,21,1,5 * * *') {

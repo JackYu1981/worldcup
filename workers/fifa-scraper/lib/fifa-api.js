@@ -11,10 +11,14 @@ import { fifaBrowserHeaders } from './token.js';
  * @returns normalized {fetched_at, from_utc, to_utc, competition_id, matches:[...]}
  */
 export async function fetchFifaCalendar(competitionId, fromIso, toIso) {
+  // NOTE: do NOT encodeURIComponent the timestamps. FIFA endpoint rejects
+  // URL-encoded colons (%3A); it expects raw `2026-06-15T00:00:00Z` form.
+  // Verified by Chunk 2.5 live debugging: encoded URLs return non-JSON 400-ish
+  // error pages, leading to "Unexpected token I" JSON parse failure downstream.
   const url = `https://api.fifa.com/api/v3/calendar/matches`
     + `?idCompetition=${encodeURIComponent(competitionId)}`
-    + `&from=${encodeURIComponent(fromIso)}`
-    + `&to=${encodeURIComponent(toIso)}`
+    + `&from=${fromIso}`
+    + `&to=${toIso}`
     + `&language=en&count=500`;
   const r = await fetch(url, { headers: fifaBrowserHeaders() });
   if (!r.ok) throw new Error(`FIFA calendar fetch failed: HTTP ${r.status}`);

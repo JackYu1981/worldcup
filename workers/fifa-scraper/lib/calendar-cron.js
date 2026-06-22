@@ -18,8 +18,17 @@ const FIXTURE_SCAN_DAYS_FORWARD = 30;
 export async function calendarCron(env) {
   // 1. Fetch + cache FIFA calendar
   const now = Date.now();
-  const fromIso = new Date(now - CALENDAR_WINDOW_DAYS_BACK * 86400_000).toISOString();
-  const toIso = new Date(now + CALENDAR_WINDOW_DAYS_FORWARD * 86400_000).toISOString();
+  // FIFA endpoint quirks (verified by Chunk 2.5 live debugging):
+  //   - Rejects ISO with millis (returns "Invalid parameter").
+  //   - Rejects URL-encoded colons (%3A).
+  //   - Returns body=null (HTTP 200) if `from`/`to` are not at midnight UTC.
+  // So we floor to midnight UTC for the date window.
+  const floorDay = (ms) => {
+    const d = new Date(ms);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  };
+  const fromIso = floorDay(now - CALENDAR_WINDOW_DAYS_BACK * 86400_000);
+  const toIso = floorDay(now + CALENDAR_WINDOW_DAYS_FORWARD * 86400_000);
   let fifaCal;
   try {
     fifaCal = await fetchFifaCalendar(COMPETITION_ID, fromIso, toIso);

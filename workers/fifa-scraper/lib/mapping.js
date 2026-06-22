@@ -84,6 +84,11 @@ export async function tryAutoMap(fixture500, env, fifaCal = null) {
 
   const fm = candidates[0];
   const skewMs = Math.abs(new Date(fm.date_utc).getTime() - kickoffUtcMs);
+  // kickoff_local_beijing: prefer formatted "YYYY-MM-DD HH:MM" if both fields exist;
+  // otherwise just use kickoff (which may already be full datetime in current 500 schema)
+  const localBeijing = (fixture500.date && /^\d{2}:\d{2}$/.test(fixture500.kickoff))
+    ? `${fixture500.date} ${fixture500.kickoff}`
+    : fixture500.kickoff;
   return {
     fifa_id_match: fm.id_match,
     fifa_id_season: fm.id_season,
@@ -93,7 +98,7 @@ export async function tryAutoMap(fixture500, env, fifaCal = null) {
     home_code: homeCode,
     away_code: awayCode,
     kickoff_utc: new Date(kickoffUtcMs).toISOString().replace(/Z$/, '+00:00'),
-    kickoff_local_beijing: `${fixture500.date} ${fixture500.kickoff}`,
+    kickoff_local_beijing: localBeijing,
     matched_at: matchedAt,
     match_confidence: skewMs < EXACT_THRESHOLD_MS ? 'exact' : 'time_skew_5min',
     match_note: skewMs >= EXACT_THRESHOLD_MS ? `time skew ${Math.round(skewMs / 1000)}s` : null,

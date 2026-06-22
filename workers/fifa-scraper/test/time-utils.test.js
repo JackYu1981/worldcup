@@ -15,6 +15,14 @@ test('parseKickoffBeijing: parses 500-style {date, kickoff} as Beijing wall cloc
   assert.equal(t.toISOString(), '2026-06-21T15:00:00.000Z');
 });
 
+test('parseKickoffBeijing: parses 500-style kickoff="YYYY-MM-DD HH:MM" (current adapter)', () => {
+  // Current 500 adapter writes kickoff as full datetime, date=null
+  const fixture = { date: null, kickoff: '2026-06-23 01:00' };
+  const t = parseKickoffBeijing(fixture);
+  // Beijing 2026-06-23 01:00 = UTC 2026-06-22 17:00
+  assert.equal(t.toISOString(), '2026-06-22T17:00:00.000Z');
+});
+
 test('parseKickoffUtc: alias for parseKickoffBeijing, returns Date in UTC', () => {
   const fixture = { date: '2026-06-21', kickoff: '04:00' };
   const t = parseKickoffUtc(fixture);

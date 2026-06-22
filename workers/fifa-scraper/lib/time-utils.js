@@ -4,17 +4,35 @@
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 /**
- * Parse a 500.com fixture's {date:"YYYY-MM-DD", kickoff:"HH:MM"} as Beijing wall clock.
+ * Parse a 500.com fixture's kickoff as Beijing wall clock.
+ * Supports both forms emitted by 500 adapter:
+ *   - kickoff = "YYYY-MM-DD HH:MM"  (full datetime — current adapter output)
+ *   - kickoff = "HH:MM" with date = "YYYY-MM-DD"  (legacy)
  * Returns a Date whose .toISOString() yields the equivalent UTC moment.
  */
 export function parseKickoffBeijing(fixture) {
-  if (!fixture?.date || !fixture?.kickoff) {
+  if (!fixture?.kickoff) {
     throw new Error(`parseKickoffBeijing: missing date or kickoff in ${JSON.stringify(fixture)}`);
   }
-  const [Y, M, D] = fixture.date.split('-').map(Number);
-  const [h, m] = fixture.kickoff.split(':').map(Number);
-  // Build UTC from Beijing wall clock by subtracting +08:00 offset
-  const utcMs = Date.UTC(Y, M - 1, D, h, m, 0) - BEIJING_OFFSET_MS;
+  const ko = fixture.kickoff.trim();
+  let Y, M, D, h, m;
+  const fullMatch = ko.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (fullMatch) {
+    [, Y, M, D, h, m] = fullMatch;
+  } else {
+    // Legacy: kickoff="HH:MM" + date="YYYY-MM-DD"
+    if (!fixture.date) {
+      throw new Error(`parseKickoffBeijing: missing date or kickoff in ${JSON.stringify(fixture)}`);
+    }
+    const ymd = fixture.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const hm = ko.match(/^(\d{2}):(\d{2})$/);
+    if (!ymd || !hm) {
+      throw new Error(`parseKickoffBeijing: missing date or kickoff in ${JSON.stringify(fixture)}`);
+    }
+    [, Y, M, D] = ymd;
+    [, h, m] = hm;
+  }
+  const utcMs = Date.UTC(+Y, +M - 1, +D, +h, +m, 0) - BEIJING_OFFSET_MS;
   return new Date(utcMs);
 }
 

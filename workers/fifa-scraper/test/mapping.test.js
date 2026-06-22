@@ -127,3 +127,13 @@ test('tryAutoMap: kickoff_local_beijing reflects original 500 fields', async () 
   const r = await tryAutoMap({ id: 'f1', home: '西班牙', away: '沙特阿拉伯', date: '2026-06-22', kickoff: '00:00' }, env);
   assert.equal(r.kickoff_local_beijing, '2026-06-22 00:00');
 });
+
+test('tryAutoMap: works with current 500 schema (date=null, kickoff="YYYY-MM-DD HH:MM")', async () => {
+  // ESP vs KSA fixture in 500-current form:  kickoff=full datetime, date=null
+  const env = makeMockEnv({ countries: COUNTRIES_KV, fifa_calendar: CAL_KV });
+  const fixture = { id: 'f1359210', home: '西班牙', away: '沙特阿拉伯', date: null, kickoff: '2026-06-22 00:00' };
+  const r = await tryAutoMap(fixture, env);
+  assert.equal(r.match_confidence, 'exact');
+  assert.equal(r.fifa_id_match, '400021474');
+  assert.equal(r.kickoff_local_beijing, '2026-06-22 00:00');
+});
