@@ -12,12 +12,12 @@ export default {
       if (cron === '*/2 * * * *') {
         const r = await mainCron(env);
         console.log(`[fifa-scraper] main cron tick: done`, r);
-      } else if (cron === '0 */6 * * *' || cron === '* * * * *') {
-        // '* * * * *' is a temp testing override; '0 */6 * * *' is production.
+      } else if (cron === '0 */6 * * *') {
         console.log(`[fifa-scraper] calendar cron tick (${cron}): start`);
         const r = await calendarCron(env);
         console.log(`[fifa-scraper] calendar cron tick: done`, r);
-      } else if (cron === '0 17,21,1,5 * * *') {
+      } else if (cron === '0 17,21,1,5 * * *' || cron === '* * * * *') {
+        // '* * * * *' is a temp Chunk 4.5 debugging override
         console.log('[fifa-scraper] tournament-wide cron tick: start');
         const r = await tournamentWideCron(env);
         console.log(`[fifa-scraper] tournament-wide cron tick: done`, r);
