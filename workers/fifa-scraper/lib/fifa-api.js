@@ -101,3 +101,41 @@ export async function fetchFdhPlayers(fdhMatchId) {
   if (!r.ok) return null;
   return r.json();
 }
+
+/**
+ * Fetch one page of a mangodev story (tournament-wide stats leaderboard).
+ *
+ * Each story holds page_size=50 actors. Per (classification, stat), pagination
+ * goes from page=1 until HTTP 404 (typically around page 25-30, since
+ * page_count metadata isn't a hard stop — verified by Chunk 4.2 probe).
+ *
+ * Use limit=1 — mangodev returns HTTP 429 "Pagination limit threshold breached"
+ * for limit ≥ ~10.
+ *
+ * Returns { story, err }.
+ *   - story: the story object with .actors[] (50 per page, fewer on last page)
+ *   - err: 'HTTP 404' when out of pages, other HTTP errors, or null on success
+ *
+ * Retries once on HTTP 429 with 3s backoff.
+ */
+export async function fetchMangoStoryPage(token, seasonId, classification, stat, page) {
+  const query = `(and resourceStatus==\`urn:gd:resourceStatus:active\` `
+              + `_externalId~\`urn:gd:story:classification:${classification}:competitionId:${seasonId}:${stat}:rank_asc:page:${page}$\`)`;
+  const url = `https://gameday-prod.fifa.mangodev.co.uk/1-0/stories`
+            + `?query=${encodeURIComponent(query)}`
+            + `&skip=0&limit=1`
+            + `&sort=tags.name==urn:gd:tag:story:fifa:column_number:asc`;
+
+  const headers = { ...fifaBrowserHeaders(), 'Authorization': `Bearer ${token}` };
+  let r = await fetch(url, { headers });
+  if (r.status === 429) {
+    await new Promise(rr => setTimeout(rr, 3000));
+    r = await fetch(url, { headers });
+  }
+  if (!r.ok) {
+    return { story: null, err: `HTTP ${r.status}` };
+  }
+  const j = await r.json();
+  const story = (j.items && j.items[0]) || null;
+  return { story, err: null };
+}
