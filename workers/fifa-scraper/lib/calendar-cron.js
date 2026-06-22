@@ -10,10 +10,10 @@ import { logSla } from './sla.js';
 import { beijingDateStr } from './time-utils.js';
 
 const COMPETITION_ID = 17;
-const CALENDAR_WINDOW_DAYS_FORWARD = 30;
-const CALENDAR_WINDOW_DAYS_BACK = 3;   // include just-completed fixtures
-const FIXTURE_SCAN_DAYS_BACK = 7;
-const FIXTURE_SCAN_DAYS_FORWARD = 30;
+const CALENDAR_WINDOW_DAYS_FORWARD = 35;   // covers ~1 month of upcoming WC fixtures
+const CALENDAR_WINDOW_DAYS_BACK = 14;      // include finished group-stage matches for back-mapping
+const FIXTURE_SCAN_DAYS_BACK = 14;         // match calendar back-window to give old mappings a chance
+const FIXTURE_SCAN_DAYS_FORWARD = 35;
 
 export async function calendarCron(env) {
   // 1. Fetch + cache FIFA calendar
@@ -69,6 +69,8 @@ export async function calendarCron(env) {
 /**
  * Load 500.com fixtures across a date window (matches:YYYY-MM-DD keys).
  * Reads `matches:{date}` for each date in [today-back, today+forward].
+ * Skips fixtures whose league is not '世界杯' — 500 packs Finnish league /
+ * friendly matches into the same envelope, which would pollute SLA logs.
  */
 async function load500FixturesAcrossDates(env, daysBack, daysForward) {
   const now = Date.now();
@@ -79,10 +81,10 @@ async function load500FixturesAcrossDates(env, daysBack, daysForward) {
     const envelope = await env.MATCH_DATA.get(`matches:${dateStr}`, 'json');
     if (!envelope?.matches) continue;
     for (const m of envelope.matches) {
-      if (m.id && !seen.has(m.id)) {
-        seen.add(m.id);
-        all.push(m);
-      }
+      if (!m.id || seen.has(m.id)) continue;
+      if (m.league !== '世界杯') continue;   // skip non-WC fixtures (Finnish league, friendlies, etc.)
+      seen.add(m.id);
+      all.push(m);
     }
   }
   return all;

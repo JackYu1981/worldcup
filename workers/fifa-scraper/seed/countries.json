@@ -4,6 +4,7 @@
   "items": [
     {"zh": "西班牙", "code": "ESP", "en": "Spain"},
     {"zh": "沙特阿拉伯", "code": "KSA", "en": "Saudi Arabia"},
+    {"zh": "沙特", "code": "KSA", "en": "Saudi Arabia"},
     {"zh": "墨西哥", "code": "MEX", "en": "Mexico"},
     {"zh": "南非", "code": "RSA", "en": "South Africa"},
     {"zh": "韩国", "code": "KOR", "en": "Korea Republic"},
@@ -48,6 +49,7 @@
     {"zh": "埃及", "code": "EGY", "en": "Egypt"},
     {"zh": "伊朗", "code": "IRN", "en": "IR Iran"},
     {"zh": "比利时", "code": "BEL", "en": "Belgium"},
-    {"zh": "德国", "code": "GER", "en": "Germany"}
+    {"zh": "德国", "code": "GER", "en": "Germany"},
+    {"zh": "库拉索", "code": "CUW", "en": "Curaçao"}
   ]
 }
