@@ -398,37 +398,50 @@
         .stats-table-wrap {
             flex: 1; overflow: auto;
             background: white;
+            -webkit-overflow-scrolling: touch;
         }
         .stats-table {
-            width: 100%; border-collapse: collapse;
-            font-size: 12px; min-width: 100%;
+            border-collapse: separate; border-spacing: 0;
+            font-size: 12px;
         }
         .stats-table thead {
-            position: sticky; top: 0; z-index: 2;
+            position: sticky; top: 0; z-index: 3;
             background: #f9fafc;
-            box-shadow: 0 1px 0 #e0e0e0;
         }
         .stats-table thead th {
             padding: 10px 8px; text-align: left;
             font-size: 11px; color: #666; font-weight: 600;
-            white-space: nowrap; cursor: pointer; user-select: none;
+            white-space: nowrap; user-select: none;
             border-bottom: 1px solid #e0e0e0;
+            background: #f9fafc;
         }
         .stats-table thead th.sort-asc::after { content: ' ↑'; color: #1a73e8; }
         .stats-table thead th.sort-desc::after { content: ' ↓'; color: #1a73e8; }
+        .stats-table thead th.sortable { cursor: pointer; }
         .stats-table thead th.sortable:hover { background: #eef3fa; }
-        .stats-table thead th.col-rank { width: 30px; text-align: center; }
-        .stats-table thead th.col-player { min-width: 150px; }
-        .stats-table thead th.col-stat { text-align: right; min-width: 60px; }
+        /* Left frozen columns: # + Player. They stay visible when horizontally scrolling stats. */
+        .stats-table th.col-rank, .stats-table td.col-rank {
+            position: sticky; left: 0; z-index: 2;
+            width: 32px; text-align: center;
+            background: inherit;
+        }
+        .stats-table thead th.col-rank { background: #f9fafc; }
+        .stats-table tbody td.col-rank { background: white; color: #999; font-size: 11px; }
+        .stats-table th.col-player, .stats-table td.col-player {
+            position: sticky; left: 32px; z-index: 2;
+            min-width: 170px; max-width: 200px;
+            background: inherit;
+            box-shadow: 1px 0 0 #e0e0e0;
+        }
+        .stats-table thead th.col-player { background: #f9fafc; }
+        .stats-table tbody td.col-player { background: white; }
+        .stats-table thead th.col-stat { text-align: right; min-width: 64px; }
 
         .stats-table tbody tr { border-bottom: 1px solid #f5f5f5; }
-        .stats-table tbody tr:active { background: #f4f8ff; }
+        .stats-table tbody tr:active td { background: #f4f8ff !important; }
         .stats-table tbody td { padding: 8px; vertical-align: middle; }
-        .stats-table td.col-rank {
-            text-align: center; color: #999; font-size: 11px;
-        }
         .stats-table td.col-player {
-            display: flex; align-items: center; gap: 8px;
+            display: flex; align-items: center; gap: 6px; padding-right: 6px;
         }
         .stats-table td.col-stat {
             text-align: right; font-weight: 600; color: #333;
@@ -440,18 +453,16 @@
             object-fit: cover; flex-shrink: 0;
             border: 1px solid #e0e0e0;
         }
-        .stats-player-name-block {
-            display: flex; flex-direction: column; gap: 1px;
-            min-width: 0;
+        .stats-player-shirt {
+            display: inline-block;
+            width: 22px; text-align: center;
+            font-size: 11px; font-weight: 700; color: #555;
+            flex-shrink: 0;
         }
         .stats-player-name {
             font-size: 12px; color: #333; font-weight: 500;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            max-width: 130px;
-        }
-        .stats-player-meta {
-            font-size: 10px; color: #999;
-            white-space: nowrap;
+            flex: 1; min-width: 0;
         }
         .stats-empty {
             text-align: center; color: #999; padding: 60px 20px; font-size: 13px;
@@ -1530,9 +1541,15 @@
             // clear what fields exist and will appear later.
             const finalCols = cols;
 
+            // Filter to starters only when lineup is locked (otherwise show everyone)
+            const allPlayers = currentStatsData.players || [];
+            const starters = allPlayers.filter(p => p.lineup_role === 'starter');
+            const lineupLocked = starters.length === 22;   // 11+11 means FIFA published
+            const playersToShow = lineupLocked ? starters : allPlayers;
+
             // Sort players by current sort col
             const sortCol = finalCols.find(c => c.key === currentStatsSort.col) || finalCols[0];
-            const sorted = [...currentStatsData.players].sort((a, b) => {
+            const sorted = [...playersToShow].sort((a, b) => {
                 const va = getStatValue(a, sortCol, section);
                 const vb = getStatValue(b, sortCol, section);
                 const aNull = va === null || va === undefined;
@@ -1546,7 +1563,7 @@
             // Build table
             let html = '<table class="stats-table"><thead><tr>';
             html += '<th class="col-rank">#</th>';
-            html += `<th class="col-player">球员</th>`;
+            html += `<th class="col-player">Player</th>`;
             for (const col of finalCols) {
                 const sortCls = currentStatsSort.col === col.key
                     ? (currentStatsSort.dir === 'desc' ? 'sort-desc' : 'sort-asc')
@@ -1562,19 +1579,19 @@
                 const home = currentStatsData.home, away = currentStatsData.away;
                 const teamSide = p.side === 'home' ? home : away;
                 const flagUrl = `/api/fifa/flag/${teamSide.country_code}`;
-                const nameDisplay = p.name?.zho || p.name_default || `Player ${p.player_id}`;
-                const posLabel = p.position_label || POS_LABEL[p.position] || '';
-                const meta = `${teamSide.country_zh || teamSide.country_code}${posLabel ? ' · ' + posLabel : ''}`;
-                const roleBadge = p.lineup_role === 'starter' ? '' : '<span style="font-size:9px;color:#bbb;margin-left:3px">替补</span>';
+                // English name only
+                const nameDisplay = p.name?.eng || p.name_default || `Player ${p.player_id}`;
+                const shirt = p.shirt_number != null ? p.shirt_number : '';
+                const roleBadge = (!lineupLocked && p.lineup_role !== 'starter')
+                    ? '<span style="font-size:9px;color:#bbb;margin-left:3px">SUB</span>'
+                    : '';
 
                 html += '<tr>';
                 html += `<td class="col-rank">${rankDisplay}</td>`;
                 html += `<td class="col-player">
                     <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
-                    <div class="stats-player-name-block">
-                        <span class="stats-player-name">${nameDisplay}${roleBadge}</span>
-                        <span class="stats-player-meta">${meta}</span>
-                    </div>
+                    <span class="stats-player-shirt">${shirt}</span>
+                    <span class="stats-player-name">${nameDisplay}${roleBadge}</span>
                 </td>`;
                 for (const col of finalCols) {
                     const v = getStatValue(p, col, section);
