@@ -2,9 +2,10 @@
  * Cloudflare Worker: 竞彩数据定时抓取
  *
  * Cron triggers:
- * - 每小时整点: 抓 500.com 在售页，按 kickoff 日期分发到 matches:{date}，
+ * - 每 2 小时整点: 抓 500.com 在售页，按 kickoff 日期分发到 matches:{date}，
  *   已有比赛合并（赔率覆盖、已写入的 score/status='finished' 不被退化）
- * - 每30分钟: 更新比分
+ *   写入时做 hash 短路 — 数据没变就不写，省 KV 写入额度
+ * - 每30分钟: 更新比分（hash 短路同理）
  */
 
 import { getAdapter } from '../../lib/adapters/index.js';
@@ -12,6 +13,44 @@ import { createEnvelope } from '../../lib/schema.js';
 import { logger } from '../../lib/logger.js';
 
 const adapter = getAdapter('500.com');
+
+// FNV-1a 32-bit — same algorithm as fifa-scraper/lib/lineup.js for consistency.
+// Computes a fingerprint of just the match content (id + odds + handicap + score + status)
+// so we skip writes when the envelope round-trip would produce identical data.
+function matchListHash(matches) {
+  const sig = (matches || [])
+    .slice()
+    .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+    .map(m => {
+      const o = m.odds || {};
+      const h = m.handicap || {};
+      return [
+        m.id, m.status || '', m.score || '', m.score_ht || '',
+        o.home_win, o.draw, o.away_win,
+        h.home_win, h.draw, h.away_win, h.handicap
+      ].join('|');
+    })
+    .join('\n');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < sig.length; i++) {
+    hash ^= sig.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+// Idempotent KV write — only puts if the new content's hash differs from what's there.
+// Returns { written: boolean, hash: string }.
+async function putIfChanged(kv, key, envelope) {
+  const newHash = matchListHash(envelope.matches);
+  const existing = await kv.get(key, 'json');
+  if (existing && existing._hash === newHash) {
+    return { written: false, hash: newHash };
+  }
+  envelope._hash = newHash;
+  await kv.put(key, JSON.stringify(envelope));
+  return { written: true, hash: newHash };
+}
 
 async function fetchHtml(url, encoding) {
   const resp = await fetch(url, { headers: adapter.fetchHeaders });
@@ -132,8 +171,10 @@ async function snapshotMatches(env) {
 
     if (merged.length === 0) continue;
     const envelope = createEnvelope(date, adapter.name, merged);
-    await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
-    summary.push(`${date}:${merged.length}场${newCount > 0 ? `(+${newCount})` : ''}`);
+    const { written } = await putIfChanged(env.MATCH_DATA, kvKey, envelope);
+    if (written) {
+      summary.push(`${date}:${merged.length}场${newCount > 0 ? `(+${newCount})` : ''}`);
+    }
   }
 
   if (summary.length > 0) {
@@ -175,10 +216,12 @@ async function updateScores(env) {
 
     if (updated > 0) {
       const envelope = createEnvelope(date, adapter.name, matches);
-      await env.MATCH_DATA.put(kvKey, JSON.stringify(envelope));
+      const { written } = await putIfChanged(env.MATCH_DATA, kvKey, envelope);
       const nowAllDone = matches.every(m => m.status === 'finished' && m.score);
-      console.log(`[Scores] ${date}: updated ${updated} (${nowAllDone ? 'all done' : 'pending'})`);
-      await logger(env.MATCH_DATA, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
+      if (written) {
+        console.log(`[Scores] ${date}: updated ${updated} (${nowAllDone ? 'all done' : 'pending'})`);
+        await logger(env.MATCH_DATA, '比分', `${date} 更新${updated}场${nowAllDone ? '(全部完成)' : ''}`);
+      }
     }
 
     totalUpdated += updated;
@@ -221,8 +264,8 @@ export default {
   async scheduled(event, env, ctx) {
     console.log(`[Cron] Triggered: ${event.cron}`);
 
-    if (event.cron === '0 * * * *') {
-      // 每整点：抓在售页合并到对应日期 KV
+    if (event.cron === '0 */2 * * *') {
+      // 每 2 小时整点：抓在售页合并到对应日期 KV（hash 短路）
       await snapshotMatches(env);
     } else {
       await updateScores(env);

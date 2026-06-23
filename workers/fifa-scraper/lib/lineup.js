@@ -170,6 +170,8 @@ export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCoun
   ];
 
   const countryRosterPatch = {};   // country_code -> [{player_id, name, shirt, position, _team_id}]
+  let playersWritten = 0;
+  let playersSkipped = 0;
 
   for (const { team, country_code } of sides) {
     if (!country_code) continue;
@@ -178,6 +180,32 @@ export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCoun
       if (!p.IdPlayer) continue;
       const existing = await env.MATCH_DATA.get(`players:${p.IdPlayer}`, 'json') || {};
       const enName = pickEnglish(p.PlayerName) || pickEnglish(p.ShortName);
+      // Fields whose change should trigger a put. last_updated is INTENTIONALLY
+      // excluded — it changes every tick and would defeat the hash.
+      const lineupHash = lineupFieldsHash({
+        country_code,
+        team_id: team.IdTeam,
+        position: p.Position ?? null,
+        shirt_number: p.ShirtNumber ?? null,
+        eng: enName || ''
+      });
+      // Always record the roster patch so players_by_country can still dedup
+      // based on its own contents (cheap — just an in-memory push).
+      countryRosterPatch[country_code].push({
+        player_id: p.IdPlayer,
+        name: enName || existing.name_default || `Player ${p.IdPlayer}`,
+        shirt_number: p.ShirtNumber ?? null,
+        position: p.Position ?? null,
+        _team_id: team.IdTeam
+      });
+      // A-mode short-circuit: same lineup-derived fingerprint → no KV write.
+      // tournament-refresh writes the volatile fields (photo_url, name.{12 langs},
+      // tournament_stats) under a different code path, so skipping here does NOT
+      // block their updates.
+      if (existing._lineup_hash === lineupHash) {
+        playersSkipped++;
+        continue;
+      }
       const updated = {
         ...existing,
         id: p.IdPlayer,
@@ -195,20 +223,19 @@ export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCoun
           ...(enName ? { eng: enName } : {})
         },
         name_default: enName || existing.name_default || `Player ${p.IdPlayer}`,
+        _lineup_hash: lineupHash,
         last_updated: new Date().toISOString().replace(/Z$/, '+00:00')
       };
       await env.MATCH_DATA.put(`players:${p.IdPlayer}`, JSON.stringify(updated));
-      countryRosterPatch[country_code].push({
-        player_id: p.IdPlayer,
-        name: updated.name_default,
-        shirt_number: p.ShirtNumber ?? null,
-        position: p.Position ?? null,
-        _team_id: team.IdTeam
-      });
+      playersWritten++;
     }
   }
 
-  // Union-upsert into players_by_country, preserving any stats_summary already there
+  // Union-upsert into players_by_country, preserving any stats_summary already there.
+  // We also hash the roster shape so we skip the country-level put when nothing changed
+  // (same set of {player_id, name, shirt, position}).
+  let countriesWritten = 0;
+  let countriesSkipped = 0;
   for (const [code, newEntries] of Object.entries(countryRosterPatch)) {
     if (newEntries.length === 0) continue;
     const existing = await env.MATCH_DATA.get(`players_by_country:${code}`, 'json') || {
@@ -229,10 +256,40 @@ export async function upsertPlayersFromLineup(env, mapping, liveData, lookupCoun
         stats_summary: cur.stats_summary
       });
     }
-    existing.roster = Array.from(byId.values());
+    const newRoster = Array.from(byId.values());
+    // Compare roster shape (player_id + name + shirt + position) — ignore stats_summary
+    // because that's owned by another writer and we don't want to trigger a put here
+    // just because it was concurrently updated.
+    const newSig = rosterSig(newRoster);
+    const oldSig = rosterSig(existing.roster);
+    if (newSig === oldSig && existing.team_id) {
+      countriesSkipped++;
+      continue;
+    }
+    existing.roster = newRoster;
     existing.team_id = existing.team_id || newEntries[0]?._team_id || null;
     existing.country_zh = existing.country_zh || lookupCountryZh(code);
     existing.updated_at = new Date().toISOString().replace(/Z$/, '+00:00');
     await env.MATCH_DATA.put(`players_by_country:${code}`, JSON.stringify(existing));
+    countriesWritten++;
   }
+
+  return { playersWritten, playersSkipped, countriesWritten, countriesSkipped };
+}
+
+// FNV-1a 32-bit — fast deterministic hash, no crypto module needed in CF Workers.
+function lineupFieldsHash(obj) {
+  const s = JSON.stringify(obj);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function rosterSig(roster) {
+  // Order-insensitive by sorting on player_id, then compare the lineup-derived fields.
+  const sorted = [...roster].sort((a, b) => String(a.player_id).localeCompare(String(b.player_id)));
+  return sorted.map(r => `${r.player_id}#${r.name}#${r.shirt_number}#${r.position}`).join('|');
 }

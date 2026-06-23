@@ -52,13 +52,12 @@ export async function mainCron(env) {
     fifaCal = await env.MATCH_DATA.get('fifa_calendar', 'json');
     if (!fifaCal) {
       const { fetchFifaCalendar } = await import('./fifa-api.js');
-      const isoDay = (offset) => {
-        const d = new Date(Date.now() + offset * 86400_000);
-        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
-          .toISOString().replace(/\.\d{3}Z$/, 'Z');
-      };
+      // Fixed window: 2026-06-01 → 2026-07-27. World Cup runs 2026-06-11 ~ 2026-07-19,
+      // we pad ±14d for safety. This is intentionally NOT a rolling window — if the
+      // calendar gets flushed mid-tournament and re-fetched at a late date, a rolling
+      // [-14d, +35d] window would drop early-stage matches we still need to map.
       try {
-        fifaCal = await fetchFifaCalendar(17, isoDay(-14), isoDay(35));
+        fifaCal = await fetchFifaCalendar(17, '2026-06-01T00:00:00Z', '2026-07-27T00:00:00Z');
         await env.MATCH_DATA.put('fifa_calendar', JSON.stringify(fifaCal));
         await logSla(env, { level: 'info', event: 'fifa_calendar_lazy_fetched', matches: fifaCal.matches.length });
       } catch (e) {
@@ -70,6 +69,9 @@ export async function mainCron(env) {
   };
 
   let lineupOk = 0, lineupErr = 0, refreshOk = 0, refreshErr = 0, finishedDetected = 0;
+  let finishedSkipped = 0;
+  let playersWrittenTotal = 0, playersSkippedTotal = 0;
+  let countriesWrittenTotal = 0, countriesSkippedTotal = 0;
 
   for (const fixture of fixtures) {
     let mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
@@ -89,6 +91,19 @@ export async function mainCron(env) {
       continue;
     }
 
+    // 2a-pre. D — finished-skip: if our KV already records this match as FINISHED,
+    // there is nothing left to learn from FIFA. Skip the network call AND the KV write.
+    // The tournament-refresh has already run on the status→finished transition tick.
+    // Lineup, score, events are immutable post-finish. This is the single biggest
+    // KV-write saver: the worst case before this was a finished match staying in
+    // window for ~15min post-roll and being re-fetched 1-2 times producing 55+
+    // wasted player writes per tick.
+    const existingLineup = await env.MATCH_DATA.get(matchLineupKey(fixture.id), 'json');
+    if (existingLineup?.match_status === FINISHED_STATUS_CODE) {
+      finishedSkipped++;
+      continue;
+    }
+
     // 2a. live/football
     let liveData;
     try {
@@ -101,7 +116,6 @@ export async function mainCron(env) {
 
     // 2b. normalize + diff-then-write lineup
     const lineup = normalizeLineup(liveData, mapping);
-    const existingLineup = await env.MATCH_DATA.get(matchLineupKey(fixture.id), 'json');
     const prevStatus = existingLineup?.match_status;
     const lineupChanged = !existingLineup || lineupSignature(existingLineup) !== lineupSignature(lineup);
     if (lineupChanged) {
@@ -111,7 +125,11 @@ export async function mainCron(env) {
 
     // 2c. Upsert players only on lineup-just-available (rare event)
     if (lineupChanged && lineup.lineup_available) {
-      await upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh);
+      const upsertStats = await upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh);
+      playersWrittenTotal += upsertStats.playersWritten;
+      playersSkippedTotal += upsertStats.playersSkipped;
+      countriesWrittenTotal += upsertStats.countriesWritten;
+      countriesSkippedTotal += upsertStats.countriesSkipped;
     }
 
     // SLA log on lineup change or KO-60min risk
@@ -145,17 +163,28 @@ export async function mainCron(env) {
   }
 
   // Summary log only when there's interesting activity
-  if (lineupChanged_anywhere() || finishedDetected > 0 || lineupErr > 0) {
+  if (lineupChanged_anywhere() || finishedDetected > 0 || lineupErr > 0 || finishedSkipped > 0) {
     await logSla(env, {
       level: 'info', event: 'main_cron_pass',
       in_window: fixtures.length,
+      finished_skipped: finishedSkipped,
       lineup_ok: lineupOk, lineup_err: lineupErr,
       finished_detected: finishedDetected,
-      refresh_ok: refreshOk, refresh_err: refreshErr
+      refresh_ok: refreshOk, refresh_err: refreshErr,
+      players_written: playersWrittenTotal, players_skipped: playersSkippedTotal,
+      countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal
     });
   }
 
-  return { in_window: fixtures.length, lineup_ok: lineupOk, lineup_err: lineupErr, finished_detected: finishedDetected, refresh_ok: refreshOk, refresh_err: refreshErr };
+  return {
+    in_window: fixtures.length,
+    finished_skipped: finishedSkipped,
+    lineup_ok: lineupOk, lineup_err: lineupErr,
+    finished_detected: finishedDetected,
+    refresh_ok: refreshOk, refresh_err: refreshErr,
+    players_written: playersWrittenTotal, players_skipped: playersSkippedTotal,
+    countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal
+  };
 
   // Helper: was any lineup written this tick?
   function lineupChanged_anywhere() { return lineupOk > 0; }

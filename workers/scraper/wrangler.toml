@@ -3,7 +3,10 @@ main = "index.js"
 compatibility_date = "2024-09-01"
 
 [triggers]
-crons = ["0 * * * *", "*/30 * * * *"]
+# snapshot: 每 2 小时整点（赔率变化频率低，2h 足够）
+# scores: 每 30 分钟（结算延迟越短越好）
+# 两条 cron 写入都受 hash 短路保护 — 数据没变就不写
+crons = ["0 */2 * * *", "*/30 * * * *"]
 
 [[kv_namespaces]]
 binding = "MATCH_DATA"

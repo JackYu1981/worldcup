@@ -325,20 +325,45 @@
         .lineup-player-name {
             flex: 1; font-size: 13px; color: #333; font-weight: 500;
             display: flex; flex-direction: column; gap: 2px;
+            min-width: 0;
         }
-        .lineup-player-name .name-zh { font-weight: 600; }
-        .lineup-player-name .name-en { font-size: 11px; color: #888; font-weight: 400; }
-        .lineup-player-events { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+        .lineup-player-name .name-row {
+            display: flex; align-items: center; gap: 6px;
+            font-weight: 600;
+        }
+        .lineup-player-name .captain-badge {
+            font-size: 10px; font-weight: 700;
+            background: #ffeb3b; color: #333;
+            padding: 1px 4px; border-radius: 3px;
+            line-height: 1.2; flex-shrink: 0;
+        }
+        .lineup-player-name .sub-replaced {
+            font-size: 11px; color: #2e7d32; font-weight: 500;
+            display: flex; align-items: center; gap: 3px;
+        }
+        .lineup-player-name .sub-replaced .arrow { font-weight: 700; }
+        .lineup-player-events { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
         .lineup-event-icon {
-            font-size: 11px; padding: 2px 5px; border-radius: 3px;
-            white-space: nowrap; line-height: 1.2;
+            font-size: 11px; line-height: 1.2;
+            white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 2px;
         }
-        .lineup-event-icon.goal { background: #e8f5e9; color: #2e7d32; }
-        .lineup-event-icon.yellow { background: #fff3e0; color: #e65100; }
-        .lineup-event-icon.red { background: #ffebee; color: #c62828; }
-        .lineup-event-icon.sub-out { background: #f5f5f5; color: #c62828; }
-        .lineup-event-icon.sub-in { background: #f5f5f5; color: #2e7d32; }
-        .lineup-event-icon.captain { background: #ffeb3b; color: #333; padding: 2px 4px; font-weight: 700; }
+        /* FIFA-style: no background pill, just colored icon + minute */
+        .lineup-event-icon.goal { color: #1a73e8; font-weight: 600; }
+        .lineup-event-icon.goal::before { content: "⚽"; font-size: 13px; }
+        .lineup-event-icon.own-goal { color: #c62828; font-weight: 600; }
+        .lineup-event-icon.own-goal::before { content: "⚽"; font-size: 13px; filter: hue-rotate(180deg); }
+        .lineup-event-icon.yellow::before {
+            content: ""; display: inline-block; width: 9px; height: 12px;
+            background: #f9c100; border-radius: 1px;
+        }
+        .lineup-event-icon.red::before {
+            content: ""; display: inline-block; width: 9px; height: 12px;
+            background: #d50000; border-radius: 1px;
+        }
+        .lineup-event-icon.yellow, .lineup-event-icon.red { color: #555; font-weight: 500; }
+        .lineup-event-icon.sub-out { color: #d50000; font-weight: 700; font-size: 12px; }
+        .lineup-event-icon.sub-in  { color: #2e7d32; font-weight: 700; font-size: 12px; }
 
         /* Player detail sub-sheet */
         .player-sheet {
@@ -1274,16 +1299,28 @@
 
             // Index events by player_id for quick lookup
             const playerEvents = {};
+            // own-goal detection: FIFA Type=2 in Goals[] is regular goal; OGs come through differently.
+            // We rely on existing 'goal' type from KV. Differentiating OG would require checking
+            // if the scoring team matches the player's team — skip for now (no OG in current data).
             for (const g of events.goals || []) {
                 if (g.side === side) (playerEvents[g.player_id] ||= []).push({ type: 'goal', minute: g.minute });
             }
             for (const b of events.bookings || []) {
                 if (b.side === side) (playerEvents[b.player_id] ||= []).push({ type: 'card', card: b.card, minute: b.minute });
             }
+            // subs: store the on-player's NAME on the off-player's record (for "↑ <name>" subline)
+            // and store the minute on the on-player's record (for "↑NN'" event icon)
             for (const s of events.substitutions || []) {
                 if (s.side === side) {
-                    (playerEvents[s.off_player_id] ||= []).push({ type: 'sub_out', minute: s.minute, partner: s.on_player_id });
-                    (playerEvents[s.on_player_id] ||= []).push({ type: 'sub_in', minute: s.minute, partner: s.off_player_id });
+                    (playerEvents[s.off_player_id] ||= []).push({
+                        type: 'sub_out',
+                        minute: s.minute,
+                        replaced_by_name: s.on_player_name || null
+                    });
+                    (playerEvents[s.on_player_id] ||= []).push({
+                        type: 'sub_in',
+                        minute: s.minute
+                    });
                 }
             }
 
@@ -1308,29 +1345,47 @@
                 ? `<img class="lineup-player-photo" src="${photoUrl}" loading="lazy" alt="" onerror="this.outerHTML='<span class=lineup-player-photo placeholder>?</span>'">`
                 : `<span class="lineup-player-photo placeholder">?</span>`;
 
+            // Pull out the "replaced_by" info (the on-player's name) so we can show
+            // a separate "↑ <name>" subline under the player's name.
+            const subOutEvent = events.find(e => e.type === 'sub_out');
+            const replacedByName = subOutEvent?.replaced_by_name;
+
+            // The right-hand events column: goals, cards, sub-out arrow, sub-in arrow.
+            // Captain badge is NOT here — it's moved next to the name to avoid
+            // visual confusion with the yellow card.
             const eventsHtml = events.map(e => {
-                if (e.type === 'goal') return `<span class="lineup-event-icon goal">⚽ ${e.minute || ''}</span>`;
+                if (e.type === 'goal') return `<span class="lineup-event-icon goal">${e.minute || ''}</span>`;
                 if (e.type === 'card') {
                     const cls = e.card === 2 ? 'red' : 'yellow';
-                    const icon = e.card === 2 ? '🟥' : '🟨';
-                    return `<span class="lineup-event-icon ${cls}">${icon} ${e.minute || ''}</span>`;
+                    return `<span class="lineup-event-icon ${cls}">${e.minute || ''}</span>`;
                 }
                 if (e.type === 'sub_out') return `<span class="lineup-event-icon sub-out">↓${e.minute || ''}</span>`;
-                if (e.type === 'sub_in') return `<span class="lineup-event-icon sub-in">↑${e.minute || ''}</span>`;
+                if (e.type === 'sub_in')  return `<span class="lineup-event-icon sub-in">↑${e.minute || ''}</span>`;
                 return '';
             }).join('');
 
-            const captainHtml = p.captain ? '<span class="lineup-event-icon captain">C</span>' : '';
+            const captainHtml = p.captain ? '<span class="captain-badge">C</span>' : '';
+            const replacedByHtml = replacedByName
+                ? `<div class="sub-replaced"><span class="arrow">↑</span> ${escapeHtml(replacedByName)}</div>`
+                : '';
 
             const safeName = (p.name || `Player ${p.player_id}`).replace(/"/g, '&quot;').replace(/'/g, "\\'");
             return `<div class="lineup-player-card" onclick="openPlayerSheet('${p.player_id}', '${safeName}')">
                 <span class="lineup-player-shirt">${p.shirt_number ?? ''}</span>
                 ${photoHtml}
                 <div class="lineup-player-name">
-                    <span class="name-zh">${p.name || `Player ${p.player_id}`}</span>
+                    <div class="name-row">
+                        <span>${escapeHtml(p.name || `Player ${p.player_id}`)}</span>
+                        ${captainHtml}
+                    </div>
+                    ${replacedByHtml}
                 </div>
-                <div class="lineup-player-events">${captainHtml}${eventsHtml}</div>
+                <div class="lineup-player-events">${eventsHtml}</div>
             </div>`;
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
         function proxyPhotoUrl(originalUrl) {
@@ -1374,7 +1429,7 @@
             const hasZhTranslation = !!p.name?.zho && p.name.zho !== nameEn;
             const showBothLines = !!nameEn && (hasZhTranslation || nameEn !== p.name_default);
             const countryDisplay = `${p.country_zh || p.country_code || '?'}`;
-            const positionDisplay = p.position_label || POS_LABEL[p.position] || '';
+            const positionDisplay = POS_LABEL[p.position] || p.position_label_zh || p.position_label || '';
 
             document.getElementById('playerTitle').textContent = nameZh;
 
@@ -1398,24 +1453,22 @@
                 <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>🥇</span><span>adidas Golden Boot</span>
                 </div>
-                ${statRow('进球 Goals', att.goals_scored ?? att.goals, '球员将球攻入对方球门的总次数')}
-                ${statRow('助攻 Assists', att.assists, '球员在队友进球前最后触球（含意外触球，只要传球目标到达预期位置）')}
-                ${statRow('上场时间（分钟）', att.total_competition_minutes_played, '本届世界杯累计参与比赛的总分钟数')}
+                ${statRow('进球 Goals', att.goals, '本届世界杯累计进球')}
+                ${statRow('助攻 Assists', att.assists, '本届世界杯累计助攻')}
+                ${statRow('上场时间（分钟）', ts.minutes_played, '本届世界杯累计参与比赛的总分钟数')}
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                 <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>⚽</span><span>Attacking 进攻</span>
                 </div>
-                ${statRow('射正 On Target', att.attempt_at_goal_on_target, '射门命中球门框内（含进球和需门将扑救的射门）')}
-                ${statRow('总射门 Attempts', att.attempt_at_goal, '所有射门次数（包括被防守球员阻挡和门将扑救）')}
+                ${statRow('射正 On Target', att.attempt_at_goal_on_target, '射门命中球门框内（含进球）')}
+                ${statRow('总射门 Attempts', att.attempt_at_goal, '所有射门次数')}
                 ${statRow('射正率 (%)', att.attempt_at_goal_conversion_rate, '射正占总射门的百分比')}
                 ${statRow('禁区内射门', att.attempt_at_goal_inside_the_penalty_area, '在禁区内的射门次数')}
                 ${statRow('禁区外射门', att.attempt_at_goal_outside_the_penalty_area, '在禁区外的射门次数')}
                 ${statRow('头球射门', att.headed_attempt_at_goal, '头球攻门次数')}
-                ${statRow('助攻 Assists', att.assists)}
-                ${statRow('xG（预期进球）', att.xg, '基于射门位置、角度、防守压力等估算的进球概率总和')}
-                ${statRow('xG 效率', att.xg_goal_effiency_rate, '进球数 / xG，衡量终结效率')}
+                ${statRow('xG（预期进球）', att.xg, '基于射门位置/角度/防守压力等估算的进球概率总和')}
                 ${statRow('角球 Corners', att.corners, '攻方获得的角球次数')}
               </div>
 
@@ -1423,11 +1476,11 @@
                 <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>🟨</span><span>Discipline 纪律</span>
                 </div>
-                ${statRow('犯规对方 Fouls For', dis.fouls_for, '球员对对手做出的犯规次数')}
-                ${statRow('被犯规 Fouls Against', dis.fouls_against, '球员被对手犯规的次数')}
                 ${statRow('黄牌 Yellow Cards', dis.yellow_cards)}
                 ${statRow('红牌 Red Cards', dis.red_cards)}
-                ${statRow('间接红牌', dis.indirect_red_cards, '累计两张黄牌后的红牌')}
+                ${statRow('间接红牌', dis.indirect_red_cards, '累计两黄变红')}
+                ${statRow('犯规对方 Fouls For', dis.fouls_for, '球员对对手的犯规次数')}
+                ${statRow('被犯规 Fouls Against', dis.fouls_against, '球员被对手犯规的次数')}
                 ${statRow('越位 Offsides', dis.offsides)}
               </div>
 
@@ -1439,43 +1492,49 @@
         }
 
         // === Stats compare sheet ===
-        // Categories define which columns to show + which stat each column reads from
-        // Players are filtered to BOTH teams of the current match (home + away starting + substitutes).
+        // Columns map to v3 schema fields actually present in players:{id}.tournament_stats.
+        // Data source: mangodev gcp_top_scorer + gcp_attack + gcp_discipline classifications
+        // (see scripts/probe-messi-v3.py and workers/fifa-scraper/lib/tournament-refresh.js).
+        //
+        // Field naming follows FIFA's gcp_* tag names verbatim — no aliases, no fallback.
+        // If a tab shows "—" everywhere, the v3 refresh hasn't covered that player yet
+        // (run the batch refresh script). Do NOT add fallbacks to v1/v2 schemas; we've
+        // already migrated past those.
         const STATS_CATEGORIES = [
             {
-                key: 'attacking', label: 'Attacking',
+                key: 'golden_boot', label: '🥇 Golden Boot',
                 cols: [
-                    { key: 'attempt_at_goal_on_target',     label: '射正',          glossary: '射门命中球门框内' },
-                    { key: 'attempt_at_goal',               label: '总射门',        glossary: '所有射门次数' },
-                    { key: 'attempt_at_goal_conversion_rate', label: '射正率 %',    glossary: '射正占总射门的百分比' },
+                    { key: 'goals',    label: '进球' },
+                    { key: 'assists',  label: '助攻' },
+                    // minutes_played sits at the top level of tournament_stats
+                    { key: 'minutes_played', label: '出场分钟', topLevel: true }
+                ],
+                section: 'attacking',
+                defaultSort: 'goals'
+            },
+            {
+                key: 'attacking', label: '进攻 Attacking',
+                cols: [
+                    { key: 'attempt_at_goal_on_target',                label: '射正',   glossary: '射门命中球门框内（含进球）' },
+                    { key: 'attempt_at_goal',                          label: '总射门', glossary: '所有射门次数' },
+                    { key: 'attempt_at_goal_conversion_rate',          label: '射正率 %', glossary: '射正占总射门的百分比' },
                     { key: 'attempt_at_goal_inside_the_penalty_area',  label: '禁区内' },
                     { key: 'attempt_at_goal_outside_the_penalty_area', label: '禁区外' },
-                    { key: 'headed_attempt_at_goal',        label: '头球' },
-                    { key: 'assists',                       label: '助攻' },
-                    { key: 'xg',                            label: 'xG',           glossary: '预期进球' },
-                    { key: 'corners',                       label: '角球' }
+                    { key: 'headed_attempt_at_goal',                   label: '头球' },
+                    { key: 'xg',                                       label: 'xG',     glossary: '预期进球' },
+                    { key: 'corners',                                  label: '角球' }
                 ],
                 section: 'attacking',
                 defaultSort: 'attempt_at_goal_on_target'
             },
             {
-                key: 'golden_boot', label: 'adidas Golden Boot',
+                key: 'discipline', label: '纪律 Discipline',
                 cols: [
-                    { key: 'goals_scored',                  label: '进球',          alt: 'goals' },   // try goals_scored then goals
-                    { key: 'assists',                       label: '助攻' },
-                    { key: 'total_competition_minutes_played', label: '出场分钟' }
-                ],
-                section: 'attacking',
-                defaultSort: 'goals_scored'
-            },
-            {
-                key: 'discipline', label: 'Discipline',
-                cols: [
-                    { key: 'fouls_for',          label: '犯规对方',    glossary: '对对手犯规次数' },
-                    { key: 'fouls_against',      label: '被犯规',      glossary: '被对手犯规次数' },
                     { key: 'yellow_cards',       label: '黄牌' },
                     { key: 'red_cards',          label: '红牌' },
-                    { key: 'indirect_red_cards', label: '间接红牌' },
+                    { key: 'indirect_red_cards', label: '间接红牌', glossary: '累计两黄变红' },
+                    { key: 'fouls_for',          label: '犯规对方', glossary: '对对手犯规次数' },
+                    { key: 'fouls_against',      label: '被犯规',   glossary: '被对手犯规次数' },
                     { key: 'offsides',           label: '越位' }
                 ],
                 section: 'discipline',
@@ -1484,8 +1543,8 @@
         ];
 
         let currentStatsData = null;   // batch API response cache
-        let currentStatsCategory = 'attacking';
-        let currentStatsSort = { col: 'attempt_at_goal_on_target', dir: 'desc' };
+        let currentStatsCategory = 'golden_boot';
+        let currentStatsSort = { col: 'goals', dir: 'desc' };
 
         async function openStatsCompareSheet() {
             if (!currentLineupFixtureId) return;
@@ -1543,10 +1602,10 @@
 
         function getStatValue(player, col, section) {
             const ts = player.tournament_stats || {};
-            const bucket = ts[section] || {};
-            // Try col.key first, then col.alt
-            const val = bucket[col.key] ?? (col.alt ? bucket[col.alt] : undefined);
-            return val;
+            // topLevel: read from tournament_stats directly (minutes_played, matches_played)
+            // otherwise: read from the section bucket (attacking / discipline)
+            if (col.topLevel) return ts[col.key];
+            return (ts[section] || {})[col.key];
         }
 
         function renderStatsTable() {

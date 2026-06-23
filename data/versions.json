@@ -179,6 +179,12 @@
       "date": "2026-06-23T00:03:41+08:00",
       "summary": "新增 FIFA 阵容查看：世界杯比赛卡片支持点击查看双方首发+替补+球员个人 stats（弹出 modal 不离开赛程页）",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.13",
+      "date": "2026-06-23T20:42:35+08:00",
+      "summary": "FIFA stats v3 全字段接入：球员档案 country_zh/position 服务端补全；lineup modal FIFA 风格 (换人显示 ↑替换者，队长标到名旁，事件图标重做)；stats compare 三 tab 用 gctp 端点数据；scraper hash 短路 + cron 频率优化降低 KV 写入；fifa_calendar 每日 0 1 cron 自动刷新；历史 lineup 回填 40 场",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

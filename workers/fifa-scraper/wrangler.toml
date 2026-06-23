@@ -2,18 +2,16 @@ name = "worldcup-fifa-scraper"
 main = "index.js"
 compatibility_date = "2024-09-01"
 
-# Single cron: lineup poller. Triggers every 10 min, but does nothing unless
-# at least one 500.com 世界杯 fixture is currently in [KO-90min, KO_end+15min].
-#
-# fifa_calendar mapping is now LAZY — main cron fetches FIFA calendar on demand
-# (cold start or manual KV flush) and caches it in KV indefinitely.
-#
-# Currently disabled (CF KV daily limit hit on 2026-06-22). To re-enable:
-#   1. Uncomment the cron line below
-#   2. npx wrangler deploy
+# Crons:
+#   */10 * * * *  → mainCron     — lineup poller (KO-90min ~ KO_end+15min window).
+#                                   A+D short-circuit caps writes at ≤3/fixture/tick.
+#   0 1 * * *     → calendarCron  — daily fifa_calendar refresh at UTC 01:00 = Beijing 09:00.
+#                                   1 write/day. Picks up newly-added knockout fixtures
+#                                   + keeps match_status field current.
 [triggers]
 crons = [
-  # "*/10 * * * *"
+  "*/10 * * * *",
+  "0 1 * * *"
 ]
 
 [[kv_namespaces]]

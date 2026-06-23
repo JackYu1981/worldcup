@@ -43,7 +43,24 @@ export async function onRequestGet(context) {
     lineup.home.country_zh = codeToZh[lineup.home.country_code] || lineup.home.country_code;
     lineup.away.country_zh = codeToZh[lineup.away.country_code] || lineup.away.country_code;
 
-    return json(lineup, 200, 30);   // cache 30s
+    // Augment each substitution with on_player_name / off_player_name so the
+    // frontend can show "↑ <replacement>" under the substituted-off player
+    // without doing its own player_id → name lookup.
+    const idToName = {};
+    for (const side of ['home', 'away']) {
+      for (const list of [lineup[side]?.starting || [], lineup[side]?.substitutes || []]) {
+        for (const p of list) {
+          if (p.player_id && p.name) idToName[p.player_id] = p.name;
+        }
+      }
+    }
+    const subs = lineup.events?.substitutions || [];
+    for (const s of subs) {
+      if (s.off_player_id && !s.off_player_name) s.off_player_name = idToName[s.off_player_id] || null;
+      if (s.on_player_id && !s.on_player_name) s.on_player_name = idToName[s.on_player_id] || null;
+    }
+
+    return json(lineup, 200, 60);   // cache 60s — main-cron hash-dedup ensures rare writes; longer cache is safe
   } catch (e) {
     return error(e.message, 500);
   }
