@@ -118,6 +118,29 @@ export async function mainCron(env) {
     const lineup = normalizeLineup(liveData, mapping);
     const prevStatus = existingLineup?.match_status;
     const lineupChanged = !existingLineup || lineupSignature(existingLineup) !== lineupSignature(lineup);
+
+    // GUARD: never write an "empty lineup" record (lineup_available=false means FIFA
+    // hasn't published starters yet). The frontend treats absence-of-record and
+    // empty-lineup the same way (shows "FIFA 尚未公布阵容"), so writing the empty
+    // version pollutes KV without any visible benefit AND can later be misread as
+    // "we already have data, skip" — bug we hit on 2026-06-22.
+    //
+    // If an existing record has real starters but the fresh fetch returns empty
+    // (e.g. FIFA briefly nulled it), we ALSO skip — never downgrade.
+    if (!lineup.lineup_available) {
+      if (lineupChanged) {
+        // Log this so we can see in SLA that FIFA hasn't published yet — diagnostic only
+        const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
+        await logSla(env, {
+          level: 'info', fixture: fixture.id, event: 'lineup_not_yet_published',
+          minutes_to_kickoff: minutesToKickoff,
+          match_status: lineup.match_status_label
+        });
+      }
+      lineupOk++;
+      continue;   // skip the write + skip the player upsert + skip finished-detection
+    }
+
     if (lineupChanged) {
       await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup));
     }

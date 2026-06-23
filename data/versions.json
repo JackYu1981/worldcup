@@ -185,6 +185,12 @@
       "date": "2026-06-23T20:42:35+08:00",
       "summary": "FIFA stats v3 全字段接入：球员档案 country_zh/position 服务端补全；lineup modal FIFA 风格 (换人显示 ↑替换者，队长标到名旁，事件图标重做)；stats compare 三 tab 用 gctp 端点数据；scraper hash 短路 + cron 频率优化降低 KV 写入；fifa_calendar 每日 0 1 cron 自动刷新；历史 lineup 回填 40 场",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.14",
+      "date": "2026-06-23T21:27:22+08:00",
+      "summary": "main-cron 抓到空 lineup（FIFA 尚未公布）时不写 KV，避免污染；只有有效的 11+11 首发才会被记录，前端继续等下一次 cron 拿到真实数据",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
