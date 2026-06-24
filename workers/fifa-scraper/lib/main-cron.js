@@ -23,6 +23,7 @@
 import { fetchLiveFootball } from './fifa-api.js';
 import { normalizeLineup, upsertPlayersFromLineup, matchLineupKey } from './lineup.js';
 import { refreshTournamentStatsForMatch } from './tournament-refresh.js';
+import { refreshMatchStats } from './match-stats.js';
 import { parseKickoffBeijing, beijingDateStr } from './time-utils.js';
 import { logSla } from './sla.js';
 
@@ -73,6 +74,7 @@ export async function mainCron(env) {
   let lineupOk = 0, lineupErr = 0, refreshOk = 0, refreshErr = 0, finishedDetected = 0;
   let finishedSkipped = 0;
   let playersWrittenTotal = 0, playersSkippedTotal = 0;
+  let matchStatsWritten = 0;
   let countriesWrittenTotal = 0, countriesSkippedTotal = 0;
 
   for (const fixture of fixtures) {
@@ -157,6 +159,22 @@ export async function mainCron(env) {
       countriesSkippedTotal += upsertStats.countriesSkipped;
     }
 
+    // 2c-bis. In-match stats (shots / fouls / yellows) from fdh-api. Independent
+    // of lineup hash — fdh accumulates throughout the match so even when lineup
+    // signature is unchanged, stats may have moved (a shot just happened, etc).
+    // Hash short-circuit happens INSIDE refreshMatchStats. Only meaningful once
+    // lineup_available=true (FIFA opens fdh data around the same time as lineup).
+    if (lineup.lineup_available) {
+      try {
+        const r = await refreshMatchStats(env, fixture.id, mapping, lineup.match_status);
+        if (r.written) {
+          matchStatsWritten++;
+        }
+      } catch (e) {
+        await logSla(env, { level: 'warn', fixture: fixture.id, event: 'match_stats_failed', error: e.message });
+      }
+    }
+
     // SLA log on lineup change or KO-60min risk
     const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
     const slaAtRisk = !lineup.lineup_available && minutesToKickoff <= 60 && minutesToKickoff > -120;
@@ -188,7 +206,7 @@ export async function mainCron(env) {
   }
 
   // Summary log only when there's interesting activity
-  if (lineupChanged_anywhere() || finishedDetected > 0 || lineupErr > 0 || finishedSkipped > 0) {
+  if (lineupChanged_anywhere() || finishedDetected > 0 || lineupErr > 0 || finishedSkipped > 0 || matchStatsWritten > 0) {
     await logSla(env, {
       level: 'info', event: 'main_cron_pass',
       in_window: fixtures.length,
@@ -197,7 +215,8 @@ export async function mainCron(env) {
       finished_detected: finishedDetected,
       refresh_ok: refreshOk, refresh_err: refreshErr,
       players_written: playersWrittenTotal, players_skipped: playersSkippedTotal,
-      countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal
+      countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal,
+      match_stats_written: matchStatsWritten
     });
   }
 
@@ -208,7 +227,8 @@ export async function mainCron(env) {
     finished_detected: finishedDetected,
     refresh_ok: refreshOk, refresh_err: refreshErr,
     players_written: playersWrittenTotal, players_skipped: playersSkippedTotal,
-    countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal
+    countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal,
+    match_stats_written: matchStatsWritten
   };
 
   // Helper: was any lineup written this tick?

@@ -1,13 +1,14 @@
 // Entry: dispatch cron triggers to the right handler.
 //
-// Single cron: */10 * * * *  — every 10 minutes:
+// Single cron: */5 * * * *  — every 5 minutes:
 //   1. calendarCron  → refresh fifa_calendar (hash-short-circuit, ≈1-3 writes/day)
 //                       + retry unmatched fixture mappings
-//   2. mainCron      → lineup poller for fixtures in [KO-90min, KO_end+15min]
+//   2. mainCron      → lineup poller for fixtures in FIFA-defined window
+//                       (KO-90min → match_status=0 / KO+4h hard cap)
 //                       + auto-triggers tournament-refresh on status 0→3 transition
 //
-// Calendar fetch is cheap (~1 HTTP call) and writes are short-circuited, so doing
-// it on every tick replaces the old daily cron without bloating KV writes.
+// 5min cadence catches in-match events (goals/cards/subs) faster — was 10min;
+// hash-short-circuit ensures we don't double the actual KV writes.
 //
 // Manual-trigger fetch routes are kept as ops backdoor:
 //   GET /trigger/main      — force one main-cron pass
@@ -20,7 +21,7 @@ export default {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     try {
-      if (cron === '*/10 * * * *') {
+      if (cron === '*/5 * * * *') {
         // calendar first — main-cron's window logic relies on up-to-date mapping
         try {
           const cal = await calendarCron(env);

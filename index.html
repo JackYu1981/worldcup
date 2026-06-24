@@ -508,6 +508,14 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             flex: 1; min-width: 0;
         }
+        /* live events: stack name + sub-context vertically inside the player block */
+        .live-name-wrap {
+            display: flex; flex-direction: column; min-width: 0; flex: 1;
+        }
+        .live-sub-line {
+            font-size: 10px; color: #2e7d32; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         .stats-empty {
             text-align: center; color: #999; padding: 60px 20px; font-size: 13px;
         }
@@ -569,8 +577,8 @@
         <div class="lineup-header">
             <button class="lineup-close" onclick="closeLineupModal()">✕</button>
             <div class="lineup-title" id="lineupTitle">加载中…</div>
+            <button class="lineup-refresh" onclick="openLiveEventsSheet()" title="本场实时数据" style="font-size:16px;">⚡</button>
             <button class="lineup-refresh" onclick="openStatsCompareSheet()" title="球员统计对比" style="font-size:16px;">📊</button>
-            <button class="lineup-refresh" onclick="refreshLineupModal()" title="刷新">↻</button>
         </div>
         <div class="lineup-body" id="lineupBody">
             <div class="empty-state">加载中…</div>
@@ -591,6 +599,16 @@
             </div>
             <div class="stats-category-tabs" id="statsCategoryTabs"></div>
             <div class="stats-table-wrap" id="statsTableWrap">
+                <div class="stats-empty">加载中…</div>
+            </div>
+        </div>
+        <!-- Live events sub-sheet (in-match shots/fouls/yellows from fdh-api) -->
+        <div class="stats-sheet" id="liveEventsSheet">
+            <div class="stats-header">
+                <button class="stats-back" onclick="closeLiveEventsSheet()">‹ 返回</button>
+                <div class="stats-title">本场实时数据</div>
+            </div>
+            <div class="stats-table-wrap" id="liveEventsTableWrap">
                 <div class="stats-empty">加载中…</div>
             </div>
         </div>
@@ -1574,6 +1592,135 @@
 
         function closeStatsCompareSheet() {
             document.getElementById('statsSheet').classList.remove('visible');
+        }
+
+        // ===== Live events sheet (in-match shots/fouls/yellows from fdh-api) =====
+        let currentLiveEventsData = null;
+        let currentLiveSort = { col: 'shots_on_target', dir: 'desc' };
+        const LIVE_COLS = [
+            { key: 'shots_on_target', label: '射正',   glossary: '射门命中球门框内' },
+            { key: 'shots',           label: '射门',   glossary: '本场总射门次数' },
+            { key: 'fouls_committed', label: '犯规',   glossary: '本场对对手的犯规次数' },
+            { key: 'yellow_cards',    label: '黄牌',   glossary: '本场黄牌' },
+        ];
+
+        async function openLiveEventsSheet() {
+            if (!currentLineupFixtureId) return;
+            const sheet = document.getElementById('liveEventsSheet');
+            sheet.classList.add('visible');
+            document.getElementById('liveEventsTableWrap').innerHTML = '<div class="stats-empty">加载中…</div>';
+            currentLiveSort = { col: 'shots_on_target', dir: 'desc' };
+
+            try {
+                const r = await fetch(`/api/fifa/match-stats/${currentLineupFixtureId}`, { cache: 'no-store' });
+                if (!r.ok) {
+                    const err = await r.text();
+                    document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${err}</div>`;
+                    return;
+                }
+                const d = await r.json();
+                if (!d.available) {
+                    document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">${d.note || '本场尚无实时数据'}</div>`;
+                    return;
+                }
+                currentLiveEventsData = d;
+                renderLiveEventsTable();
+            } catch (e) {
+                document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function closeLiveEventsSheet() {
+            document.getElementById('liveEventsSheet').classList.remove('visible');
+        }
+
+        function switchLiveSort(col) {
+            if (currentLiveSort.col === col) {
+                currentLiveSort.dir = currentLiveSort.dir === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentLiveSort.col = col;
+                currentLiveSort.dir = 'desc';
+            }
+            renderLiveEventsTable();
+        }
+
+        function renderLiveEventsTable() {
+            if (!currentLiveEventsData) return;
+            const players = (currentLiveEventsData.players || []).slice();
+            const sortCol = currentLiveSort.col;
+            players.sort((a, b) => {
+                const va = a[sortCol] ?? 0, vb = b[sortCol] ?? 0;
+                return currentLiveSort.dir === 'desc' ? (vb - va) : (va - vb);
+            });
+
+            // Header
+            let html = `<div class="stats-row header">
+                <div class="stats-player-block">Player</div>
+                <div class="stats-data-block">`;
+            for (const col of LIVE_COLS) {
+                const sortCls = currentLiveSort.col === col.key
+                    ? (currentLiveSort.dir === 'desc' ? 'sort-desc' : 'sort-asc')
+                    : '';
+                html += `<div class="stats-cell ${sortCls}" title="${col.glossary}" onclick="switchLiveSort('${col.key}')">${col.label}</div>`;
+            }
+            html += `</div></div>`;
+
+            // Rows
+            const home = currentLiveEventsData.home, away = currentLiveEventsData.away;
+            for (const p of players) {
+                const teamSide = p.side === 'home' ? home : away;
+                const flagUrl = `/api/fifa/flag/${teamSide.country_code}`;
+                const shirt = p.shirt_number != null ? p.shirt_number : '';
+                // Sub context line under name: shows who they replaced (if came on)
+                // OR who replaced them (if went off)
+                let subLine = '';
+                if (p.replaces_player_name) {
+                    // This is a sub who came on for someone
+                    subLine = `<div class="live-sub-line">↑ ${p.replaces_at_minute || ''} 换下 ${p.replaces_player_name}</div>`;
+                } else if (p.replaced_player_name) {
+                    // This starter went off
+                    subLine = `<div class="live-sub-line">↓ ${p.replaced_at_minute || ''} 被 ${p.replaced_player_name} 换上</div>`;
+                }
+
+                html += `<div class="stats-row">
+                    <div class="stats-player-block">
+                        <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
+                        <span class="stats-player-shirt">${shirt}</span>
+                        <div class="live-name-wrap">
+                            <span class="stats-player-name">${escapeHtml(p.name)}</span>
+                            ${subLine}
+                        </div>
+                    </div>
+                    <div class="stats-data-block">`;
+                for (const col of LIVE_COLS) {
+                    const v = p[col.key];
+                    const display = (v === null || v === undefined) ? '—' : v;
+                    const zeroCls = (v === 0) ? ' zero' : '';
+                    html += `<div class="stats-cell${zeroCls}">${display}</div>`;
+                }
+                html += `</div></div>`;
+            }
+
+            // Footer note showing freshness
+            const fetched = currentLiveEventsData.fetched_at
+                ? currentLiveEventsData.fetched_at.slice(0, 16).replace('T', ' ')
+                : '—';
+            html += `<div style="padding:10px 14px;font-size:11px;color:#888;text-align:center">本场实时数据 · 最后更新 ${fetched}</div>`;
+
+            document.getElementById('liveEventsTableWrap').innerHTML = html;
+
+            // Sync scroll across data blocks
+            const blocks = document.querySelectorAll('#liveEventsTableWrap .stats-row .stats-data-block');
+            let syncing = false;
+            blocks.forEach(blk => {
+                blk.addEventListener('scroll', () => {
+                    if (syncing) return;
+                    syncing = true;
+                    const left = blk.scrollLeft;
+                    blocks.forEach(other => { if (other !== blk) other.scrollLeft = left; });
+                    requestAnimationFrame(() => { syncing = false; });
+                });
+            });
         }
 
         function renderStatsCategoryTabs() {
