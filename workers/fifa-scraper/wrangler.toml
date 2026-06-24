@@ -3,15 +3,17 @@ main = "index.js"
 compatibility_date = "2024-09-01"
 
 # Crons:
-#   */10 * * * *  → mainCron     — lineup poller (KO-90min ~ KO_end+15min window).
-#                                   A+D short-circuit caps writes at ≤3/fixture/tick.
-#   0 1 * * *     → calendarCron  — daily fifa_calendar refresh at UTC 01:00 = Beijing 09:00.
-#                                   1 write/day. Picks up newly-added knockout fixtures
-#                                   + keeps match_status field current.
+#   */10 * * * *    → mainCron     — lineup poller (KO-90min ~ KO_end+15min window).
+#                                     A+D short-circuit caps writes at ≤3/fixture/tick.
+#                                     Also auto-triggers tournament-refresh on status 0→3 transition.
+#   */10 * * * *    → calendarCron — (handled by the same cron tick: mainCron runs first,
+#                                     then calendarCron if last refresh >10min ago)
+#                                     hash-short-circuit keeps writes ≈1-3/day.
+#                                     Picks up newly-added knockout fixtures, status updates,
+#                                     kickoff time changes.
 [triggers]
 crons = [
-  "*/10 * * * *",
-  "0 1 * * *"
+  "*/10 * * * *"
 ]
 
 [[kv_namespaces]]

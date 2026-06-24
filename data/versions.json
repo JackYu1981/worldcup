@@ -191,6 +191,12 @@
       "date": "2026-06-23T21:27:22+08:00",
       "summary": "main-cron 抓到空 lineup（FIFA 尚未公布）时不写 KV，避免污染；只有有效的 11+11 首发才会被记录，前端继续等下一次 cron 拿到真实数据",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.8.15",
+      "date": "2026-06-24T10:57:08+08:00",
+      "summary": "FIFA 权威化重构：matches API 服务端 join FIFA 比分/状态/半场比分（500 只留赔率）；lineup 含 score+score_ht 字段；worker 单 cron 内联 calendar 刷新（hash 短路）；window 关闭由 FIFA match_status 决定不再固定时长（修加时拖到的比赛漏抓 bug）；tournament-refresh worker 内自动触发，用 gctp 三端点 + AUTHORITATIVE_CLS 锁 stat 防 stale 覆盖；team-v3-refresh 网络重试 + bug 修复",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

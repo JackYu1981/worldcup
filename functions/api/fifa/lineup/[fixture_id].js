@@ -1,8 +1,25 @@
 // GET /api/fifa/lineup/{fixture_id}
-// Returns the match_lineups:{500_id} KV record, augmented with country_zh
-// from the countries seed (so frontend doesn't need a separate lookup).
+// Returns the match_lineups:{500_id} KV record, augmented with:
+//   - country_zh from the countries seed
+//   - substitution player names (frontend doesn't need to do its own lookup)
+//   - score_ht: half-time score derived from events.goals[] where period <= 3
+//   - kickoff_utc: from fixture_mapping (authoritative FIFA time)
 
 import { json, error, options } from '../../../lib/response.js';
+
+// FIFA period codes (observed): 3 = 1st half (incl. 45'+stoppage),
+// 5 = 2nd half (incl. 90'+stoppage). Half-time goals are exactly those with period <= 3.
+function computeHalfTimeScore(lineup) {
+  const goals = (lineup.events && lineup.events.goals) || [];
+  let home = 0, away = 0;
+  for (const g of goals) {
+    const period = g.period;
+    if (period == null || period > 3) continue;
+    if (g.side === 'home') home++;
+    else if (g.side === 'away') away++;
+  }
+  return { home, away };
+}
 
 export async function onRequestGet(context) {
   const { params, env } = context;
@@ -31,7 +48,8 @@ export async function onRequestGet(context) {
       return json({
         lineup_available: false,
         reason: 'not_yet_published_by_fifa',
-        note: 'FIFA will publish lineup ~60-90min before kickoff'
+        note: 'FIFA will publish lineup ~60-90min before kickoff',
+        kickoff_utc: mapping.kickoff_utc || null,
       });
     }
 
@@ -59,6 +77,15 @@ export async function onRequestGet(context) {
       if (s.off_player_id && !s.off_player_name) s.off_player_name = idToName[s.off_player_id] || null;
       if (s.on_player_id && !s.on_player_name) s.on_player_name = idToName[s.on_player_id] || null;
     }
+
+    // Half-time score derived from goals' period field (FIFA doesn't expose HT directly)
+    const ht = computeHalfTimeScore(lineup);
+    lineup.home.score_ht = ht.home;
+    lineup.away.score_ht = ht.away;
+
+    // Authoritative kickoff time (UTC) from mapping
+    const mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixtureId}`, 'json');
+    if (mapping?.kickoff_utc) lineup.kickoff_utc = mapping.kickoff_utc;
 
     return json(lineup, 200, 60);   // cache 60s — main-cron hash-dedup ensures rare writes; longer cache is safe
   } catch (e) {

@@ -68,12 +68,18 @@ def fifa_headers():
 def kv_get(key):
     url = f'https://api.cloudflare.com/client/v4/accounts/{ACC}/storage/kv/namespaces/{NS}/values/{urllib.parse.quote(key, safe="")}'
     req = urllib.request.Request(url, headers=cf_headers())
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 404: return None
-        raise
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 404: return None
+            raise
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
+            if attempt < 3:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
 
 
 def kv_put(key, value):
@@ -81,10 +87,18 @@ def kv_put(key, value):
     body = json.dumps(value, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(url, data=body, method='PUT',
                                  headers={**cf_headers(), 'Content-Type': 'application/octet-stream'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        j = json.loads(r.read())
-        if not j.get('success'):
-            raise RuntimeError(f'KV put failed: {j}')
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                j = json.loads(r.read())
+                if not j.get('success'):
+                    raise RuntimeError(f'KV put failed: {j}')
+                return
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
+            if attempt < 3:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
 
 
 def fetch_teams():
@@ -146,12 +160,75 @@ def fetch_team_classification(team_external_id, classification):
                 time.sleep(wait)
                 continue
             raise
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
+            if attempt < 3:
+                wait = 3 * (attempt + 1)
+                print(f'    network {type(e).__name__}, retry in {wait}s...', file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise
 
 
-def extract_players_from_stories(stories):
-    """Return {player_id: {stats: {}, name_multilang: {}, photo_url, country_code, team_id}}."""
+def _story_primary_stat(story):
+    """Extract the 'stat' name from a story's _externalId."""
+    eid = story.get('_externalId', '') or ''
+    parts = eid.split(':')
+    for i, p in enumerate(parts):
+        if p in ('rank_asc', 'rank_desc'):
+            if i >= 1:
+                return parts[i - 1]
+    return None
+
+
+# Authoritative classification per stat field.
+# DISCOVERED BUG (2026-06-24, post-POR-UZB match):
+#   `gctp_top_scorer:goals` story says Ronaldo goals=2 (correct)
+#   `gctp_attack:goals` story says Ronaldo goals=0 (STALE — possibly "open play goals"
+#   or a different definition)
+# So `goals` and `assists` MUST come from `gctp_top_scorer`. Attack-detail fields
+# (attempts, xg, corners) come from `gctp_attack`. Discipline from `gctp_discipline`.
+# If a stat is recorded in multiple classifications, the one listed here wins.
+AUTHORITATIVE_CLS = {
+    # gctp_top_scorer — accumulated tournament totals
+    'goals': 'gctp_top_scorer',
+    'assists': 'gctp_top_scorer',
+    'total_competition_minutes_played': 'gctp_top_scorer',
+    'total_competition_matches_played': 'gctp_top_scorer',
+    'fdcp_top_scorer_rank': 'gctp_top_scorer',
+    # gctp_attack — attacking detail
+    'attempt_at_goal': 'gctp_attack',
+    'attempt_at_goal_on_target': 'gctp_attack',
+    'attempt_at_goal_on_target_rate': 'gctp_attack',
+    'attempt_at_goal_conversion_rate': 'gctp_attack',
+    'attempt_at_goal_inside_the_penalty_area': 'gctp_attack',
+    'attempt_at_goal_outside_the_penalty_area': 'gctp_attack',
+    'headed_attempt_at_goal': 'gctp_attack',
+    'number_of_shot_ending_sequences': 'gctp_attack',
+    'goals_conceded': 'gctp_attack',
+    'corners': 'gctp_attack',
+    'xg': 'gctp_attack',
+    'xg_goal_effiency_rate': 'gctp_attack',
+    'possession': 'gctp_attack',
+    # gctp_discipline — discipline fields
+    'fouls_for': 'gctp_discipline',
+    'fouls_against': 'gctp_discipline',
+    'yellow_cards': 'gctp_discipline',
+    'red_cards': 'gctp_discipline',
+    'indirect_red_cards': 'gctp_discipline',
+    'offsides': 'gctp_discipline',
+}
+
+
+def extract_players_from_stories(stories, classification):
+    """Return {player_id: {stats: {}, name_multilang: {}, photo_url, country_code, team_id}}.
+
+    CRITICAL: mangodev returns the same stat field across multiple classifications/stories
+    with inconsistent values (some stale). Use AUTHORITATIVE_CLS to lock each stat to ONE
+    classification. Within a classification, use only the story's primary stat.
+    """
     by_pid = {}
     for story in stories:
+        primary_stat = _story_primary_stat(story)
         for actor in story.get('actors', []):
             pid = actor.get('key',{}).get('_externalSportsPersonId')
             if not pid: continue
@@ -166,6 +243,14 @@ def extract_players_from_stories(stories):
                 value = t.get('value')
                 if n.startswith('urn:gd:tag:football:stats:'):
                     stat = n.split(':')[-1]
+                    # Two-level gating:
+                    # 1. only adopt this story's primary stat (intra-classification dedup)
+                    # 2. only adopt the stat from its authoritative classification (inter-classification truth)
+                    if primary_stat is not None and stat != primary_stat:
+                        continue
+                    auth = AUTHORITATIVE_CLS.get(stat)
+                    if auth is not None and auth != classification:
+                        continue
                     if value is None and stat in entry['stats']: continue
                     entry['stats'][stat] = value
                 elif n == 'urn:gd:tag:story:staff:image' and not entry['photo_url']:
@@ -231,7 +316,7 @@ def refresh_team(team_meta, dry_run, sleep_between_cls=0.5, countries_lookup=Non
         except Exception as e:
             print(f'  [{team_name}] {cls} fetch err: {e}', file=sys.stderr)
             return 0, 0, 1
-        cls_players = extract_players_from_stories(stories)
+        cls_players = extract_players_from_stories(stories, cls)
         # Merge into merged_players
         for pid, info in cls_players.items():
             tgt = merged_players.setdefault(pid, {

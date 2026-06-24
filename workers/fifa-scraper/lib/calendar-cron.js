@@ -1,5 +1,9 @@
-// Calendar cron — runs every 6h.
-// 1. Fetch FIFA calendar for a 30-day forward window, write to KV `fifa_calendar`.
+// Calendar cron — fetches FIFA calendar and runs mapping pass.
+// Now also invoked inline by main-cron on every 10min tick (hash short-circuit
+// keeps the actual write cost ≈1-3/day even with frequent invocations).
+//
+// 1. Fetch FIFA calendar for a 30-day forward window, write to KV `fifa_calendar`
+//    only if content changed (hash short-circuit).
 // 2. For every 500.com fixture across recent matches:* keys, try auto-mapping.
 //    Skip fixtures already mapped with confidence='exact'.
 //    Skip unmatched fixtures whose retry cooldown hasn't elapsed.
@@ -10,25 +14,49 @@ import { logSla } from './sla.js';
 import { beijingDateStr } from './time-utils.js';
 
 const COMPETITION_ID = 17;
-const CALENDAR_WINDOW_DAYS_FORWARD = 35;   // covers ~1 month of upcoming WC fixtures
-const CALENDAR_WINDOW_DAYS_BACK = 14;      // include finished group-stage matches for back-mapping
-const FIXTURE_SCAN_DAYS_BACK = 14;         // match calendar back-window to give old mappings a chance
+const CALENDAR_WINDOW_DAYS_FORWARD = 35;
+const CALENDAR_WINDOW_DAYS_BACK = 14;
+const FIXTURE_SCAN_DAYS_BACK = 14;
 const FIXTURE_SCAN_DAYS_FORWARD = 35;
+
+// FNV-1a 32-bit on a canonical projection of the calendar — used to short-circuit
+// the KV write when nothing material has changed since last refresh.
+function fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function calendarFingerprint(cal) {
+  // Project only fields that drive behavior — ignore fetched_at and tag ordering.
+  const projected = (cal.matches || [])
+    .map(m => [
+      m.id_match,
+      m.date_utc,
+      m.match_status,
+      m.home_code,
+      m.away_code,
+      m.id_stage,
+    ].join('|'))
+    .sort()
+    .join('\n');
+  return fnv1a(projected);
+}
 
 export async function calendarCron(env) {
   // 1. Fetch + cache FIFA calendar
   const now = Date.now();
-  // FIFA endpoint quirks (verified by Chunk 2.5 live debugging):
-  //   - Rejects ISO with millis (returns "Invalid parameter").
-  //   - Rejects URL-encoded colons (%3A).
-  //   - Returns body=null (HTTP 200) if `from`/`to` are not at midnight UTC.
-  // So we floor to midnight UTC for the date window.
   const floorDay = (ms) => {
     const d = new Date(ms);
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+      .toISOString().replace(/\.\d{3}Z$/, 'Z');
   };
   const fromIso = floorDay(now - CALENDAR_WINDOW_DAYS_BACK * 86400_000);
   const toIso = floorDay(now + CALENDAR_WINDOW_DAYS_FORWARD * 86400_000);
+
   let fifaCal;
   try {
     fifaCal = await fetchFifaCalendar(COMPETITION_ID, fromIso, toIso);
@@ -36,21 +64,35 @@ export async function calendarCron(env) {
     await logSla(env, { level: 'error', event: 'calendar_fetch_failed', error: e.message });
     return { fetched: false, mapped: 0 };
   }
-  await env.MATCH_DATA.put('fifa_calendar', JSON.stringify(fifaCal));
-  await logSla(env, {
-    level: 'info', event: 'calendar_fetched',
-    matches: fifaCal.matches.length, from: fromIso, to: toIso
-  });
+
+  // Hash short-circuit: only write if the calendar content has changed
+  const newHash = calendarFingerprint(fifaCal);
+  const existing = await env.MATCH_DATA.get('fifa_calendar', 'json');
+  const oldHash = existing?._hash;
+
+  let calendarWritten = false;
+  if (oldHash !== newHash) {
+    fifaCal._hash = newHash;
+    await env.MATCH_DATA.put('fifa_calendar', JSON.stringify(fifaCal));
+    calendarWritten = true;
+    await logSla(env, {
+      level: 'info', event: 'calendar_refreshed',
+      matches: fifaCal.matches.length, from: fromIso, to: toIso
+    });
+  } else {
+    // Use existing record for downstream mapping (it's identical content anyway)
+    fifaCal = existing;
+  }
 
   // 2. Iterate 500.com fixtures and run mapping where needed
   const fixtures = await load500FixturesAcrossDates(env, FIXTURE_SCAN_DAYS_BACK, FIXTURE_SCAN_DAYS_FORWARD);
   let mappedCount = 0;
   for (const fixture of fixtures) {
-    const existing = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
-    if (existing?.match_confidence === 'exact' || existing?.match_confidence === 'time_skew_5min') continue;
-    if (existing?.match_confidence === 'unmatched' &&
-        existing.unmatched_retry_after &&
-        Date.now() < Date.parse(existing.unmatched_retry_after)) continue;
+    const existingMap = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
+    if (existingMap?.match_confidence === 'exact' || existingMap?.match_confidence === 'time_skew_5min') continue;
+    if (existingMap?.match_confidence === 'unmatched' &&
+        existingMap.unmatched_retry_after &&
+        Date.now() < Date.parse(existingMap.unmatched_retry_after)) continue;
 
     const mapped = await tryAutoMap(fixture, env, fifaCal);
     await env.MATCH_DATA.put(`fixture_mapping:${fixture.id}`, JSON.stringify(mapped));
@@ -59,18 +101,11 @@ export async function calendarCron(env) {
     }
   }
 
-  await logSla(env, {
-    level: 'info', event: 'mapping_pass_complete',
-    scanned: fixtures.length, newly_mapped: mappedCount
-  });
-  return { fetched: true, mapped: mappedCount, scanned: fixtures.length };
+  return { fetched: true, calendarWritten, mapped: mappedCount, scanned: fixtures.length };
 }
 
 /**
  * Load 500.com fixtures across a date window (matches:YYYY-MM-DD keys).
- * Reads `matches:{date}` for each date in [today-back, today+forward].
- * Skips fixtures whose league is not '世界杯' — 500 packs Finnish league /
- * friendly matches into the same envelope, which would pollute SLA logs.
  */
 async function load500FixturesAcrossDates(env, daysBack, daysForward) {
   const now = Date.now();
@@ -82,7 +117,7 @@ async function load500FixturesAcrossDates(env, daysBack, daysForward) {
     if (!envelope?.matches) continue;
     for (const m of envelope.matches) {
       if (!m.id || seen.has(m.id)) continue;
-      if (m.league !== '世界杯') continue;   // skip non-WC fixtures (Finnish league, friendlies, etc.)
+      if (m.league !== '世界杯') continue;
       seen.add(m.id);
       all.push(m);
     }

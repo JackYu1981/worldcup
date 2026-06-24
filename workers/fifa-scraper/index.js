@@ -1,12 +1,13 @@
 // Entry: dispatch cron triggers to the right handler.
-// All real logic lives in lib/*; this file stays thin so it's easy to read.
 //
-// Crons:
-//   */10 * * * *  →  mainCron     — lineup poller for fixtures in [KO-90min, KO_end+15min]
-//   0 1 * * *     →  calendarCron — once daily (UTC 01:00 = Beijing 09:00):
-//                                    refresh fifa_calendar (covers newly added knockout
-//                                    fixtures + status field freshness) + retry unmatched
-//                                    fixture mappings. ~1 write/day to KV.
+// Single cron: */10 * * * *  — every 10 minutes:
+//   1. calendarCron  → refresh fifa_calendar (hash-short-circuit, ≈1-3 writes/day)
+//                       + retry unmatched fixture mappings
+//   2. mainCron      → lineup poller for fixtures in [KO-90min, KO_end+15min]
+//                       + auto-triggers tournament-refresh on status 0→3 transition
+//
+// Calendar fetch is cheap (~1 HTTP call) and writes are short-circuited, so doing
+// it on every tick replaces the old daily cron without bloating KV writes.
 //
 // Manual-trigger fetch routes are kept as ops backdoor:
 //   GET /trigger/main      — force one main-cron pass
@@ -20,11 +21,15 @@ export default {
     const cron = event.cron;
     try {
       if (cron === '*/10 * * * *') {
+        // calendar first — main-cron's window logic relies on up-to-date mapping
+        try {
+          const cal = await calendarCron(env);
+          console.log(`[fifa-scraper] calendar tick:`, cal);
+        } catch (e) {
+          console.error(`[fifa-scraper] calendar cron error:`, e);
+        }
         const r = await mainCron(env);
         console.log(`[fifa-scraper] main cron tick: done`, r);
-      } else if (cron === '0 1 * * *') {
-        const r = await calendarCron(env);
-        console.log(`[fifa-scraper] daily calendar refresh: done`, r);
       } else {
         console.warn(`[fifa-scraper] unknown cron: ${cron}`);
       }

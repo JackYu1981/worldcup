@@ -23,12 +23,14 @@
 import { fetchLiveFootball } from './fifa-api.js';
 import { normalizeLineup, upsertPlayersFromLineup, matchLineupKey } from './lineup.js';
 import { refreshTournamentStatsForMatch } from './tournament-refresh.js';
-import { parseKickoffBeijing, beijingDateStr, matchDurationMs } from './time-utils.js';
+import { parseKickoffBeijing, beijingDateStr } from './time-utils.js';
 import { logSla } from './sla.js';
 
 const KO_PREROLL_MS = 90 * 60_000;
-const KO_POSTROLL_MS = 15 * 60_000;
-const DEFAULT_MATCH_MS = 105 * 60_000;
+// Hard cap to prevent runaway: if KV still shows a match as live 4 hours after
+// kickoff, FIFA likely missed flipping the status (or the match was abandoned).
+// Beyond this we stop polling — manual intervention required.
+const KO_HARD_TIMEOUT_MS = 4 * 60 * 60_000;
 const FINISHED_STATUS_CODE = 0;   // verified by Chunk 3.1 probe
 
 export async function mainCron(env) {
@@ -250,11 +252,21 @@ async function findFixturesInWindow(env, now) {
       seen.add(m.id);
       let ko;
       try { ko = parseKickoffBeijing(m).getTime(); } catch { continue; }
-      const matchMs = await matchDurationMs(env, m).catch(() => DEFAULT_MATCH_MS);
-      const koEnd = ko + matchMs;
-      if (now >= ko - KO_PREROLL_MS && now <= koEnd + KO_POSTROLL_MS) {
-        inWindow.push(m);
-      }
+
+      // Window logic (FIFA-driven, not duration-driven):
+      //   - Before KO-90min:  not in window (too early for lineups)
+      //   - From KO-90min on: in window UNTIL FIFA reports match_status=0 (finished)
+      //                       — covers regulation, stoppage, extra time, penalties
+      //   - Hard timeout:     KO + 4h. If KV still shows live after 4h, FIFA likely
+      //                       missed flipping status; stop polling to save quota.
+      //
+      // 2026-06-24 incident: PAN-CRO ran to 96' with stoppage; old duration-based
+      // window (KO+120min) closed before FIFA flipped status=0. Now we trust FIFA.
+      if (now < ko - KO_PREROLL_MS) continue;          // too early
+      if (now > ko + KO_HARD_TIMEOUT_MS) continue;     // hard cap
+      const lineup = await env.MATCH_DATA.get(`match_lineups:${m.id}`, 'json');
+      if (lineup?.match_status === FINISHED_STATUS_CODE) continue;  // already finished
+      inWindow.push(m);
     }
   }
   return inWindow;

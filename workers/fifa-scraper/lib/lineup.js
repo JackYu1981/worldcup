@@ -110,6 +110,13 @@ export function normalizeLineup(liveData, mapping) {
   const homeEvents = normalizeEvents('home', homeTeam);
   const awayEvents = normalizeEvents('away', awayTeam);
 
+  // Half-time score derived from goals' Period field. FIFA doesn't expose HT score
+  // directly — Period codes: 3 = 1st half (incl. 45'+stoppage), 5 = 2nd half.
+  // So HT goals are those with Period <= 3.
+  let homeHt = 0, awayHt = 0;
+  for (const g of homeEvents.goals) if ((g.period ?? 99) <= 3) homeHt++;
+  for (const g of awayEvents.goals) if ((g.period ?? 99) <= 3) awayHt++;
+
   return {
     fifa_id_match: mapping.fifa_id_match || liveData.IdMatch,
     fetched_at: new Date().toISOString().replace(/Z$/, '+00:00'),
@@ -124,6 +131,8 @@ export function normalizeLineup(liveData, mapping) {
       team_id: homeTeam.IdTeam,
       team_name_en: pickEnglish(homeTeam.TeamName),
       tactics: homeTeam.Tactics || null,
+      score: homeTeam.Score ?? null,         // FIFA full-time score
+      score_ht: homeHt,                       // computed half-time goals
       starting: home.starting,
       substitutes: home.substitutes
     },
@@ -132,6 +141,8 @@ export function normalizeLineup(liveData, mapping) {
       team_id: awayTeam.IdTeam,
       team_name_en: pickEnglish(awayTeam.TeamName),
       tactics: awayTeam.Tactics || null,
+      score: awayTeam.Score ?? null,
+      score_ht: awayHt,
       starting: away.starting,
       substitutes: away.substitutes
     },
