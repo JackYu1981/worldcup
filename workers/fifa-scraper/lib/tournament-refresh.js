@@ -214,16 +214,22 @@ function buildTournamentStats(stats) {
 async function refreshTeam(env, token, teamExternalId, teamCountryCode, countriesLookup) {
   const teamId = teamExternalId.split('_').pop();
 
+  // R3-a: 3 classifications fetched in parallel (~1s each → ~1s total instead of ~3s).
+  // Errors per-classification are isolated (allSettled) so a transient 429 on one
+  // doesn't poison the other two.
+  const clsResults = await Promise.allSettled(
+    CLASSIFICATIONS.map(cls => fetchTeamClassification(token, teamExternalId, cls))
+  );
+
   const merged = {};
-  for (const cls of CLASSIFICATIONS) {
-    let stories;
-    try {
-      stories = await fetchTeamClassification(token, teamExternalId, cls);
-    } catch (e) {
-      console.warn(`[tournament-refresh] team=${teamId} cls=${cls} fetch failed: ${e.message}`);
+  for (let i = 0; i < CLASSIFICATIONS.length; i++) {
+    const cls = CLASSIFICATIONS[i];
+    const res = clsResults[i];
+    if (res.status === 'rejected') {
+      console.warn(`[tournament-refresh] team=${teamId} cls=${cls} fetch failed: ${res.reason?.message || res.reason}`);
       continue;
     }
-    const players = extractPlayersFromStories(stories, cls);
+    const players = extractPlayersFromStories(res.value, cls);
     for (const [pid, info] of Object.entries(players)) {
       const tgt = merged[pid] || (merged[pid] = {
         stats: {}, name_multilang: {}, photo_url: null,
@@ -238,51 +244,61 @@ async function refreshTeam(env, token, teamExternalId, teamCountryCode, countrie
   }
 
   const now = new Date().toISOString().replace(/Z$/, '+00:00');
-  let writes = 0, unchanged = 0, errors = 0;
 
-  for (const [pid, agg] of Object.entries(merged)) {
-    const { top, attacking, discipline } = buildTournamentStats(agg.stats);
-    const existing = (await env.MATCH_DATA.get(`players:${pid}`, 'json')) || {};
-    const newName = { ...(existing.name || {}), ...agg.name_multilang };
-    const countryCode = agg.country_code || existing.country_code || teamCountryCode;
-    const countryZh =
-      (countryCode && countriesLookup[countryCode]) || existing.country_zh || null;
-    const newRecord = {
-      ...existing,
-      id: pid,
-      country_code: countryCode,
-      country_zh: countryZh,
-      team_id: agg.team_id || existing.team_id || teamId,
-      photo_url: agg.photo_url || existing.photo_url,
-      name: newName,
-      name_default: newName.eng || existing.name_default || `Player ${pid}`,
-      tournament_stats: {
-        version: 3,
-        fetched_at: now,
-        source: 'mangodev_gctp',
-        ...top,
-        attacking,
-        discipline,
-      },
-      last_updated: now,
-    };
-    // Strip v1/v2 stale fields (clean migration)
-    delete newRecord.fdh_match_ids;
-    delete newRecord.last_match_id;
-    delete newRecord._lineup_hash;
+  // R3-b: per-player KV get+put in parallel. Each player is independent.
+  // Previously serial: 26 players × (get + maybe-put) = 26-52 round trips serially.
+  // Now: all reads + writes overlap, bounded only by CF KV concurrent-IO limits.
+  const playerOps = await Promise.allSettled(
+    Object.entries(merged).map(async ([pid, agg]) => {
+      const { top, attacking, discipline } = buildTournamentStats(agg.stats);
+      const existing = (await env.MATCH_DATA.get(`players:${pid}`, 'json')) || {};
+      const newName = { ...(existing.name || {}), ...agg.name_multilang };
+      const countryCode = agg.country_code || existing.country_code || teamCountryCode;
+      const countryZh =
+        (countryCode && countriesLookup[countryCode]) || existing.country_zh || null;
+      const newRecord = {
+        ...existing,
+        id: pid,
+        country_code: countryCode,
+        country_zh: countryZh,
+        team_id: agg.team_id || existing.team_id || teamId,
+        photo_url: agg.photo_url || existing.photo_url,
+        name: newName,
+        name_default: newName.eng || existing.name_default || `Player ${pid}`,
+        tournament_stats: {
+          version: 3,
+          fetched_at: now,
+          source: 'mangodev_gctp',
+          ...top,
+          attacking,
+          discipline,
+        },
+        last_updated: now,
+      };
+      // Strip v1/v2 stale fields (clean migration)
+      delete newRecord.fdh_match_ids;
+      delete newRecord.last_match_id;
+      delete newRecord._lineup_hash;
 
-    const newHash = hashRecordPayload(newRecord);
-    newRecord._hash = newHash;
-    if (existing._hash === newHash) {
-      unchanged++;
-      continue;
-    }
-    try {
+      const newHash = hashRecordPayload(newRecord);
+      newRecord._hash = newHash;
+      if (existing._hash === newHash) {
+        return { outcome: 'unchanged' };
+      }
       await env.MATCH_DATA.put(`players:${pid}`, JSON.stringify(newRecord));
-      writes++;
-    } catch (e) {
-      console.error(`[tournament-refresh] put players:${pid} failed: ${e.message}`);
+      return { outcome: 'written' };
+    })
+  );
+
+  let writes = 0, unchanged = 0, errors = 0;
+  for (const r of playerOps) {
+    if (r.status === 'rejected') {
+      console.error(`[tournament-refresh] player op failed: ${r.reason?.message || r.reason}`);
       errors++;
+    } else if (r.value.outcome === 'written') {
+      writes++;
+    } else {
+      unchanged++;
     }
   }
 
@@ -339,8 +355,13 @@ export async function refreshTournamentStatsForMatch(env, mapping, lookupCountry
     if (c.code && c.zh) countriesLookup[c.code] = c.zh;
   }
 
-  const home = await refreshTeam(env, token, homeEid, homeCode, countriesLookup);
-  const away = await refreshTeam(env, token, awayEid, awayCode, countriesLookup);
+  // R3-c: home + away teams refreshed in parallel. They share token+countries+
+  // teamCache reads (already done above) but their player writes target disjoint
+  // KV keys, so there's no write conflict.
+  const [home, away] = await Promise.all([
+    refreshTeam(env, token, homeEid, homeCode, countriesLookup),
+    refreshTeam(env, token, awayEid, awayCode, countriesLookup),
+  ]);
 
   return {
     playersUpdated: home.writes + away.writes,

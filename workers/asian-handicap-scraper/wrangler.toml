@@ -1,0 +1,18 @@
+name = "worldcup-asian-handicap-scraper"
+main = "index.js"
+compatibility_date = "2024-09-01"
+
+# Cron strategy — dynamic frequency controlled in-code per-fixture:
+#   - WC fixtures >2h before kickoff: refresh every 30min (cron tick still runs
+#     every 5min but per-fixture cooldown skips most ticks)
+#   - WC fixtures ≤2h before kickoff: refresh every 10min
+#   - WC fixtures past kickoff: skip (asian handicap no longer relevant)
+#
+# Single 5min cron is the finest granularity we need; per-fixture state in KV
+# (asian_handicap:{fid}.last_attempted_at) controls actual fetch decisions.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "MATCH_DATA"
+id = "278f1209ffd84662bd51921370a2fbe9"

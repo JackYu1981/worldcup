@@ -1,16 +1,30 @@
 // GET /api/fifa/lineup/{fixture_id}
-// Returns the match_lineups:{500_id} KV record, augmented with:
-//   - country_zh from the countries seed
-//   - substitution player names (frontend doesn't need to do its own lookup)
-//   - score_ht: half-time score derived from events.goals[] where period <= 3
-//   - kickoff_utc: from fixture_mapping (authoritative FIFA time)
+//
+// Returns a structured response separating WHAT'S ALWAYS KNOWABLE from
+// WHAT REQUIRES FIFA TO HAVE PUBLISHED THE LINEUP. Three independent blocks:
+//
+//   fixture_meta   — ALWAYS present (built from fixture_mapping + countries seed).
+//                    Includes: home/away country_code + country_zh + team_name_en,
+//                    kickoff_utc, fifa_id_match.
+//
+//   match_state    — Present whenever match_lineups exists (= worker has seen the
+//                    fixture at least once; usually KO-90min onward).
+//                    Includes: match_status, match_status_label, period, match_time,
+//                    home/away.score, score_ht, events (goals/bookings/subs).
+//
+//   lineup         — Present ONLY when FIFA has published starters (lineup_available=true).
+//                    Includes: home/away.starting[], substitutes[], coach, tactics.
+//
+// The frontend renders header / 战绩 from fixture_meta unconditionally, scoreboard
+// from match_state when available, and the 阵容 section body from lineup when
+// available. No more "one missing piece blocks everything" coupling.
 
 import { json, error, options } from '../../../lib/response.js';
 
-// FIFA period codes (observed): 3 = 1st half (incl. 45'+stoppage),
-// 5 = 2nd half (incl. 90'+stoppage). Half-time goals are exactly those with period <= 3.
-function computeHalfTimeScore(lineup) {
-  const goals = (lineup.events && lineup.events.goals) || [];
+// FIFA period codes: 3 = 1st half (incl. 45'+stoppage),
+// 5 = 2nd half (incl. 90'+stoppage). HT goals = period <= 3.
+function computeHalfTimeScore(events) {
+  const goals = (events && events.goals) || [];
   let home = 0, away = 0;
   for (const g of goals) {
     const period = g.period;
@@ -27,67 +41,157 @@ export async function onRequestGet(context) {
   if (!fixtureId) return error('missing fixture_id', 400);
 
   try {
-    const lineup = await env.MATCH_DATA.get(`match_lineups:${fixtureId}`, 'json');
-    if (!lineup) {
-      // Differentiate "no mapping yet" vs "mapping but no lineup published"
-      const mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixtureId}`, 'json');
-      if (!mapping) {
-        return json({
-          lineup_available: false,
-          reason: 'fixture_not_mapped',
-          note: 'FIFA mapping not yet computed for this 500.com fixture'
-        });
-      }
-      if (mapping.match_confidence !== 'exact' && mapping.match_confidence !== 'time_skew_5min') {
-        return json({
-          lineup_available: false,
-          reason: 'fixture_unmatched',
-          note: mapping.match_note || 'No matching FIFA fixture found'
-        });
-      }
-      return json({
-        lineup_available: false,
-        reason: 'not_yet_published_by_fifa',
-        note: 'FIFA will publish lineup ~60-90min before kickoff',
-        kickoff_utc: mapping.kickoff_utc || null,
-      });
-    }
-
-    // Augment with country_zh from countries seed
-    const countries = await env.MATCH_DATA.get('countries', 'json');
+    // Load all KV sources in parallel — including asian handicap (independent block)
+    const [mapping, lineup, countries, fifaCal, handicap] = await Promise.all([
+      env.MATCH_DATA.get(`fixture_mapping:${fixtureId}`, 'json').catch(() => null),
+      env.MATCH_DATA.get(`match_lineups:${fixtureId}`, 'json').catch(() => null),
+      env.MATCH_DATA.get('countries', 'json').catch(() => null),
+      env.MATCH_DATA.get('fifa_calendar', 'json').catch(() => null),
+      env.MATCH_DATA.get(`asian_handicap:${fixtureId}`, 'json').catch(() => null),
+    ]);
     const codeToZh = countries?.items
       ? Object.fromEntries(countries.items.map(c => [c.code, c.zh]))
       : {};
-    lineup.home.country_zh = codeToZh[lineup.home.country_code] || lineup.home.country_code;
-    lineup.away.country_zh = codeToZh[lineup.away.country_code] || lineup.away.country_code;
+    const codeToEn = countries?.items
+      ? Object.fromEntries(countries.items.map(c => [c.code, c.en]))
+      : {};
+    // Look up stage/group/stadium meta from the FIFA calendar by FIFA match id.
+    let fifaMatchMeta = null;
+    if (mapping?.fifa_id_match && fifaCal?.matches) {
+      fifaMatchMeta = fifaCal.matches.find(fm => fm.id_match === mapping.fifa_id_match) || null;
+    }
 
-    // Augment each substitution with on_player_name / off_player_name so the
-    // frontend can show "↑ <replacement>" under the substituted-off player
-    // without doing its own player_id → name lookup.
-    const idToName = {};
-    for (const side of ['home', 'away']) {
-      for (const list of [lineup[side]?.starting || [], lineup[side]?.substitutes || []]) {
-        for (const p of list) {
-          if (p.player_id && p.name) idToName[p.player_id] = p.name;
-        }
+    // === BLOCK 1: fixture_meta — always built from mapping (or null if no mapping) ===
+    // This is what powers header / tabs / 战绩 even when nothing else exists.
+    let fixture_meta = null;
+    let mapping_state = 'unmapped';   // unmapped | unmatched | matched
+    if (mapping) {
+      if (mapping.match_confidence === 'exact' || mapping.match_confidence === 'time_skew_5min') {
+        mapping_state = 'matched';
+      } else {
+        mapping_state = 'unmatched';
+      }
+      if (mapping.home_code && mapping.away_code) {
+        fixture_meta = {
+          fixture_id: fixtureId,
+          fifa_id_match: mapping.fifa_id_match || null,
+          kickoff_utc: mapping.kickoff_utc || null,
+          stage_name: fifaMatchMeta?.stage_name || null,    // e.g. "First Stage"
+          group_name: fifaMatchMeta?.group_name || null,    // e.g. "Group C"
+          stadium_name: fifaMatchMeta?.stadium_name || null,
+          stadium_city: fifaMatchMeta?.stadium_city || null,
+          home: {
+            country_code: mapping.home_code,
+            country_zh: codeToZh[mapping.home_code] || mapping.home_code,
+            country_en: codeToEn[mapping.home_code] || mapping.home_code,
+          },
+          away: {
+            country_code: mapping.away_code,
+            country_zh: codeToZh[mapping.away_code] || mapping.away_code,
+            country_en: codeToEn[mapping.away_code] || mapping.away_code,
+          },
+        };
       }
     }
-    const subs = lineup.events?.substitutions || [];
-    for (const s of subs) {
-      if (s.off_player_id && !s.off_player_name) s.off_player_name = idToName[s.off_player_id] || null;
-      if (s.on_player_id && !s.on_player_name) s.on_player_name = idToName[s.on_player_id] || null;
+
+    // === BLOCK 2: match_state — derived from match_lineups when it exists ===
+    // Score / status / clock / events. None of this depends on starters being
+    // published — FIFA writes status & score independently of the lineup roster.
+    let match_state = null;
+    if (lineup) {
+      const ht = computeHalfTimeScore(lineup.events);
+      match_state = {
+        match_status: lineup.match_status ?? null,
+        match_status_label: lineup.match_status_label || null,
+        period: lineup.period ?? null,
+        match_time: lineup.match_time ?? null,
+        fetched_at: lineup.fetched_at || null,
+        home_score: lineup.home?.score ?? null,
+        away_score: lineup.away?.score ?? null,
+        home_score_ht: ht.home,
+        away_score_ht: ht.away,
+        events: lineup.events || { goals: [], bookings: [], substitutions: [] },
+      };
     }
 
-    // Half-time score derived from goals' period field (FIFA doesn't expose HT directly)
-    const ht = computeHalfTimeScore(lineup);
-    lineup.home.score_ht = ht.home;
-    lineup.away.score_ht = ht.away;
+    // === BLOCK 3: lineup — only when starters are actually published ===
+    // tactics + starting + substitutes + coach. Frontend uses this to render
+    // the 阵容 section body; absence triggers the "等待 FIFA 公布" placeholder.
+    let lineup_block = null;
+    const lineupAvailable = !!(lineup && lineup.lineup_available);
+    if (lineupAvailable) {
+      // Build id→{name,shirt} table for substitution enrichment.
+      const idToName = {};
+      const idToShirt = {};
+      for (const side of ['home', 'away']) {
+        for (const list of [lineup[side]?.starting || [], lineup[side]?.substitutes || []]) {
+          for (const p of list) {
+            if (p.player_id && p.name) idToName[p.player_id] = p.name;
+            if (p.player_id && p.shirt_number != null) idToShirt[p.player_id] = p.shirt_number;
+          }
+        }
+      }
+      // Enrich substitution records (used by frontend; the events live in match_state)
+      const subs = match_state.events?.substitutions || [];
+      for (const s of subs) {
+        if (s.off_player_id && !s.off_player_name) s.off_player_name = idToName[s.off_player_id] || null;
+        if (s.on_player_id  && !s.on_player_name)  s.on_player_name  = idToName[s.on_player_id]  || null;
+        if (s.on_player_id  && s.on_player_shirt  == null) s.on_player_shirt  = idToShirt[s.on_player_id]  ?? null;
+        if (s.off_player_id && s.off_player_shirt == null) s.off_player_shirt = idToShirt[s.off_player_id] ?? null;
+      }
 
-    // Authoritative kickoff time (UTC) from mapping
-    const mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixtureId}`, 'json');
-    if (mapping?.kickoff_utc) lineup.kickoff_utc = mapping.kickoff_utc;
+      lineup_block = {
+        fixture_locked: lineup.fixture_locked || false,
+        home: {
+          tactics: lineup.home?.tactics || null,
+          starting: lineup.home?.starting || [],
+          substitutes: lineup.home?.substitutes || [],
+          coach: lineup.home?.coach || null,
+        },
+        away: {
+          tactics: lineup.away?.tactics || null,
+          starting: lineup.away?.starting || [],
+          substitutes: lineup.away?.substitutes || [],
+          coach: lineup.away?.coach || null,
+        },
+      };
+    }
 
-    return json(lineup, 200, 60);   // cache 60s — main-cron hash-dedup ensures rare writes; longer cache is safe
+    // === BLOCK 4: asian_handicap — bet365 from 500.com, written by separate worker ===
+    // Independent of lineup/match_state — present whenever the scraper has fetched
+    // it (typically from fixture appearance on 500.com odds page until kickoff).
+    let asian_handicap = null;
+    if (handicap?.current) {
+      asian_handicap = {
+        bookmaker: handicap.bookmaker || 'bet365',
+        current: handicap.current,        // { line, home_water, away_water }
+        open:    handicap.open || null,    // initial line for trend context
+        trend:   handicap.trend || 'stable',
+        fetched_at: handicap.fetched_at || null,
+      };
+    }
+
+    // === Response shape ===
+    const response = {
+      fixture_id: fixtureId,
+      mapping_state,                     // unmapped | unmatched | matched
+      lineup_available: lineupAvailable, // (legacy) true iff lineup block is present
+      reason: lineupAvailable ? null : (
+        mapping_state === 'unmapped' ? 'fixture_not_mapped' :
+        mapping_state === 'unmatched' ? 'fixture_unmatched' :
+        'not_yet_published_by_fifa'
+      ),
+      note: lineupAvailable ? null : (
+        mapping_state === 'unmapped' ? 'FIFA mapping not yet computed for this 500.com fixture' :
+        mapping_state === 'unmatched' ? (mapping?.match_note || 'No matching FIFA fixture found') :
+        'FIFA will publish lineup ~60-90min before kickoff'
+      ),
+      fixture_meta,
+      match_state,
+      lineup: lineup_block,
+      asian_handicap,                    // null when scraper hasn't fetched yet
+    };
+    return json(response, 200, 60);
   } catch (e) {
     return error(e.message, 500);
   }

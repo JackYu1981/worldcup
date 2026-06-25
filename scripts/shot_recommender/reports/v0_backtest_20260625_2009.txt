@@ -1,0 +1,49 @@
+[v0 failed] f1359226: Traceback (most recent call last):
+  File "/Users/I064337/ai/worldcup/scripts/shot_recommender/v0_baseline.py", line 386, in <module>
+    main()
+    ~~~~^^
+  File "/Users/I064337/ai/worldcup/scripts/s
+[v0 failed] f1359229: Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 1321, in do_open
+    h.request(re
+[scan] enumerating finished WC matches with match_stats...
+[scan] found 6 eligible matches
+[run] running v0 on each match with mock pick-em (no handicap KV yet)...
+
+  [f1359179] precision=16.67% hits=1/6
+    ✗ pid=433668 rec=1 actual=0 hits=0
+    ✗ pid=433754 rec=1 actual=0 hits=0
+    ✗ pid=401481 rec=1 actual=0 hits=0
+    ✓ pid=429157 rec=1 actual=1 hits=1
+    ✗ pid=356731 rec=1 actual=0 hits=0
+    ✗ pid=403585 rec=1 actual=0 hits=0
+
+  [f1359188] precision=50.00% hits=3/6
+    ✗ pid=448114 rec=1 actual=0 hits=0
+    ✓ pid=448131 rec=1 actual=1 hits=1
+    ✓ pid=393480 rec=1 actual=2 hits=1
+    ✗ pid=441257 rec=2 actual=0 hits=0
+    ✓ pid=390670 rec=1 actual=1 hits=1
+
+  [f1359199] precision=66.67% hits=4/6
+    ✓ pid=433787 rec=1 actual=2 hits=1
+    ✗ pid=401334 rec=1 actual=0 hits=0
+    ✗ pid=484045 rec=1 actual=0 hits=0
+    ✓ pid=405742 rec=2 actual=4 hits=2
+    ✓ pid=430609 rec=1 actual=2 hits=1
+  [f1359226] (skip — v0 picks parsing not yet wired, see TODO T4)
+  [f1359229] (skip — v0 picks parsing not yet wired, see TODO T4)
+
+  [f1359232] precision=66.67% hits=4/6
+    ✓ pid=448598 rec=1 actual=1 hits=1
+    ✓ pid=400721 rec=1 actual=3 hits=1
+    ✓ pid=448612 rec=1 actual=2 hits=1
+    ✓ pid=405879 rec=1 actual=1 hits=1
+    ✗ pid=485664 rec=1 actual=0 hits=0
+    ✗ pid=431693 rec=1 actual=0 hits=0
+
+=== Aggregate ===
+  Matches evaluated: 4
+  Average precision@6: 50.00%
+  Random baseline (~22 players, pick 6): ~27.27%
+  Outcome: OK

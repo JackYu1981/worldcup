@@ -41,7 +41,7 @@ export async function onRequestPost(context) {
 
     target.score = score;
     target.score_ht = score_ht;
-    envelope.fetched_at = new Date().toISOString();
+    envelope.fetched_at = new Date().toISOString().replace(/Z$/, '+00:00');
     await kv.put(`matches:${period}`, JSON.stringify(envelope));
 
     // 跨期串单方案的 plan.legs 可能来自不同 period，必须用全量赛程池评估

@@ -3,17 +3,18 @@ main = "index.js"
 compatibility_date = "2024-09-01"
 
 # Crons:
-#   */5 * * * *     → mainCron     — lineup poller for fixtures in FIFA-defined window
-#                                     (KO-90min → match_status=0 / KO+4h hard cap).
-#                                     A+D short-circuit caps writes at ≤3/fixture/tick.
-#                                     Tighter cadence catches in-match events faster.
-#   */5 * * * *     → calendarCron — handled by the same cron tick (mainCron runs first,
-#                                     then calendarCron). Hash-short-circuit keeps writes
-#                                     ≈1-3/day. Picks up newly-added knockout fixtures,
-#                                     status updates, kickoff time changes.
+#   * * * * *     → mainCron     — lineup poller for fixtures in FIFA-defined window
+#                                   (KO-90min → match_status=0 / KO+4h hard cap).
+#                                   1min cadence catches in-match events near-realtime.
+#                                   Hash-short-circuit + finished-skip cap actual writes
+#                                   at ≤3/fixture/tick.
+#   * * * * *     → calendarCron  — handled by the same cron tick (mainCron runs first,
+#                                   then calendarCron). Hash-short-circuit keeps writes
+#                                   ≈1-3/day. Picks up newly-added knockout fixtures,
+#                                   status updates, kickoff time changes.
 [triggers]
 crons = [
-  "*/5 * * * *"
+  "* * * * *"
 ]
 
 [[kv_namespaces]]

@@ -14,17 +14,18 @@
             color: #333;
             padding: 0 0 100px 0;
         }
-        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: white; border-bottom: 1px solid #eee; }
-        .site-header .title { font-size: 20px; font-weight: 700; }
-        .site-header .user-badge { position: absolute; right: 12px; bottom: 6px; font-size: 10px; color: #999; }
-        .site-header .user-badge a { color: #bbb; margin-left: 4px; font-size: 10px; text-decoration: none; }
+        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 8px 16px; background: #000; max-height: 52px; box-sizing: border-box; overflow: hidden; flex-shrink: 0; }
+        .site-header .banner-img { height: 36px; width: auto; max-width: 80vw; aspect-ratio: 444 / 116; object-fit: contain; display: block; flex-shrink: 0; }
+        .site-header .user-badge { position: absolute; right: 12px; bottom: 4px; font-size: 10px; color: #888; }
+        .site-header .user-badge a { color: #aaa; margin-left: 4px; font-size: 10px; text-decoration: none; }
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
-            padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
+            padding: 10px 16px; background: #0a2f5c; border-bottom: 1px solid #08254a;
             flex-wrap: wrap;
         }
-        .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
-        .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+        .nav-tab { padding: 8px 14px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75); text-decoration: none; border-bottom: 2px solid transparent; transition: color 0.15s; }
+        .nav-tab:hover { color: #fff; }
+        .nav-tab.active { color: #00b04f; border-bottom-color: #00b04f; font-weight: 600; }
         .stats-row {
             display: flex;
             gap: 12px;
@@ -82,6 +83,8 @@
         .calendar .day.lost { background: #e8f5e9; color: #2e7d32; }
         .calendar .day.pending { background: #e3f2fd; color: #1a73e8; }
         .calendar .day.empty { background: transparent; cursor: default; }
+        .calendar .day.empty-clickable { background: #fafafa; color: #aaa; cursor: pointer; }
+        .calendar .day.empty-clickable:hover { background: #f0f0f0; }
         .calendar .day .amount { font-size: 10px; margin-top: 2px; font-weight: 600; }
         .day-detail-overlay {
             position: fixed;
@@ -194,11 +197,100 @@
             color: #333;
         }
         .ticket-stake .return { font-weight: 600; color: #c62828; }
+        /* Manual P&L editor inside day detail */
+        .manual-pnl-editor {
+            background: #f8f9fa;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .manual-pnl-row {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .manual-pnl-label {
+            font-size: 13px; color: #555; font-weight: 600;
+            flex-shrink: 0;
+        }
+        /* Sign prefix lives INSIDE the input visually via a wrapper. Real <input>
+         * stays unsigned-numeric (so phone shows a number pad), and the prefix
+         * span on its left reflects the active sign. Looks like one composite
+         * field with a colored leading sign. */
+        .manual-pnl-input-wrap {
+            display: inline-flex; align-items: stretch;
+            border: 1px solid #ddd; border-radius: 6px;
+            background: white;
+            overflow: hidden;
+            flex-shrink: 0;
+            height: 32px;
+        }
+        .manual-pnl-input-wrap:focus-within { border-color: #0a2f5c; }
+        .manual-pnl-prefix {
+            display: flex; align-items: center; justify-content: center;
+            width: 22px;
+            font-size: 16px; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            user-select: none;
+            /* Sign color stays neutral here — the colored +/- button next to it
+             * already conveys the active state with green/red bg. Two colored
+             * signs side-by-side is visual noise. */
+            color: #555;
+        }
+        .manual-pnl-row input.no-border {
+            border: none !important;
+            width: 70px;
+            padding: 0 10px 0 4px;
+            font-size: 14px;
+            outline: none;
+            background: transparent;
+        }
+        .manual-pnl-row input {
+            width: 90px; flex-shrink: 0;
+            padding: 6px 10px; font-size: 14px;
+            border: 1px solid #ddd; border-radius: 6px;
+            outline: none;
+        }
+        .manual-pnl-row input:focus { border-color: #0a2f5c; }
+        /* Single toggle button — label is literally "+/-" so users instantly
+         * recognize "this flips the sign". One tap toggles the input sign state.
+         * Active sign state stored on the button via data-sign for save-time read. */
+        .pnl-sign-toggle-btn {
+            height: 34px;
+            padding: 0 12px;
+            font-size: 14px; font-weight: 700;
+            border: 1px solid #ddd; background: white;
+            border-radius: 8px; cursor: pointer;
+            color: #0a2f5c;
+            font-variant-numeric: tabular-nums;
+            line-height: 1; letter-spacing: 0.5px;
+            flex-shrink: 0;
+            transition: background 0.12s, color 0.12s, border-color 0.12s;
+        }
+        .pnl-sign-toggle-btn[data-sign="+"] {
+            color: #00b04f; border-color: #b9e8ca; background: #f1faf4;
+        }
+        .pnl-sign-toggle-btn[data-sign="-"] {
+            color: #c62828; border-color: #f1bcbc; background: #fdf2f2;
+        }
+        .pnl-sign-toggle-btn:active { transform: scale(0.95); }
+        .manual-pnl-save {
+            padding: 6px 14px; font-size: 13px; font-weight: 600;
+            background: #00b04f; color: white; border: none; border-radius: 6px;
+            cursor: pointer; flex-shrink: 0;
+        }
+        .manual-pnl-save:active { background: #008f3f; }
+        .manual-pnl-clear {
+            padding: 6px 10px; font-size: 12px;
+            background: transparent; color: #999; border: 1px solid #ddd; border-radius: 6px;
+            cursor: pointer; flex-shrink: 0;
+        }
+        .manual-pnl-clear:active { background: #f0f0f0; }
+        .manual-pnl-hint { font-size: 11px; color: #888; margin-top: 6px; }
     </style>
 </head>
 <body>
     <div class="site-header">
-        <span class="title">⚽ 投注助手</span>
+        <img class="banner-img" src="/assets/banner-fifa-2026.png" alt="FIFA World Cup 2026" width="444" height="116" loading="eager" decoding="async">
         <span class="user-badge" id="userBadge"></span>
     </div>
 
@@ -227,7 +319,7 @@
     </div>
 
     <div class="chart-card">
-        <h3>累计收益曲线</h3>
+        <h3>累计净盈亏曲线</h3>
         <canvas id="profitChart" height="200"></canvas>
     </div>
 
@@ -257,13 +349,25 @@
     <script>
         let allPlans = [];
         let dailyMap = {};
+        let manualEntries = {};   // { 'YYYY-MM-DD': amount }
 
         async function loadData() {
             try {
-                const resp = await fetch(`/api/plans`, { headers: AUTH.headers(), cache: 'no-store' });
-                if (!resp.ok) throw new Error('Failed');
-                const data = await resp.json();
+                // Parallel fetch — plans + manual entries are independent
+                const [plansResp, pnlResp] = await Promise.all([
+                    fetch(`/api/plans`, { headers: AUTH.headers(), cache: 'no-store' }),
+                    fetch(`/api/pnl-manual`, { headers: AUTH.headers(), cache: 'no-store' }),
+                ]);
+                if (!plansResp.ok) throw new Error('Failed plans');
+                const data = await plansResp.json();
                 allPlans = data.plans || [];
+
+                if (pnlResp.ok) {
+                    const pnl = await pnlResp.json();
+                    manualEntries = (pnl && pnl.entries) || {};
+                } else {
+                    manualEntries = {};
+                }
 
                 dailyMap = {};
                 allPlans.forEach(p => {
@@ -279,6 +383,19 @@
                 console.error(e);
             }
             renderCalendar();
+        }
+
+        // Combined daily P&L: plans-derived + manual entry. Both are absolute
+        // amounts on the same scale (CNY net P&L), so we just add them.
+        function getDailyCombinedPnl(dateStr) {
+            const plans = dailyMap[dateStr] || [];
+            const planPnl = plans.reduce((s, p) => {
+                return (p.status === 'won' || p.status === 'lost')
+                    ? s + getPlanProfit(p)
+                    : s;
+            }, 0);
+            const manual = manualEntries[dateStr] || 0;
+            return { plan: planPnl, manual, total: planPnl + manual };
         }
 
         function getPlanStake(p) {
@@ -303,25 +420,34 @@
                     if (p.status === 'won') wonCount++;
                 }
             });
-            const profit = totalReturn - totalStake;
+            // Net profit = plan-derived + sum of all manual entries
+            const planProfit = totalReturn - totalStake;
+            const manualSum = Object.values(manualEntries).reduce((s, v) => s + (v || 0), 0);
+            const profit = planProfit + manualSum;
             document.getElementById('totalStake').textContent = `¥${totalStake}`;
             const profitEl = document.getElementById('totalProfit');
-            profitEl.textContent = `${profit >= 0 ? '+' : ''}¥${profit}`;
+            profitEl.textContent = `${profit >= 0 ? '+' : ''}¥${Math.round(profit * 100) / 100}`;
             profitEl.className = `value ${profit >= 0 ? 'positive' : 'negative'}`;
             document.getElementById('hitRate').textContent = settledCount > 0 ? `${Math.round(wonCount / settledCount * 100)}%` : '-';
         }
 
         function renderChart() {
             const ctx = document.getElementById('profitChart').getContext('2d');
-            const settled = allPlans
+
+            // Build union of dates from BOTH sources (settled plans + manual entries).
+            // Each contributes its own daily delta; we add them when both exist.
+            const dateSet = new Set();
+            allPlans
                 .filter(p => p.status === 'won' || p.status === 'lost')
-                .sort((a, b) => (a.date || a.period || a.submitted_at || '').localeCompare(b.date || b.period || b.submitted_at || ''));
+                .forEach(p => {
+                    const d = (p.date || p.period || '').slice(0, 10);
+                    if (d) dateSet.add(d);
+                });
+            Object.keys(manualEntries).forEach(d => dateSet.add(d));
 
             const byDate = {};
-            settled.forEach(p => {
-                const d = (p.date || p.period || '').slice(0, 10);
-                if (!byDate[d]) byDate[d] = 0;
-                byDate[d] += getPlanProfit(p);
+            dateSet.forEach(d => {
+                byDate[d] = getDailyCombinedPnl(d).total;
             });
 
             let cumulative = 0;
@@ -329,6 +455,8 @@
             const data = [0];
             Object.keys(byDate).sort().forEach(d => {
                 cumulative += byDate[d];
+                // Round to 2 decimals to keep cumulative clean
+                cumulative = Math.round(cumulative * 100) / 100;
                 labels.push(d.slice(5));
                 data.push(cumulative);
             });
@@ -339,14 +467,15 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: '累计收益 (¥)',
+                        label: '累计净盈亏 (¥)',
                         data: data,
-                        borderColor: '#1a73e8',
-                        backgroundColor: 'rgba(26,115,232,0.1)',
+                        // FIFA palette: deep blue line, green/red point colors by sign
+                        borderColor: '#0a2f5c',
+                        backgroundColor: 'rgba(10,47,92,0.08)',
                         fill: true,
                         tension: 0.3,
                         pointRadius: 4,
-                        pointBackgroundColor: data.map(v => v >= 0 ? '#c62828' : '#2e7d32')
+                        pointBackgroundColor: data.map(v => v >= 0 ? '#00b04f' : '#c62828')
                     }]
                 },
                 options: {
@@ -393,32 +522,38 @@
 
             for (let i = 1; i <= daysInMonth; i++) {
                 const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(i).padStart(2, '0')}`;
-                const plans = dailyMap[dateStr];
+                const plans = dailyMap[dateStr] || [];
+                const manualAmount = manualEntries[dateStr];
                 const div = document.createElement('div');
                 div.className = 'day';
 
-                if (plans && plans.length > 0) {
+                // Day shows whichever data exists: plans, manual, or both
+                const hasPlans = plans.length > 0;
+                const hasManual = manualAmount !== undefined;
+
+                if (!hasPlans && !hasManual) {
+                    // Empty day — still clickable for manual entry, but visually muted
+                    div.classList.add('empty-clickable');
+                    div.textContent = i;
+                    div.onclick = () => showDayDetail(dateStr, []);
+                } else {
                     const hasWon = plans.some(p => p.status === 'won');
                     const allSettled = plans.every(p => p.status === 'won' || p.status === 'lost');
-                    const dayProfit = plans.reduce((sum, p) => {
-                        if (p.status === 'won' || p.status === 'lost') return sum + getPlanProfit(p);
-                        return sum;
-                    }, 0);
+                    const combined = getDailyCombinedPnl(dateStr);
 
-                    if (!allSettled && !hasWon) {
+                    if (hasPlans && !allSettled && !hasWon && !hasManual) {
+                        // Plans still pending and no manual override
                         div.classList.add('pending');
                         div.innerHTML = `${i}<span class="amount">待开</span>`;
-                    } else if (dayProfit >= 0 && hasWon) {
+                    } else if (combined.total >= 0 && (hasWon || hasManual)) {
                         div.classList.add('won');
-                        div.innerHTML = `${i}<span class="amount">+${dayProfit}</span>`;
+                        const sign = combined.total > 0 ? '+' : '';
+                        div.innerHTML = `${i}<span class="amount">${sign}${combined.total}</span>`;
                     } else {
                         div.classList.add('lost');
-                        div.innerHTML = `${i}<span class="amount">${dayProfit}</span>`;
+                        div.innerHTML = `${i}<span class="amount">${combined.total}</span>`;
                     }
                     div.onclick = () => showDayDetail(dateStr, plans);
-                } else {
-                    div.classList.add('empty');
-                    div.textContent = i;
                 }
                 cal.appendChild(div);
             }
@@ -437,8 +572,43 @@
             const title = document.getElementById('dayDetailTitle');
             const content = document.getElementById('dayDetailContent');
 
-            title.textContent = `${dateStr} 投注方案`;
-            content.innerHTML = plans.map(p => {
+            const combined = getDailyCombinedPnl(dateStr);
+            const sign = combined.total >= 0 ? '+' : '';
+            title.textContent = `${dateStr} · 净盈亏 ${sign}¥${combined.total}`;
+
+            // === Manual P&L editor ===
+            // Single "+/-" button — label literally reads "+/-" so its purpose
+            // is obvious. data-sign records the current active sign; tapping
+            // toggles it. Input box holds the unsigned absolute value.
+            const cur = manualEntries[dateStr];
+            const curSign = cur !== undefined ? (cur < 0 ? '-' : '+') : '+';
+            const curAbsStr = cur !== undefined ? String(Math.abs(cur)) : '';
+            const manualEditorHtml = `
+                <div class="manual-pnl-editor">
+                    <div class="manual-pnl-row">
+                        <span class="manual-pnl-label">手动盈亏 ¥</span>
+                        <button type="button" class="pnl-sign-toggle-btn" id="manualPnlSignBtn"
+                                data-sign="${curSign}" onclick="toggleManualPnlSign()"
+                                title="点击切换正负">+/-</button>
+                        <span class="manual-pnl-input-wrap">
+                            <span class="manual-pnl-prefix" id="manualPnlPrefix" data-sign="${curSign}">${curSign}</span>
+                            <input type="text" id="manualPnlInput" class="no-border" value="${curAbsStr}"
+                                   placeholder="0" inputmode="decimal"
+                                   oninput="onManualPnlInput(event)" />
+                        </span>
+                        <button class="manual-pnl-save" onclick="saveManualPnl('${dateStr}')">保存</button>
+                        ${cur !== undefined
+                            ? `<button class="manual-pnl-clear" onclick="clearManualPnl('${dateStr}')">清除</button>`
+                            : ''}
+                    </div>
+                    <div class="manual-pnl-hint">
+                        ${plans.length > 0 ? `自动核算 ${combined.plan >= 0 ? '+' : ''}¥${combined.plan}  ·  手动 ${cur !== undefined ? (cur >= 0 ? '+' : '') + '¥' + cur : '未录入'}` : '今天没有投注方案，直接录入即可'}
+                    </div>
+                </div>
+            `;
+
+            // === Plan tickets (only when there are plans) ===
+            const ticketsHtml = plans.length === 0 ? '' : plans.map(p => {
                 const status = p.status || 'pending';
                 const statusText = status === 'won' ? '🎉 中奖' : status === 'lost' ? '💣 未中' : '⏳ 待开';
                 const profit = getPlanProfit(p);
@@ -480,7 +650,102 @@
                 </div>`;
             }).join('');
 
+            content.innerHTML = manualEditorHtml + ticketsHtml;
             overlay.classList.add('visible');
+        }
+
+        // Single "+/-" toggle. Flips the sign state on the button AND syncs
+        // the in-input prefix span so users always see the active sign next
+        // to their number.
+        function toggleManualPnlSign() {
+            const btn = document.getElementById('manualPnlSignBtn');
+            const prefix = document.getElementById('manualPnlPrefix');
+            if (!btn) return;
+            const next = btn.dataset.sign === '-' ? '+' : '-';
+            btn.dataset.sign = next;
+            if (prefix) {
+                prefix.dataset.sign = next;
+                prefix.textContent = next;
+            }
+        }
+
+        // Sanitize input — digits + at most one dot, no sign characters.
+        // Sign comes from the toggle button, not from the input box.
+        function onManualPnlInput(e) {
+            const raw = e.target.value;
+            let cleaned = raw.replace(/[^0-9.]/g, '');
+            // collapse multiple dots: keep first only
+            const firstDot = cleaned.indexOf('.');
+            if (firstDot >= 0) {
+                cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+            }
+            // strip leading zeros (but keep "0.xx")
+            cleaned = cleaned.replace(/^0+(\d)/, '$1');
+            if (cleaned !== raw) e.target.value = cleaned;
+        }
+
+        async function saveManualPnl(dateStr) {
+            const input = document.getElementById('manualPnlInput');
+            const signBtn = document.getElementById('manualPnlSignBtn');
+            const raw = (input.value || '').trim();
+            if (raw === '' || raw === '.') {
+                alert('请输入金额（用 +/- 按钮切换正负）');
+                return;
+            }
+            const absVal = Number(raw);
+            if (!Number.isFinite(absVal) || absVal < 0) {
+                alert('金额必须是 ≥0 的数字');
+                return;
+            }
+            const sign = signBtn?.dataset.sign === '-' ? -1 : 1;
+            const amount = sign * absVal;
+            try {
+                const r = await fetch('/api/pnl-manual', {
+                    method: 'PUT',
+                    headers: { ...AUTH.headers(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr, amount }),
+                });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({ error: '保存失败' }));
+                    alert(err.error || '保存失败');
+                    return;
+                }
+                const j = await r.json();
+                manualEntries = j.entries || {};
+                // Re-render everything that depends on this
+                renderStats();
+                renderChart();
+                renderCalendar();
+                // Re-open the same day with fresh data so user sees the update inline
+                closeDayDetail();
+                const plans = dailyMap[dateStr] || [];
+                showDayDetail(dateStr, plans);
+            } catch (e) {
+                alert('网络错误：' + e.message);
+            }
+        }
+
+        async function clearManualPnl(dateStr) {
+            if (!confirm(`确认清除 ${dateStr} 的手动盈亏录入？`)) return;
+            try {
+                const r = await fetch('/api/pnl-manual', {
+                    method: 'PUT',
+                    headers: { ...AUTH.headers(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr, amount: null }),
+                });
+                if (!r.ok) {
+                    alert('清除失败');
+                    return;
+                }
+                const j = await r.json();
+                manualEntries = j.entries || {};
+                renderStats();
+                renderChart();
+                renderCalendar();
+                closeDayDetail();
+            } catch (e) {
+                alert('网络错误：' + e.message);
+            }
         }
 
         function closeDayDetail() {

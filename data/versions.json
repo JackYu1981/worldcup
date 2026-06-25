@@ -203,6 +203,12 @@
       "date": "2026-06-24T15:27:40+08:00",
       "summary": "本场实时数据 (live events) 功能：fdh-api 抓 shots/shots_on_target/fouls/yellow_cards 写 match_stats:{500_id} 独立 KV 不污染 player_records；lineup modal 新增 ⚡ 图标弹层 (仿 stats compare 风格)，默认按射正降序排列，替补显示换下/被换上信息；cron 频率 10min → 5min 更及时；删 ↻ 刷新按钮",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.9.0",
+      "date": "2026-06-25T21:16:43+08:00",
+      "summary": "AI 射门推荐系统骨架：bet365 亚盘抓取 worker（动态频率拉取 12 场 WC 比赛盘口+水位+升降盘趋势）+ lineup 弹窗赛前态展示亚盘 + 🤖 AI 推荐 sheet 占位（决策依据+引擎输出）；推荐页加「直接生成」按钮（笛卡尔积平均下注，绕过 AI session）；看板页手动盈亏录入+曲线；lineup 球员弹窗本场(累计)对比；lineup 弹窗整体重设计（赛前/赛中/赛后解耦+战绩 cross-fixture 导航+教练）；index 卡片亚盘+阶段+组别+体育场+国旗；时区字段全量迁移（893 字段统一 +00:00/+08:00）；BRA gctp 48 队补跑+52 marker；worker 4h 盲区修复+team-v3-refresh 并行化；header 高度防御性修复",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

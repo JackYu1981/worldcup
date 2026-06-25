@@ -106,6 +106,7 @@ export async function onRequestGet(context) {
         shots_on_target: st.shots_on_target ?? 0,
         fouls_committed: st.fouls_committed ?? 0,
         yellow_cards:    st.yellow_cards ?? 0,
+        red_cards:       st.red_cards ?? 0,
       });
     }
 

@@ -27,7 +27,7 @@ try {
   logs = data.logs || [];
 } catch (e) {}
 
-logs.unshift({ type, message, time: new Date().toISOString() });
+logs.unshift({ type, message, time: new Date().toISOString().replace(/Z$/, '+00:00') });
 if (logs.length > 100) logs.length = 100;
 
 const fs = await import('fs');

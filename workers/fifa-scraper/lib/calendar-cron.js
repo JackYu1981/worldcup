@@ -101,7 +101,95 @@ export async function calendarCron(env) {
     }
   }
 
-  return { fetched: true, calendarWritten, mapped: mappedCount, scanned: fixtures.length };
+  // 3. Build team_fixtures:{country_code} reverse index from mappings + fixtures.
+  // This collapses "scan all matches:* + look up fixture_mapping for each + filter
+  // by country" (the read path the team-history API used to do) into a single
+  // KV get per team. Maintained here on calendar cron — same cadence as mapping
+  // changes (new knockout draws etc).
+  const teamFixturesIndex = await buildTeamFixturesIndex(env, fixtures, fifaCal);
+  const indexWriteCount = await writeTeamFixturesIndex(env, teamFixturesIndex);
+  // Always emit a heartbeat so we can observe in SLA logs that the reverse-index
+  // code path actually executed each tick — even when 0 writes happen.
+  await logSla(env, {
+    level: 'info', event: 'team_fixtures_index_pass',
+    teams: Object.keys(teamFixturesIndex).length,
+    keys_written: indexWriteCount,
+  });
+
+  return {
+    fetched: true,
+    calendarWritten,
+    mapped: mappedCount,
+    scanned: fixtures.length,
+    team_index_keys_written: indexWriteCount,
+  };
+}
+
+/**
+ * Build country_code → [{fixture_id, date_utc, opp_code, is_home}] reverse index.
+ *
+ * For each 500.com WC fixture we have a mapping with home_code/away_code; we
+ * record this fixture under BOTH countries' indexes. Result is keyed by ISO3
+ * country code, value is a list sorted oldest→newest.
+ *
+ * Read path (team-history API) becomes: kv.get(`team_fixtures:${code}`) → list,
+ * then for each entry kv.get(`match_lineups:${fixture_id}`) to fetch the score.
+ * That's still N+1 reads per query, but N is bounded by ~7 matches/team and
+ * eliminates the broad `matches:*` scan + per-fixture mapping lookup.
+ *
+ * Exported for unit testing — also called once per calendarCron tick.
+ */
+export async function buildTeamFixturesIndex(env, fixtures, fifaCal) {
+  const fifaByMatchId = new Map();
+  for (const fm of (fifaCal?.matches || [])) {
+    fifaByMatchId.set(fm.id_match, fm);
+  }
+  const indexByCode = {};
+  for (const fix of fixtures) {
+    const map = await env.MATCH_DATA.get(`fixture_mapping:${fix.id}`, 'json');
+    if (!map || (map.match_confidence !== 'exact' && map.match_confidence !== 'time_skew_5min')) continue;
+    const homeCode = map.home_code;
+    const awayCode = map.away_code;
+    if (!homeCode || !awayCode) continue;
+    const fm = fifaByMatchId.get(map.fifa_id_match);
+    // Use FIFA's authoritative date_utc for ordering; fall back to mapping kickoff_utc
+    const dateUtc = fm?.date_utc || map.kickoff_utc || null;
+
+    const homeEntry = { fixture_id: fix.id, date_utc: dateUtc, opp_code: awayCode, is_home: true };
+    const awayEntry = { fixture_id: fix.id, date_utc: dateUtc, opp_code: homeCode, is_home: false };
+    (indexByCode[homeCode] = indexByCode[homeCode] || []).push(homeEntry);
+    (indexByCode[awayCode] = indexByCode[awayCode] || []).push(awayEntry);
+  }
+  // Sort each list chronologically
+  for (const code of Object.keys(indexByCode)) {
+    indexByCode[code].sort((a, b) => (a.date_utc || '').localeCompare(b.date_utc || ''));
+  }
+  return indexByCode;
+}
+
+/**
+ * Write team_fixtures:{code} keys when their content changed. FNV hash compare
+ * per country — typically only a few teams change between cron runs (a new
+ * knockout fixture being added flips 2 keys, calendar churn at most).
+ * Returns the number of keys actually written.
+ *
+ * Exported for unit testing.
+ */
+export async function writeTeamFixturesIndex(env, indexByCode) {
+  let writes = 0;
+  for (const [code, entries] of Object.entries(indexByCode)) {
+    const next = { country_code: code, fixtures: entries };
+    // Hash on a normalized projection so reordering or non-content drift doesn't
+    // trigger writes. We hash the same fields we sort by.
+    const sig = entries.map(e => `${e.fixture_id}|${e.date_utc}|${e.opp_code}|${e.is_home}`).join('\n');
+    const newHash = fnv1a(sig);
+    const existing = await env.MATCH_DATA.get(`team_fixtures:${code}`, 'json');
+    if (existing?._hash === newHash) continue;
+    next._hash = newHash;
+    await env.MATCH_DATA.put(`team_fixtures:${code}`, JSON.stringify(next));
+    writes++;
+  }
+  return writes;
 }
 
 /**

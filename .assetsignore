@@ -1,0 +1,30 @@
+# Cloudflare Pages ignores everything here when uploading.
+# Intentionally NOT using .gitignore because wrangler doesn't follow that.
+
+# Python venv (playwright/chromium cache, large)
+.venv/
+venv/
+__pycache__/
+
+# Worker subprojects (deployed separately via `wrangler deploy` from their own dirs)
+workers/
+
+# Local script tooling not needed at the edge
+scripts/
+data/
+picks/
+uploads/
+
+# Local docs (not user-facing)
+docs/
+
+# IDE & build artifacts
+.idea/
+.vscode/
+.wrangler/
+node_modules/
+*.bak
+
+# Misc local files
+IMG_*.png
+*.bak

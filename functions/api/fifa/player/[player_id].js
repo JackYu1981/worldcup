@@ -1,11 +1,19 @@
-// GET /api/fifa/player/{player_id}
+// GET /api/fifa/player/{player_id}?fixture_id=fXXXX (optional)
 // Returns the full players:{player_id} KV record with profile + tournament_stats.
+// When fixture_id is provided, also returns this player's PER-MATCH stats
+// (`match_stats` field on the response), allowing the UI to show
+//   "累计 N (本场 M)" comparisons.
 //
 // Server-side enrichment (no extra KV writes anywhere):
 //   - country_zh   ← joined from the `countries` seed when missing on the record
 //   - shirt_number ← scanned from match_lineups:* records if missing (gctp/gcp
 //                    classifications don't expose this; lineup data has it)
 //   - position     ← same fallback as shirt_number
+//   - match_stats  ← {goals, assists, shots, shots_on_target, fouls_committed,
+//                     yellow_cards, red_cards} for the given fixture, when fixture_id
+//                     is passed. Two sources joined:
+//                       a) match_stats:{fixture}.players[pid]  — fdh-api in-match data
+//                       b) match_lineups:{fixture}.events     — goals/bookings counted
 
 import { json, error, options } from '../../../lib/response.js';
 
@@ -13,9 +21,12 @@ import { json, error, options } from '../../../lib/response.js';
 const POSITION_LABEL_ZH = { 0: '门将', 1: '后卫', 2: '中场', 3: '前锋' };
 
 export async function onRequestGet(context) {
-  const { params, env } = context;
+  const { params, env, request } = context;
   const playerId = params.player_id;
   if (!playerId) return error('missing player_id', 400);
+
+  const url = new URL(request.url);
+  const fixtureId = url.searchParams.get('fixture_id') || null;
 
   try {
     const player = await env.MATCH_DATA.get(`players:${playerId}`, 'json');
@@ -75,6 +86,50 @@ export async function onRequestGet(context) {
     // Chinese position label fallback
     if (player.position != null && !player.position_label_zh) {
       player.position_label_zh = POSITION_LABEL_ZH[player.position] || null;
+    }
+
+    // Per-match stats enrichment (when fixture_id provided)
+    if (fixtureId) {
+      // Pull both sources in parallel
+      const [matchStats, lineup] = await Promise.all([
+        env.MATCH_DATA.get(`match_stats:${fixtureId}`, 'json'),
+        env.MATCH_DATA.get(`match_lineups:${fixtureId}`, 'json'),
+      ]);
+
+      const ms = {};
+      // From match_stats: shots/shots_on_target/fouls_committed/yellow_cards/red_cards
+      const inMatch = (matchStats?.players || {})[playerId];
+      if (inMatch) {
+        ms.shots = inMatch.shots ?? 0;
+        ms.shots_on_target = inMatch.shots_on_target ?? 0;
+        ms.fouls_committed = inMatch.fouls_committed ?? 0;
+        ms.yellow_cards = inMatch.yellow_cards ?? 0;
+        ms.red_cards = inMatch.red_cards ?? 0;
+      }
+      // From match_lineups.events: goals + assists (count occurrences for this pid)
+      // Goals: each event with player_id = pid (excluding own goals, optionally)
+      // Assists: lineups events.goals[i].assist_player_id matches pid
+      const events = lineup?.events || {};
+      const goalEvents = events.goals || [];
+      const ownGoalKinds = new Set(['own_goal', 'OG']);   // be lenient on field name
+      let goals = 0, assists = 0;
+      for (const g of goalEvents) {
+        if (String(g.player_id) === String(playerId)) {
+          // Don't count own-goals as the player's own scoring stat
+          if (!ownGoalKinds.has(g.type) && !ownGoalKinds.has(g.kind) && !g.own_goal) {
+            goals++;
+          }
+        }
+        if (String(g.assist_player_id) === String(playerId)) {
+          assists++;
+        }
+      }
+      if (goals > 0 || assists > 0 || Object.keys(ms).length > 0) {
+        ms.goals = goals;
+        ms.assists = assists;
+        player.match_stats = ms;
+        player.match_stats_fixture_id = fixtureId;
+      }
     }
 
     return json(player, 200, 60);   // cache 60s

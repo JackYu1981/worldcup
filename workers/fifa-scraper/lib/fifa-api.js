@@ -55,7 +55,10 @@ export function normalizeCalendarResponse(raw, competitionId, fromIso, toIso) {
       home_name_en: pickEnglish(r.Home?.TeamName),
       away_name_en: pickEnglish(r.Away?.TeamName),
       match_status: r.MatchStatus ?? null,
-      stage_name: pickEnglish(r.StageName)
+      stage_name: pickEnglish(r.StageName),     // "First Stage" / "Round of 32" / "Final" etc.
+      group_name: pickEnglish(r.GroupName),     // "Group A" .. "Group L" (null for knockouts)
+      stadium_name: pickEnglish(r.Stadium?.Name),  // "Atlanta Stadium" / "Monterrey Stadium" etc.
+      stadium_city: pickEnglish(r.Stadium?.CityName) || null,  // populated for some venues
     });
   }
   return {

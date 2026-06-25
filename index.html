@@ -8,23 +8,54 @@
     <title>赛程 - 世界杯投注助手</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* Disable browser's native pull-to-refresh on the whole page. Without this,
+         * a large downward drag (especially when a sheet is open and the user's
+         * finger strays outside the sheet's bounding box, or hits the top status-bar
+         * gap) triggers Chrome/Safari swipe-to-refresh → full page reload → sheet
+         * closes, currentPeriod resets, looks visually like "returned to index".
+         * Our JS pull-refresh (pull-refresh.js) handles the gesture explicitly. */
+        html, body { overscroll-behavior-y: contain; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f5f5f5;
             color: #333;
             padding: 0 0 160px 0;
         }
-        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: white; border-bottom: 1px solid #eee; }
-        .site-header .title { font-size: 20px; font-weight: 700; }
-        .site-header .user-badge { position: absolute; right: 12px; bottom: 6px; font-size: 10px; color: #999; }
-        .site-header .user-badge a { color: #bbb; margin-left: 4px; font-size: 10px; text-decoration: none; }
+        /* Site banner — seamless against the nav-tabs strip below it (no
+         * white hairline between them). The nav-tabs deep-blue picks up
+         * directly under the black banner. */
+        .site-header {
+            display: flex; align-items: center; justify-content: center;
+            position: relative; padding: 8px 16px; background: #000;
+            /* Defensive cap: even if the banner image briefly renders at its
+             * natural size (444×116) before CSS/decoding applies, the bar
+             * itself cannot exceed this height. Prevents the intermittent
+             * "header becomes huge / very wide" flash on slow networks. */
+            max-height: 52px; box-sizing: border-box;
+            overflow: hidden; flex-shrink: 0;
+        }
+        .site-header .banner-img {
+            height: 36px; width: auto; max-width: 80vw;
+            aspect-ratio: 444 / 116; /* reserve correct box pre-decode */
+            object-fit: contain; display: block; flex-shrink: 0;
+        }
+        .site-header .user-badge { position: absolute; right: 12px; bottom: 4px; font-size: 10px; color: #888; }
+        .site-header .user-badge a { color: #aaa; margin-left: 4px; font-size: 10px; text-decoration: none; }
+        /* === Global palette (FIFA 2026) ===
+         *   --banner   #000000   black banner (matches official wordmark)
+         *   --primary  #0a2f5c   FIFA deep blue — nav-tabs strip, primary CTAs
+         *   --accent   #00b04f   FIFA green — active states, success
+         *   --bg       #f5f5f5   neutral background
+         *   --card     #ffffff   card surfaces
+         */
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
-            padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
+            padding: 10px 16px; background: #0a2f5c; border-bottom: 1px solid #08254a;
             flex-wrap: wrap;
         }
-        .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
-        .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+        .nav-tab { padding: 8px 14px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75); text-decoration: none; border-bottom: 2px solid transparent; transition: color 0.15s; }
+        .nav-tab:hover { color: #fff; }
+        .nav-tab.active { color: #00b04f; border-bottom-color: #00b04f; font-weight: 600; }
 
         .period-tabs {
             display: flex; overflow-x: auto; background: white;
@@ -102,9 +133,19 @@
             align-items: center;
         }
         .match-center .home {
+            display: flex; align-items: center; justify-content: flex-end; gap: 6px;
             text-align: right; font-size: 13px; font-weight: 600; color: #333;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            overflow: hidden;
             padding-right: 10px;
+        }
+        .match-center .home .team-name,
+        .match-center .away .team-name {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+        }
+        .match-center .team-flag {
+            width: 20px; height: 14px; flex-shrink: 0;
+            border-radius: 2px; object-fit: cover;
+            box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1);
         }
         .match-center .kickoff-box {
             display: flex; flex-direction: column; align-items: center;
@@ -112,21 +153,76 @@
         }
         .match-center .kickoff-box .kickoff-date { font-size: 11px; color: #999; }
         .match-center .kickoff-box .kickoff-time { font-size: 11px; color: #999; }
+        .match-center .kickoff-box .kickoff-countdown {
+            font-size: 14px; color: #0a2f5c; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .match-center .kickoff-box .kickoff-countdown-label {
+            font-size: 10px; color: #00b04f; margin-top: 1px; font-weight: 600;
+        }
+        /* Bet365 asian handicap compact label on index match cards.
+         * Lives inside .kickoff-box below the kickoff time, only for WC matches
+         * with scraped data, only in pre-match state (>15min before kickoff). */
+        .match-center .kickoff-box .card-ah {
+            display: inline-flex; align-items: center; gap: 2px;
+            margin-top: 3px;
+            font-size: 10px; font-weight: 700;
+            color: #0a2f5c;
+            padding: 1px 5px;
+            background: rgba(10,47,92,0.08);
+            border-radius: 8px;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.4;
+        }
+        .match-center .kickoff-box .card-ah-trend.rising  { color: #c62828; font-weight: 700; }
+        .match-center .kickoff-box .card-ah-trend.falling { color: #1565c0; font-weight: 700; }
         .match-center .score-box {
             display: flex; flex-direction: column; align-items: center;
             min-width: 50px; line-height: 1.2;
         }
+        /* Score now uses deep neutral, bigger size. Winning side gets a green
+         * underline (FIFA official style) — added inline based on score parse.
+         * Exception: live matches use red + colon separator (per user preference) for urgency. */
         .match-center .score-badge {
-            font-size: 16px; font-weight: 700; color: #e74c3c; text-align: center;
+            font-size: 18px; font-weight: 700; color: #222; text-align: center;
+            font-variant-numeric: tabular-nums; letter-spacing: 0.5px;
+        }
+        .match-center .score-badge.live { color: #e74c3c; }
+        .match-center .score-badge .winner-side {
+            position: relative;
+        }
+        .match-center .score-badge .winner-side::after {
+            content: '';
+            position: absolute; left: 10%; right: 10%; bottom: -3px;
+            height: 2px; background: #00b04f; border-radius: 1px;
         }
         .match-center .score-half {
-            font-size: 10px; color: #999; margin-top: 2px;
+            font-size: 10px; color: #999; margin-top: 4px;
+        }
+        .match-center .score-live {
+            font-size: 10px; color: #00b04f; margin-top: 4px; font-weight: 600;
         }
         .match-center .away {
+            display: flex; align-items: center; justify-content: flex-start; gap: 6px;
             text-align: left; font-size: 13px; font-weight: 600; color: #333;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            overflow: hidden;
             padding-left: 10px;
         }
+        /* WC fixture sub-info row: "First Stage · Group C · Stadium".
+         * Aligns with the right-85% center band of the top row (which has a 15%
+         * left info column), so the meta line is centered under the team/score
+         * area, not under the whole card. */
+        .wc-meta-row {
+            display: grid; grid-template-columns: 15% 1fr;
+            padding: 2px 12px 5px;
+            font-size: 9px; color: #aaa;
+            border-bottom: 1px solid #f5f5f5;
+            background: white;
+        }
+        .wc-meta-row .meta-content {
+            grid-column: 2; text-align: center;
+        }
+        .wc-meta-row .sep { color: #ddd; margin: 0 4px; }
 
         .odds-table {
             display: grid; grid-template-columns: 15% 1fr 1fr 1fr;
@@ -223,25 +319,161 @@
             z-index: 150; display: none; flex-direction: column;
         }
         .lineup-sheet.visible { display: flex; }
+        /* Modal top bar — use the FIFA deep blue to match the site header,
+         * not Google blue. Smaller padding so the bar isn't visually overpowering,
+         * and a soft low-saturation divider under it instead of a heavy shadow. */
         .lineup-header {
-            display: flex; align-items: center;
-            background: #1a73e8; color: white;
-            padding: 12px 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex; align-items: center; justify-content: space-between;
+            background: #0a2f5c; color: white;
+            padding: 10px 14px;
+            border-bottom: 2px solid #1e4d85;
             flex-shrink: 0;
             min-height: 0;
-            height: 48px; box-sizing: border-box;
+            height: 44px; max-height: 44px; box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
         }
         .lineup-close, .lineup-refresh {
             background: transparent; border: none; color: white;
             font-size: 18px; padding: 0 6px; cursor: pointer; line-height: 1;
             flex-shrink: 0;
+            position: relative; z-index: 1;
         }
         .lineup-close:active, .lineup-refresh:active { opacity: 0.7; }
+        /* AI 机器人按钮 — 与 ⚡📊 同尺寸同间距，仅 emoji 自带紫色调暗示功能 */
+        .lineup-bot-btn {
+            font-size: 16px;
+        }
+        /* AI sheet inner styles */
+        .bot-summary {
+            padding: 12px 14px;
+            background: #f8fafe;
+            border-bottom: 1px solid #eef0f5;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 8px;
+        }
+        .bot-summary .bot-dist {
+            font-size: 13px; font-weight: 600; color: #0a2f5c;
+        }
+        .bot-summary .bot-trend {
+            font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+        }
+        .bot-summary .bot-trend.trend-rising  { background: #fce8e8; color: #c62828; }
+        .bot-summary .bot-trend.trend-falling { background: #e3edff; color: #1565c0; }
+        .bot-summary .bot-trend.trend-stable  { background: #f0f0f0; color: #666; }
+        .bot-section-title {
+            padding: 10px 14px 4px;
+            font-size: 12px; font-weight: 600; color: #555;
+        }
+        .bot-pick-card {
+            background: white;
+            margin: 0 12px 8px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .bot-pick-head {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 14px;
+        }
+        .bot-pick-rank {
+            font-weight: 700; color: #7c3aed;
+            font-variant-numeric: tabular-nums;
+        }
+        .bot-pick-name {
+            font-weight: 600; color: #333;
+            flex: 1; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .bot-shots-badge {
+            font-size: 11px; font-weight: 700;
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            color: #333;
+            padding: 2px 8px; border-radius: 10px;
+            white-space: nowrap;
+        }
+        .bot-pick-score {
+            font-size: 12px; color: #888;
+            font-variant-numeric: tabular-nums;
+        }
+        .bot-pick-reason {
+            margin-top: 6px;
+            padding-left: 4px;
+            font-size: 12px; color: #555;
+            line-height: 1.5;
+            white-space: pre-line;
+        }
+        .bot-meta {
+            padding: 8px 14px 14px;
+            font-size: 10px; color: #aaa;
+            text-align: center;
+            letter-spacing: 0.3px;
+        }
+        /* Bot card containing the decision-inputs table (亚盘 / 阵容 etc.) */
+        .bot-card {
+            background: white;
+            margin: 0 12px 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            font-size: 13px;
+        }
+        .bot-card.bot-info {
+            color: #888;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .bot-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 0;
+            gap: 12px;
+        }
+        .bot-row .bot-k {
+            color: #888; font-size: 12px; flex-shrink: 0;
+        }
+        .bot-row .bot-v {
+            color: #333; font-weight: 600; text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .bot-row .bot-v.bot-trend.trend-rising  { color: #c62828; }
+        .bot-row .bot-v.bot-trend.trend-falling { color: #1565c0; }
+        .bot-row .bot-v.bot-trend.trend-stable  { color: #666; }
+        .bot-divider {
+            height: 1px; background: #eef0f5; margin: 6px 0;
+        }
+        .bot-subheader {
+            padding: 4px 14px 6px;
+            font-size: 12px; color: #555; font-weight: 600;
+        }
         .lineup-title {
-            flex: 1; text-align: center; font-size: 15px; font-weight: 600;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px;
-            min-width: 0;
+            position: absolute; left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex; align-items: center; gap: 6px;
+            text-align: center; font-size: 14px; font-weight: 600;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            max-width: 75%;
+            pointer-events: none;
+        }
+        /* WC 2026 emblem next to the stage/group label in the modal header.
+         * Original asset is a black emblem on white — we invert + brighten so
+         * it reads as white on the deep-blue header. */
+        .lineup-title .title-icon {
+            width: 20px; height: 20px;
+            min-width: 20px; min-height: 20px;
+            max-width: 20px; max-height: 20px;
+            aspect-ratio: 1;
+            flex-shrink: 0;
+            object-fit: contain;
+            filter: invert(1) brightness(2);
+        }
+        .lineup-title .title-text {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+        /* 右侧按钮组 */
+        .lineup-header-right,
+        .lineup-header-left {
+            display: flex; align-items: center; gap: 4px;
         }
         .lineup-body { flex: 1; overflow-y: auto; padding-bottom: 30px; }
 
@@ -264,8 +496,79 @@
         .lineup-team-flag img { width: 100%; height: 100%; object-fit: cover; }
         .lineup-team-name { font-size: 14px; font-weight: 600; color: #333; }
         .lineup-team-tactics { font-size: 11px; color: #888; }
+        /* "本届战绩" — parallel section under the player list, same design
+         * language: deep-blue header + card-shaped rows with the same padding,
+         * radius, shadow as .lineup-player-card. Each row navigates to that
+         * match's lineup modal on tap. */
+        .lineup-history-section {
+            margin-top: 14px;
+        }
+        .history-row {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            background: white;
+            margin: 0 12px 6px;
+            padding: 11px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            transition: background 0.15s;
+            font-size: 13px;
+        }
+        .history-row:active { background: #f0f0f0; }
+        /* Current fixture row: highlight with a left blue stripe, not clickable. */
+        .history-row.is-current {
+            background: #f4f8ff;
+            cursor: default;
+            box-shadow: inset 3px 0 0 #0a2f5c, 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .history-row.is-current:active { background: #f4f8ff; }
+        .history-row .row-team {
+            display: flex; align-items: center; gap: 7px;
+            min-width: 0;
+        }
+        .history-row .row-team.left  { justify-content: flex-end; padding-right: 8px; }
+        .history-row .row-team.right { justify-content: flex-start; padding-left: 8px; }
+        .history-row .row-flag {
+            width: 22px; height: 16px; border-radius: 2px;
+            object-fit: cover; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+        .history-row .row-name {
+            color: #333;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0;
+            font-weight: 500;
+        }
+        /* Winner side gets bolder + darker text. The bullet marker (FIFA's
+         * convention) was visually redundant — score itself + slightly bolder
+         * winner name is enough; removed at user request. */
+        .history-row .row-team.winner .row-name { font-weight: 700; color: #222; }
+        .history-row .row-score {
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: #222;
+            font-size: 15px;
+            letter-spacing: 1.2px;
+            padding: 0 14px;
+            white-space: nowrap;
+        }
+        .lineup-history-empty {
+            margin: 0 12px;
+            padding: 14px 12px;
+            background: white;
+            border-radius: 8px;
+            font-size: 12px; color: #888;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
         .lineup-center-block { text-align: center; padding: 0 10px; }
         .lineup-score { font-size: 22px; font-weight: 700; color: #e74c3c; }
+        .lineup-score-ht {
+            font-size: 11px; color: #888; margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+        }
         .lineup-status-tag {
             display: inline-block; padding: 2px 8px; border-radius: 3px;
             font-size: 10px; font-weight: 600; color: white;
@@ -275,6 +578,36 @@
         .lineup-status-tag.live { background: #e74c3c; }
         .lineup-status-tag.finished { background: #4caf50; }
         .lineup-kickoff-time { font-size: 12px; color: #999; }
+        /* Asian handicap block — sits in the lineup modal's scoreboard area
+         * during the scheduled (pre-kickoff) state. Compact 3-line layout. */
+        .lineup-ah-block {
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: #f4f8ff;
+            border-radius: 4px;
+            display: inline-flex; flex-direction: column;
+            align-items: center; gap: 1px;
+            line-height: 1.2;
+        }
+        .lineup-ah-block .ah-line {
+            font-size: 13px; font-weight: 700; color: #0a2f5c;
+            display: flex; align-items: center; gap: 5px;
+            font-variant-numeric: tabular-nums;
+        }
+        .lineup-ah-block .ah-waters {
+            font-size: 11px; color: #555;
+            font-variant-numeric: tabular-nums;
+        }
+        .lineup-ah-block .ah-source {
+            font-size: 9px; color: #999; letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .lineup-ah-block .ah-trend {
+            font-size: 11px; font-weight: 600;
+            padding: 0 4px; border-radius: 3px;
+        }
+        .lineup-ah-block .ah-trend.rising  { color: #c62828; background: rgba(198,40,40,0.08); }
+        .lineup-ah-block .ah-trend.falling { color: #1565c0; background: rgba(21,101,192,0.08); }
 
         /* Team tab switcher */
         .lineup-team-tabs {
@@ -285,22 +618,101 @@
             margin-top: 8px;
         }
         .lineup-team-tab {
-            padding: 12px; text-align: center; font-size: 13px;
-            color: #666; cursor: pointer; border-bottom: 2px solid transparent;
+            padding: 8px 8px; cursor: pointer;
+            border-bottom: 2px solid transparent;
             transition: all 0.15s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; line-height: 1.2;
+        }
+        /* Row 1: flag + country code on the same horizontal line */
+        .lineup-team-tab .tab-row-1 {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .lineup-team-tab .tab-flag {
+            width: 22px; height: 15px; flex-shrink: 0;
+            border-radius: 2px; object-fit: cover;
+            box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08);
+        }
+        .lineup-team-tab .tab-code {
+            font-size: 14px; font-weight: 700; color: #333;
+            letter-spacing: 0.4px;
+        }
+        /* Row 2: tactics formation (only when FIFA has published it) */
+        .lineup-team-tab .tab-tactics {
+            font-size: 10px; color: #888; font-variant-numeric: tabular-nums;
         }
         .lineup-team-tab.active {
-            color: #1a73e8; font-weight: 600; border-bottom-color: #1a73e8;
             background: #f4f8ff;
+            border-bottom-color: #0a2f5c;
         }
+        .lineup-team-tab.active .tab-code { color: #0a2f5c; }
+        .lineup-team-tab.active .tab-tactics { color: #00b04f; font-weight: 600; }
 
-        /* Player groups */
+        /* === Unified section design language ===
+         * Every modal-body section (阵容 / 相关战绩 / future ones) uses the
+         * SAME header chrome and the SAME item-card shape, so the modal reads
+         * as a stack of parallel sections.
+         *
+         * Tokens (modal context):
+         *   #1a73e8  bright section header bg (modal-only — distinct from the
+         *            #0a2f5c top bar so the body sections read as their own layer)
+         *   #00b04f  FIFA green       — winning marks, active states, success
+         *   #f5f7fa  page background
+         *   #ffffff  card surface
+         */
+        .lineup-section-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 14px;
+            background: #1a73e8;
+            color: rgba(255,255,255,0.95);
+            font-size: 12px; font-weight: 600;
+            letter-spacing: 0.4px;
+        }
+        .lineup-section-header .count-badge {
+            font-size: 11px; font-weight: 600;
+            background: rgba(255,255,255,0.18);
+            padding: 1px 7px; border-radius: 10px;
+            min-width: 22px; text-align: center;
+        }
+        .lineup-section-body {
+            padding: 10px 0 4px;
+        }
+        /* Player groups — legacy class kept for back-compat, restyled to match
+         * the new section-header pattern. Inline calls still use this class. */
         .lineup-group-title {
-            font-size: 12px; color: #999;
-            padding: 14px 14px 6px; text-transform: uppercase; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 14px;
+            background: #1a73e8;
+            color: rgba(255,255,255,0.95);
+            font-size: 12px; font-weight: 600;
+            letter-spacing: 0.4px;
+            margin-top: 8px;
+        }
+        .lineup-group-title:first-of-type { margin-top: 0; }
+        /* Position sub-divider within the 阵容 section. NOT a section header
+         * (no deep-blue bg) — these are second-level groupings under "阵容".
+         * Subtle uppercase-feel text marker so the eye still finds groups. */
+        .lineup-position-divider {
+            font-size: 11px; color: #999; font-weight: 600;
+            padding: 12px 18px 4px;
+            letter-spacing: 0.5px;
+        }
+        /* Pre-publication wait state — sits inside the 阵容 section body when
+         * FIFA hasn't published starters yet. Keeps the card-shape visual rhythm
+         * so it lives alongside the other sections (header/战绩) instead of
+         * replacing the whole modal body. */
+        .lineup-pre-publish {
+            margin: 10px 12px 6px;
+            padding: 24px 16px;
+            background: white;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #888;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .lineup-player-card {
-            display: flex; align-items: center; gap: 10px;
+            display: flex; align-items: center; gap: 5px;
             background: white; margin: 0 12px 6px; padding: 10px 12px;
             border-radius: 8px; cursor: pointer;
             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
@@ -319,8 +731,8 @@
             color: #999; font-size: 12px;
         }
         .lineup-player-shirt {
-            width: 28px; text-align: center; font-size: 13px; font-weight: 700;
-            color: #333; flex-shrink: 0;
+            min-width: 18px; text-align: center; font-size: 13px; font-weight: 700;
+            color: #333; flex-shrink: 0; padding: 0 2px;
         }
         .lineup-player-name {
             flex: 1; font-size: 13px; color: #333; font-weight: 500;
@@ -337,11 +749,26 @@
             padding: 1px 4px; border-radius: 3px;
             line-height: 1.2; flex-shrink: 0;
         }
+        /* Inline sub-out indicator next to the player's name. Pairs visually with
+         * the green "↑ <name>" subline below, since both refer to the same player
+         * leaving / being replaced. Smaller minute font keeps it secondary. */
+        .lineup-player-name .sub-out-inline {
+            color: #d50000; font-weight: 700; font-size: 13px;
+            line-height: 1; flex-shrink: 0;
+            display: inline-flex; align-items: baseline; gap: 1px;
+        }
+        .lineup-player-name .sub-out-inline .sub-out-minute {
+            font-size: 10px; font-weight: 600;
+        }
         .lineup-player-name .sub-replaced {
             font-size: 11px; color: #2e7d32; font-weight: 500;
             display: flex; align-items: center; gap: 3px;
         }
         .lineup-player-name .sub-replaced .arrow { font-weight: 700; }
+        .lineup-player-name .sub-replaced-shirt {
+            font-weight: 700; color: #2e7d32;
+            margin-right: 1px;
+        }
         .lineup-player-events { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
         .lineup-event-icon {
             font-size: 11px; line-height: 1.2;
@@ -403,21 +830,26 @@
         }
         .stats-sheet.visible { transform: translateY(0); }
         .stats-header {
-            display: flex; align-items: center;
+            display: flex; align-items: center; justify-content: flex-start;
             background: #1a73e8; color: white;
             padding: 12px 14px;
             flex-shrink: 0;
             height: 48px; box-sizing: border-box;
+            position: relative;
         }
         .stats-back {
             background: transparent; border: none; color: white;
             font-size: 14px; padding: 0 6px; cursor: pointer;
             flex-shrink: 0;
+            position: relative; z-index: 1;
         }
         .stats-title {
-            flex: 1; text-align: center; font-size: 14px; font-weight: 600;
-            padding: 0 10px;
+            position: absolute; left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; font-size: 14px; font-weight: 600;
+            max-width: 70%;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            pointer-events: none;
         }
         .stats-category-tabs {
             display: flex; background: white; border-bottom: 1px solid #f0f0f0;
@@ -463,6 +895,17 @@
             overflow: hidden;
         }
         .stats-row.header .stats-player-block { padding: 10px 8px; }
+        /* Two-line name+sub layout: flag + shirt on the left, name on top,
+         * sub badge ("↓HT SON") on a second line below the name. Keeps the
+         * 180px column width usable even with long replaced_player names. */
+        .stats-player-info {
+            display: flex; flex-direction: column;
+            justify-content: center; gap: 2px;
+            min-width: 0; flex: 1;
+        }
+        .stats-player-info .stats-player-name {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
 
         /* Right stats block — horizontal scroll within row */
         .stats-row .stats-data-block {
@@ -516,6 +959,25 @@
             font-size: 10px; color: #2e7d32; font-weight: 500;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        /* Minimal sub badge in live-events table — inline next to player name */
+        .live-sub-badge {
+            font-size: 10px; font-weight: 700;
+            padding: 1px 4px; border-radius: 3px;
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .live-sub-badge.on  { color: #2e7d32; }
+        .live-sub-badge.off { color: #c62828; }
+        /* Per-match stat tag in player sheet: "(本场 N)" appended to career stat */
+        .stat-match-tag {
+            margin-left: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #7c3aed;
+            background: rgba(124,58,237,0.08);
+            padding: 1px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
         .stats-empty {
             text-align: center; color: #999; padding: 60px 20px; font-size: 13px;
         }
@@ -523,7 +985,7 @@
 </head>
 <body>
     <div class="site-header">
-        <span class="title">⚽ 投注助手</span>
+        <img class="banner-img" src="/assets/banner-fifa-2026.png" alt="FIFA World Cup 2026" width="444" height="116" loading="eager" decoding="async">
         <span class="user-badge" id="userBadge"></span>
     </div>
 
@@ -575,10 +1037,15 @@
     <!-- Lineup full-screen sheet (slides up from bottom) -->
     <div class="lineup-sheet" id="lineupSheet">
         <div class="lineup-header">
-            <button class="lineup-close" onclick="closeLineupModal()">✕</button>
+            <div class="lineup-header-left">
+                <button class="lineup-close" onclick="closeLineupModal()">✕</button>
+                <button class="lineup-refresh lineup-bot-btn" onclick="openShotRecommenderSheet()" title="AI 射门推荐">🤖</button>
+            </div>
             <div class="lineup-title" id="lineupTitle">加载中…</div>
-            <button class="lineup-refresh" onclick="openLiveEventsSheet()" title="本场实时数据" style="font-size:16px;">⚡</button>
-            <button class="lineup-refresh" onclick="openStatsCompareSheet()" title="球员统计对比" style="font-size:16px;">📊</button>
+            <div class="lineup-header-right">
+                <button class="lineup-refresh" onclick="openLiveEventsSheet()" title="本场实时数据" style="font-size:16px;">⚡</button>
+                <button class="lineup-refresh" onclick="openStatsCompareSheet()" title="球员统计对比" style="font-size:16px;">📊</button>
+            </div>
         </div>
         <div class="lineup-body" id="lineupBody">
             <div class="empty-state">加载中…</div>
@@ -612,6 +1079,19 @@
                 <div class="stats-empty">加载中…</div>
             </div>
         </div>
+
+        <!-- AI shot recommender sub-sheet — content pulled from recommendation:{fid} KV
+             (populated by the python engine; v0 baseline + future LR/GBT). UI shape
+             matches liveEventsSheet for consistency. -->
+        <div class="stats-sheet" id="shotRecommenderSheet">
+            <div class="stats-header">
+                <button class="stats-back" onclick="closeShotRecommenderSheet()">‹ 返回</button>
+                <div class="stats-title">🤖 AI 射门推荐</div>
+            </div>
+            <div class="stats-table-wrap" id="shotRecommenderBody">
+                <div class="stats-empty">加载中…</div>
+            </div>
+        </div>
     </div>
 
     <script src="auth.js"></script>
@@ -626,9 +1106,30 @@
         let activeLeague = '世界杯';
 
         function generateDates() {
-            const dates = [];
+            // During the WC tournament window (2026-06-11 → 2026-07-19), expose
+            // the FULL WC date strip so users can scroll back to opening day
+            // (6/11) or forward to the final (7/19). Outside this window, fall
+            // back to the original ±N days view.
+            const WC_START = '2026-06-11';
+            const WC_END   = '2026-07-19';
             const now = new Date();
             const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+            // Are we inside WC window?
+            if (baseDate >= WC_START && baseDate <= WC_END) {
+                const dates = [];
+                const start = new Date(WC_START + 'T00:00:00+08:00');
+                const end = new Date(WC_END + 'T00:00:00+08:00');
+                for (let t = start.getTime(); t <= end.getTime(); t += 86400_000) {
+                    const d = new Date(t);
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    dates.push(`${y}-${m}-${dd}`);
+                }
+                return dates;
+            }
+            // Pre/post WC: ±N days around today (original behavior)
+            const dates = [];
             for (let i = -7; i <= 5; i++) {
                 const d = new Date(baseDate + 'T00:00:00+08:00');
                 d.setDate(d.getDate() + i);
@@ -804,7 +1305,8 @@
 
         const USER_TIMEZONES = { jack: 'Asia/Shanghai', brian: 'America/Montreal', test: 'Asia/Shanghai' };
         function getUserTimezone() {
-            const user = (sessionStorage.getItem('auth_user') || 'jack').toLowerCase();
+            const u = (AUTH.getUser() && AUTH.getUser().username) || 'jack';
+            const user = u.toLowerCase();
             return USER_TIMEZONES[user] || 'Asia/Shanghai';
         }
         function parseKickoff(kickoff) {
@@ -813,6 +1315,84 @@
             const m = kickoff.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
             if (m) return { date: m[1], time: m[2] };
             return { date: '', time: kickoff };
+        }
+        // Compact bet365 asian handicap label for index match cards.
+        // Format: "让0.5 ↘" (one line, fits in the narrow kickoff-box).
+        // Long form (water values) lives in lineup modal; here just line + trend.
+        function renderIndexAhBlock(ah) {
+            const line = Number(ah?.current?.line);
+            if (!Number.isFinite(line)) return '';
+            const absStr = Math.abs(line).toFixed(2).replace(/\.?0+$/, '');
+            const sideLabel = line > 0.01 ? '主让' : line < -0.01 ? '客让' : '平手';
+            const lineDisplay = (sideLabel === '平手') ? sideLabel : `${sideLabel}${absStr}`;
+            const trendArrow = ah.trend === 'rising' ? '<span class="card-ah-trend rising">↗</span>'
+                             : ah.trend === 'falling' ? '<span class="card-ah-trend falling">↘</span>'
+                             : '';
+            return `<span class="card-ah">${lineDisplay}${trendArrow}</span>`;
+        }
+        // Parse "YYYY-MM-DD HH:MM" (Beijing) → epoch ms
+        function parseKickoffMs(kickoff) {
+            if (!kickoff) return null;
+            const m = kickoff.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);
+            if (!m) return null;
+            const dt = new Date(`${m[1]}T${m[2]}:${m[3]}:00+08:00`);
+            const ms = dt.getTime();
+            return isNaN(ms) ? null : ms;
+        }
+        // Format countdown ms → "MM:SS" (for the last hour before kickoff)
+        function formatCountdown(ms) {
+            if (ms < 0) return '00:00';
+            const totalSec = Math.floor(ms / 1000);
+            const mm = Math.floor(totalSec / 60);
+            const ss = totalSec % 60;
+            return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+        }
+
+        // FIFA period code → live clock state.
+        // Verified from FIFA timelines (2026-06-24, PAN-CRO):
+        //   2 = Coin Toss (pre-match)
+        //   3 = 1st half (active, ticking)
+        //   4 = Half-time break (paused, "🍵")
+        //   5 = 2nd half (active, ticking from 45')
+        //   6 = end of regulation / waiting for ET (rare)
+        //   7 = ET 1st half (active, ticking from 90')
+        //   8 = ET half-time break
+        //   9 = ET 2nd half (active, ticking from 105')
+        //   10 = match end (status=0 instead, handled separately)
+        function formatLiveClock(lc, nowMs) {
+            if (!lc) return '';
+            const period = lc.period;
+            const mt = (lc.match_time || '').trim();
+            // Inactive states — show as-is, no ticking
+            if (period === 4 || period === 8) return '🍵';
+            if (period === 2 || period == null) return mt || '即将开始';
+            // Active states (3, 5, 7, 9): tick forward from match_time anchor
+            // Parse FIFA match_time format: "45'" or "45'+2'" → total minutes
+            const baseMin = parseFifaMatchTime(mt);
+            if (baseMin === null) return mt;  // unparseable, fall back to raw
+            const anchorMs = Date.parse(lc.fetched_at) || nowMs;
+            const elapsedExtraSec = Math.max(0, Math.floor((nowMs - anchorMs) / 1000));
+            // Convert anchor minute back to display
+            // Anchor was "45'+2'" → base 47 → display continues at 47, 48, ...
+            const displayMin = baseMin + Math.floor(elapsedExtraSec / 60);
+            return formatMinuteAsFifa(displayMin, period);
+        }
+        // Parse "45'", "45'+2'", "90'+5'" → integer total minutes
+        function parseFifaMatchTime(mt) {
+            if (!mt) return null;
+            const m = mt.match(/^(\d+)'(?:\+(\d+)')?$/);
+            if (!m) return null;
+            return parseInt(m[1]) + (m[2] ? parseInt(m[2]) : 0);
+        }
+        // Display total minutes as FIFA style — keep stoppage on top of regulation cap.
+        //   period 3 (1st half): regulation cap = 45 → "45'+2'" if >45 else "27'"
+        //   period 5 (2nd half): regulation cap = 90 → "90'+5'" if >90 else "67'"
+        //   period 7 (ET 1H):    regulation cap = 105 → "105'+X'" if >105 else "98'"
+        //   period 9 (ET 2H):    regulation cap = 120 → "120'+X'" if >120 else "112'"
+        function formatMinuteAsFifa(min, period) {
+            const cap = period === 3 ? 45 : period === 5 ? 90 : period === 7 ? 105 : period === 9 ? 120 : null;
+            if (cap && min > cap) return `${cap}'+${min - cap}'`;
+            return `${min}'`;
         }
         function formatKickoff(kickoff, legacyTime) {
             // New API: formatKickoff("YYYY-MM-DD HH:MM"). Legacy: formatKickoff(date, time).
@@ -887,6 +1467,26 @@
             const kickoff = formatKickoff(kickoffStr);
             const leagueColor = getLeagueColor(m.league || '其他');
 
+            // For World Cup matches the server attaches `fifa_meta` with ISO3 codes,
+            // stage / group / stadium info. Falls back gracefully if not present.
+            const fm = m.fifa_meta || null;
+            const flagImg = (code) => code && code.length === 3
+                ? `<img class="team-flag" src="/api/fifa/flag/${code}" alt="${code}" loading="lazy" onerror="this.style.display='none'">`
+                : '';
+            const homeFlag = fm ? flagImg(fm.home_code) : '';
+            const awayFlag = fm ? flagImg(fm.away_code) : '';
+
+            // Determine winner for score-underline highlight (FIFA-style green bar).
+            // Only applies to finished matches with a score difference.
+            let homeWinner = false, awayWinner = false;
+            if (status === 'finished' && m.score) {
+                const [hs, as] = (typeof m.score === 'string' ? m.score.split('-') : [m.score.home, m.score.away]).map(Number);
+                if (Number.isFinite(hs) && Number.isFinite(as)) {
+                    if (hs > as) homeWinner = true;
+                    else if (as > hs) awayWinner = true;
+                }
+            }
+
             let centerHtml;
             if (status === 'finished' && m.score) {
                 let homeScore, awayScore;
@@ -896,11 +1496,52 @@
                 } else {
                     homeScore = m.score.home; awayScore = m.score.away;
                 }
-                let ftNote = '';
-                if (m.score_ht && m.score_ht !== m.score) {
-                    ftNote = `<span class="score-half">半 ${m.score_ht}</span>`;
+                // 半场比分挪到 lineup 弹窗显示，index 卡片只保留终场
+                // Wrap winning side's digit in winner-side span for green underline
+                const hh = homeWinner ? `<span class="winner-side">${homeScore}</span>` : homeScore;
+                const aa = awayWinner ? `<span class="winner-side">${awayScore}</span>` : awayScore;
+                centerHtml = `<div class="score-box"><span class="score-badge">${hh}-${aa}</span></div>`;
+            } else if (status === 'live' && m.score) {
+                // 进行中：比分 + 实时分钟（前端走秒，每 30s 后台 refresh 锚点）
+                let homeScore, awayScore;
+                if (typeof m.score === 'string') {
+                    const parts = m.score.split('-');
+                    homeScore = parts[0]; awayScore = parts[1];
+                } else {
+                    homeScore = m.score.home; awayScore = m.score.away;
                 }
-                centerHtml = `<div class="score-box"><span class="score-badge">${homeScore}-${awayScore}</span>${ftNote}</div>`;
+                const lc = m.live_clock || {};
+                // Encode anchor in data attributes; ticker.updateLiveClocks reads them.
+                const initialDisplay = formatLiveClock(lc, Date.now());
+                centerHtml = `<div class="score-box">
+                    <span class="score-badge live">${homeScore}:${awayScore}</span>
+                    <span class="score-live live-clock"
+                          data-period="${lc.period ?? ''}"
+                          data-match-time="${lc.match_time || ''}"
+                          data-fetched-at="${lc.fetched_at || ''}">${initialDisplay}</span>
+                </div>`;
+            } else if (status === 'scheduled' && m.kickoff) {
+                // Pre-kickoff state has two display modes:
+                //   ≤15 min before kickoff → countdown only (urgent, no AH noise)
+                //   else                   → kickoff time + asian handicap (if scraped)
+                // The 15min cutoff replaces the older 1h countdown because pre-match
+                // asian handicap is more informative for users until the very last few minutes.
+                const koMs = parseKickoffMs(m.kickoff);
+                if (koMs && koMs - Date.now() < 15 * 60_000 && koMs > Date.now()) {
+                    const countdown = formatCountdown(koMs - Date.now());
+                    centerHtml = `<div class="kickoff-box">
+                        <span class="kickoff-countdown countdown-clock" data-ko-ms="${koMs}">${countdown}</span>
+                        <span class="kickoff-countdown-label">即将开始</span>
+                    </div>`;
+                } else {
+                    // Show kickoff date/time AND, if we have bet365 AH for this WC match, show it inline
+                    const ahHtml = m.asian_handicap ? renderIndexAhBlock(m.asian_handicap) : '';
+                    centerHtml = `<div class="kickoff-box">
+                        <span class="kickoff-date">${kickoff.date}</span>
+                        <span class="kickoff-time">${kickoff.time}</span>
+                        ${ahHtml}
+                    </div>`;
+                }
             } else {
                 centerHtml = `<div class="kickoff-box"><span class="kickoff-date">${kickoff.date}</span><span class="kickoff-time">${kickoff.time}</span></div>`;
             }
@@ -959,6 +1600,20 @@
             const topRowClass = isWorldCup ? 'match-top-row wc-clickable' : 'match-top-row';
             const topRowOnclick = isWorldCup ? ` onclick="openLineupModal('${m.id}')"` : '';
 
+            // WC meta sub-line: "First Stage · Group C · Atlanta Stadium" (FIFA-style).
+            // Only show when at least stage_name is known (post-calendar-refresh).
+            let wcMetaHtml = '';
+            if (isWorldCup && fm && fm.stage_name) {
+                const parts = [fm.stage_name];
+                if (fm.group_name) parts.push(fm.group_name);
+                if (fm.stadium_name) {
+                    parts.push(fm.stadium_city
+                        ? `${fm.stadium_name} (${fm.stadium_city})`
+                        : fm.stadium_name);
+                }
+                wcMetaHtml = `<div class="wc-meta-row"><div class="meta-content">${parts.join('<span class="sep">·</span>')}</div></div>`;
+            }
+
             return `<div class="match-card">
                     <div class="${topRowClass}"${topRowOnclick}>
                         <div class="match-left-info">
@@ -966,11 +1621,12 @@
                             <span class="league-tag" style="background:${leagueColor}">${m.league || '其他'}</span>
                         </div>
                         <div class="match-center">
-                            <span class="home">${m.home}</span>
+                            <span class="home"><span class="team-name">${m.home}</span>${homeFlag}</span>
                             ${centerHtml}
-                            <span class="away">${m.away}</span>
+                            <span class="away">${awayFlag}<span class="team-name">${m.away}</span></span>
                         </div>
                     </div>
+                    ${wcMetaHtml}
                 ${oddsHtml}
             </div>`;
         }
@@ -1147,7 +1803,10 @@
             else tierName = 'aggressive';
 
             const payload = {
-                submitted_at: new Date().toISOString(),
+                // ISO 8601 with explicit +00:00 offset (not the .Z shorthand).
+                // Project convention: timestamps NEVER use .Z — keeps them
+                // greppable as "+00:00 UTC" or "+08:00 Beijing".
+                submitted_at: new Date().toISOString().replace(/Z$/, '+00:00'),
                 selected_tier: tierName,
                 source: 'recommendation',
                 stake: 100,
@@ -1197,6 +1856,8 @@
         let currentLineupFixtureId = null;
         let currentLineupData = null;
         let currentLineupSide = 'home';   // 'home' | 'away'
+        let lineupAutoRefreshTimer = null;   // R9: 60s background refresh while modal open
+        const LINEUP_AUTO_REFRESH_MS = 60_000;
         const POS_LABEL = { 0: '守门员', 1: '后卫', 2: '中场', 3: '前锋', 6: '其他' };
         const POS_ORDER = [0, 1, 2, 3, 6];
 
@@ -1208,10 +1869,13 @@
             document.getElementById('lineupBody').innerHTML = '<div class="empty-state">加载中…</div>';
             closePlayerSheet();
             await loadAndRenderLineup();
+            // R9: kick off background refresh AFTER first paint so we don't double-fetch on open
+            startLineupAutoRefresh();
         }
 
         function closeLineupModal() {
             document.getElementById('lineupSheet').classList.remove('visible');
+            stopLineupAutoRefresh();
             currentLineupFixtureId = null;
             currentLineupData = null;
         }
@@ -1219,24 +1883,67 @@
         async function refreshLineupModal() {
             if (!currentLineupFixtureId) return;
             document.getElementById('lineupBody').innerHTML = '<div class="empty-state">刷新中…</div>';
-            await loadAndRenderLineup();
+            await loadAndRenderLineup({ bustCache: true });
+            // Reset the auto-refresh window so the next tick is a full 60s from now,
+            // not a stale clock from before the manual refresh.
+            startLineupAutoRefresh();
         }
 
-        async function loadAndRenderLineup() {
-            try {
-                const r = await fetch(`/api/fifa/lineup/${currentLineupFixtureId}`, { cache: 'no-store' });
-                const data = await r.json();
-                currentLineupData = data;
-                if (!data.lineup_available) {
-                    document.getElementById('lineupTitle').textContent = '阵容';
-                    const reasonText = {
-                        'fixture_not_mapped': 'FIFA 映射尚未建立（等待 cron 计算）',
-                        'fixture_unmatched': data.note || '未在 FIFA 找到对应比赛',
-                        'not_yet_published_by_fifa': 'FIFA 通常在开赛前 60-90 分钟公布首发'
-                    }[data.reason] || data.note || '阵容暂未发布';
-                    document.getElementById('lineupBody').innerHTML = `<div class="empty-state">${reasonText}</div>`;
+        // R9: silent background re-render. No "刷新中…" placeholder — we re-render
+        // in place so the user can keep scrolling/reading. Aborts if fixtureId
+        // changed (modal switched matches) or modal closed.
+        function startLineupAutoRefresh() {
+            stopLineupAutoRefresh();
+            const fid = currentLineupFixtureId;
+            lineupAutoRefreshTimer = setInterval(async () => {
+                if (!document.getElementById('lineupSheet').classList.contains('visible')) {
+                    stopLineupAutoRefresh();
                     return;
                 }
+                if (currentLineupFixtureId !== fid) {
+                    stopLineupAutoRefresh();
+                    return;
+                }
+                // Skip silent refresh if user has a sub-sheet open (player detail /
+                // stats compare / live events) — those have their own data and we
+                // don't want to yank the underlying lineup out from under them.
+                const subSheets = ['playerSheet', 'statsSheet', 'liveEventsSheet', 'shotRecommenderSheet'];
+                const subOpen = subSheets.some(id => {
+                    const el = document.getElementById(id);
+                    return el && el.classList.contains('visible');
+                });
+                if (subOpen) return;
+                try {
+                    const r = await fetch(`/api/fifa/lineup/${currentLineupFixtureId}`, { cache: 'no-store' });
+                    const data = await r.json();
+                    if (currentLineupFixtureId !== fid) return;   // raced with close/switch
+                    currentLineupData = data;
+                    if (data.lineup_available) renderLineup(data);
+                    // If not available, leave the existing message in place (no flicker).
+                } catch (_) {
+                    // Network blip — try again next tick.
+                }
+            }, LINEUP_AUTO_REFRESH_MS);
+        }
+
+        function stopLineupAutoRefresh() {
+            if (lineupAutoRefreshTimer) {
+                clearInterval(lineupAutoRefreshTimer);
+                lineupAutoRefreshTimer = null;
+            }
+        }
+
+        async function loadAndRenderLineup(opts = {}) {
+            try {
+                const url = opts.bustCache
+                    ? `/api/fifa/lineup/${currentLineupFixtureId}?_t=${Date.now()}`
+                    : `/api/fifa/lineup/${currentLineupFixtureId}`;
+                const r = await fetch(url, { cache: 'no-store' });
+                const data = await r.json();
+                currentLineupData = data;
+                // Render header/score/tabs/history sections in ALL cases.
+                // The 阵容 body itself shows a "FIFA hasn't published yet"
+                // message when starters are empty — see renderTeamPlayers.
                 renderLineup(data);
             } catch (e) {
                 document.getElementById('lineupBody').innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
@@ -1244,27 +1951,64 @@
         }
 
         function renderLineup(data) {
-            const home = data.home, away = data.away;
-            // Title: short hand HOME 比分 AWAY
-            const titleStr = `${home.country_zh || home.country_code} vs ${away.country_zh || away.country_code}`;
-            document.getElementById('lineupTitle').textContent = titleStr;
+            // Decoupled rendering: each section pulls from its own data block.
+            //   fixture_meta → header + tabs + 战绩 (ALWAYS rendered)
+            //   match_state  → scoreboard (rendered iff worker has seen the fixture)
+            //   lineup       → 阵容 body roster (rendered iff FIFA published starters)
+            // No section blocks another when its data is missing.
+            const meta = data.fixture_meta;
+            const state = data.match_state;        // null before kickoff
+            const lineup = data.lineup;            // null before FIFA publishes
+            if (!meta) {
+                // No mapping at all — can't even draw the header. Rare; legacy fallback.
+                document.getElementById('lineupBody').innerHTML =
+                    `<div class="empty-state">${data.note || '此比赛尚未就绪'}</div>`;
+                return;
+            }
+            const home = meta.home, away = meta.away;
+            const homeTactics = lineup?.home?.tactics || null;
+            const awayTactics = lineup?.away?.tactics || null;
 
-            // Match header (teams + center info)
+            // Modal title bar — shows competition context (stage/group) instead of
+            // team names, since the teams are already prominently in the body header.
+            // Format: "[emblem] Group C · First Stage" — falls back to teams when missing.
+            const EMBLEM_HTML = `<img class="title-icon" src="/assets/wc26-emblem.png" alt="" width="20" height="20" loading="eager" decoding="async">`;
+            const titleParts = [];
+            if (meta.group_name) titleParts.push(meta.group_name);
+            if (meta.stage_name) titleParts.push(meta.stage_name);
+            const titleText = titleParts.length ? titleParts.join(' · ') : `${home.country_zh} vs ${away.country_zh}`;
+            document.getElementById('lineupTitle').innerHTML =
+                `${EMBLEM_HTML}<span class="title-text">${titleText}</span>`;
+
+            // === Top scoreboard block — depends ONLY on match_state ===
+            // Pre-match state shows kickoff; live shows score+clock; finished shows score.
             let centerHtml;
-            if (data.match_status_label === 'finished') {
-                // Score from match_lineups doesn't directly include score; use events.goals count
-                const homeGoals = (data.events?.goals || []).filter(g => g.side === 'home').length;
-                const awayGoals = (data.events?.goals || []).filter(g => g.side === 'away').length;
-                centerHtml = `<div class="lineup-score">${homeGoals} - ${awayGoals}</div>
+            const statusLabel = state?.match_status_label;
+            if (statusLabel === 'finished') {
+                const hs = state.home_score, as = state.away_score;
+                const hht = state.home_score_ht, aht = state.away_score_ht;
+                const hasHt = (hht != null && aht != null) && (hht !== hs || aht !== as);
+                const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
+                centerHtml = `<div class="lineup-score">${hs ?? '-'} - ${as ?? '-'}</div>
+                              ${htLine}
                               <div class="lineup-status-tag finished">已结束</div>`;
-            } else if (data.match_status_label === 'live') {
-                const homeGoals = (data.events?.goals || []).filter(g => g.side === 'home').length;
-                const awayGoals = (data.events?.goals || []).filter(g => g.side === 'away').length;
-                centerHtml = `<div class="lineup-score">${homeGoals} - ${awayGoals}</div>
-                              <div class="lineup-status-tag live">进行中 ${data.match_time || ''}</div>`;
+            } else if (statusLabel === 'live') {
+                const hs = state.home_score, as = state.away_score;
+                const hht = state.home_score_ht, aht = state.away_score_ht;
+                const hasHt = (hht != null && aht != null) && (state.period >= 4);
+                const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
+                centerHtml = `<div class="lineup-score">${hs ?? '-'} - ${as ?? '-'}</div>
+                              ${htLine}
+                              <div class="lineup-status-tag live">进行中 ${state.match_time || ''}</div>`;
             } else {
-                centerHtml = `<div class="lineup-kickoff-time">未开赛</div>
-                              <div class="lineup-status-tag scheduled">待开赛</div>`;
+                // Scheduled / unknown — show kickoff time + asian handicap (if scraped)
+                const koLabel = formatKickoffLabel(meta.kickoff_utc);
+                const ah = data.asian_handicap;
+                const ahHtml = ah ? renderAsianHandicapBlock(ah) : '';
+                // No "待开赛" badge here — the kickoff label + 亚盘 block already
+                // makes the pre-match state obvious; the extra tag was visual noise.
+                centerHtml = `<div class="lineup-kickoff-time">${koLabel || '未开赛'}</div>
+                              ${ahHtml}`;
             }
 
             const homeAbbr = (home.country_code || '?').slice(0, 3);
@@ -1273,31 +2017,190 @@
                 if (!code || code.length !== 3) return `<span>?</span>`;
                 return `<img src="/api/fifa/flag/${code}" alt="${code}" loading="lazy" onerror="this.outerHTML='<span>${code}</span>'">`;
             };
+            const tabFlagImg = (code) => {
+                if (!code || code.length !== 3) return '';
+                return `<img class="tab-flag" src="/api/fifa/flag/${code}" alt="${code}" loading="lazy" onerror="this.style.display='none'">`;
+            };
 
             const headerHtml = `
               <div class="lineup-match-header">
                 <div class="lineup-team-info home">
                     <div class="lineup-team-flag">${flagImg(homeAbbr)}</div>
-                    <div class="lineup-team-name">${home.country_zh || home.country_code}</div>
-                    ${home.tactics ? `<div class="lineup-team-tactics">${home.tactics}</div>` : ''}
+                    <div class="lineup-team-name">${home.country_zh}</div>
                 </div>
                 <div class="lineup-center-block">${centerHtml}</div>
                 <div class="lineup-team-info away">
                     <div class="lineup-team-flag">${flagImg(awayAbbr)}</div>
-                    <div class="lineup-team-name">${away.country_zh || away.country_code}</div>
-                    ${away.tactics ? `<div class="lineup-team-tactics">${away.tactics}</div>` : ''}
+                    <div class="lineup-team-name">${away.country_zh}</div>
                 </div>
               </div>
               <div class="lineup-team-tabs">
-                <div class="lineup-team-tab ${currentLineupSide==='home'?'active':''}" onclick="switchLineupSide('home')">${home.country_zh || home.country_code}</div>
-                <div class="lineup-team-tab ${currentLineupSide==='away'?'active':''}" onclick="switchLineupSide('away')">${away.country_zh || away.country_code}</div>
+                <div class="lineup-team-tab ${currentLineupSide==='home'?'active':''}" onclick="switchLineupSide('home')">
+                    <div class="tab-row-1">
+                        ${tabFlagImg(homeAbbr)}
+                        <span class="tab-code">${homeAbbr}</span>
+                    </div>
+                    ${homeTactics ? `<span class="tab-tactics">${homeTactics}</span>` : ''}
+                </div>
+                <div class="lineup-team-tab ${currentLineupSide==='away'?'active':''}" onclick="switchLineupSide('away')">
+                    <div class="tab-row-1">
+                        ${tabFlagImg(awayAbbr)}
+                        <span class="tab-code">${awayAbbr}</span>
+                    </div>
+                    ${awayTactics ? `<span class="tab-tactics">${awayTactics}</span>` : ''}
+                </div>
               </div>
             `;
 
-            const side = currentLineupSide === 'home' ? home : away;
-            const teamPlayersHtml = renderTeamPlayers(side, data.events || {}, currentLineupSide);
+            // === 阵容 section body — depends on lineup block ===
+            const side = currentLineupSide;
+            const sideLineup = lineup?.[side] || null;
+            const events = state?.events || {};
+            const teamPlayersHtml = renderTeamPlayers({
+                roster: sideLineup,
+                events,
+                side,
+                fallbackReason: data.reason,
+            });
 
-            document.getElementById('lineupBody').innerHTML = headerHtml + teamPlayersHtml;
+            // === 相关战绩 section — depends ONLY on fixture_meta ===
+            const sideCode = side === 'home' ? homeAbbr : awayAbbr;
+            const sideName = side === 'home' ? home.country_zh : away.country_zh;
+            const histSectionHtml = `
+              <div class="lineup-history-section" id="lineupHistorySection">
+                <div class="lineup-section-header">
+                    <span>${sideName} 本届相关战绩</span>
+                </div>
+                <div class="lineup-section-body">
+                    <div class="lineup-history-empty" id="histStrip">加载中…</div>
+                </div>
+              </div>
+            `;
+
+            document.getElementById('lineupBody').innerHTML = headerHtml + teamPlayersHtml + histSectionHtml;
+            loadTeamHistory(sideCode, 'histStrip', currentLineupFixtureId);
+        }
+
+        // Format kickoff_utc into a friendly Beijing display.
+        function formatKickoffLabel(utcIso) {
+            if (!utcIso) return '';
+            const ms = Date.parse(utcIso);
+            if (!Number.isFinite(ms)) return '';
+            // Use built-in Intl with Asia/Shanghai for consistency with index page
+            try {
+                return new Intl.DateTimeFormat('zh-CN', {
+                    timeZone: 'Asia/Shanghai',
+                    month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit',
+                    hour12: false,
+                }).format(new Date(ms));
+            } catch { return ''; }
+        }
+
+        // Render the asian handicap block shown in the modal's scoreboard area
+        // when the match hasn't started yet. Pulls from data.asian_handicap.
+        // Format: "主队让 0.5 ↘  上 1.00 / 下 0.85  bet365"
+        function renderAsianHandicapBlock(ah) {
+            const cur = ah.current || {};
+            const line = Number(cur.line);
+            if (!Number.isFinite(line)) return '';
+            const homeWater = Number(cur.home_water);
+            const awayWater = Number(cur.away_water);
+            // line > 0: 主队让 (home gives goals); line < 0: 客队让
+            const isHomeGiving = line > 0.01;
+            const isAwayGiving = line < -0.01;
+            let lineLabel;
+            if (isHomeGiving) lineLabel = `主队让 ${line.toFixed(2).replace(/\.?0+$/, '')}`;
+            else if (isAwayGiving) lineLabel = `客队让 ${Math.abs(line).toFixed(2).replace(/\.?0+$/, '')}`;
+            else lineLabel = '平手';
+            const trendArrow = ah.trend === 'rising' ? '<span class="ah-trend rising">↗ 升盘</span>'
+                             : ah.trend === 'falling' ? '<span class="ah-trend falling">↘ 降盘</span>'
+                             : '';
+            return `<div class="lineup-ah-block">
+                <div class="ah-line">${lineLabel} ${trendArrow}</div>
+                <div class="ah-waters">上 ${isFinite(homeWater) ? homeWater.toFixed(2) : '—'} / 下 ${isFinite(awayWater) ? awayWater.toFixed(2) : '—'}</div>
+                <div class="ah-source">bet365</div>
+            </div>`;
+        }
+
+        async function loadTeamHistory(code, targetId, currentFid) {
+            // Snapshot context: we tag the placeholder element with a generation
+            // counter (`_genId`) before each tab switch so concurrent fetches
+            // don't trample each other when the user rapidly switches tabs.
+            const initialEl = document.getElementById(targetId);
+            if (!initialEl) return;
+            const myGen = ++_histGen;
+            initialEl.dataset.gen = String(myGen);
+
+            try {
+                const r = await fetch(`/api/fifa/team-history/${code}`, { cache: 'no-store' });
+                if (myGen !== _histGen) return;   // raced; abandon
+
+                // Re-grab the element fresh — it may have been re-rendered by a
+                // subsequent renderLineup call between the fetch start and now.
+                const el = document.getElementById(targetId);
+                if (!el || el.dataset.gen !== String(myGen)) return;
+
+                if (!r.ok) {
+                    el.textContent = '暂无历史战绩';
+                    return;
+                }
+                const data = await r.json();
+                if (myGen !== _histGen) return;   // raced again
+
+                const matches = data.history || [];
+                // Hide the current fixture from the history list — the user
+                // already has it open in the modal header, no need to repeat.
+                const past = matches.filter(h => h.fixture_id !== currentFid);
+                if (past.length === 0) {
+                    el.textContent = '本届暂无已结束的其他相关比赛';
+                    return;
+                }
+                const rowsHtml = past.map(h => {
+                    const leftWinner  = h.winner === 'home';
+                    const rightWinner = h.winner === 'away';
+                    const homeName = h.home_name_zh || h.home_name_en || h.home_code;
+                    const awayName = h.away_name_zh || h.away_name_en || h.away_code;
+                    const homeFlag = h.home_code && h.home_code.length === 3
+                        ? `<img class="row-flag" src="/api/fifa/flag/${h.home_code}" alt="${h.home_code}" loading="lazy" onerror="this.style.display='none'">`
+                        : '';
+                    const awayFlag = h.away_code && h.away_code.length === 3
+                        ? `<img class="row-flag" src="/api/fifa/flag/${h.away_code}" alt="${h.away_code}" loading="lazy" onerror="this.style.display='none'">`
+                        : '';
+                    return `<div class="history-row" onclick="navigateToLineup('${h.fixture_id}')">
+                        <div class="row-team left ${leftWinner ? 'winner' : ''}">
+                            <span class="row-name">${homeName}</span>
+                            ${homeFlag}
+                        </div>
+                        <div class="row-score">${h.home_score} - ${h.away_score}</div>
+                        <div class="row-team right ${rightWinner ? 'winner' : ''}">
+                            ${awayFlag}
+                            <span class="row-name">${awayName}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                // The placeholder (#histStrip) is inside .lineup-section-body.
+                // Replace its outerHTML with the history rows so each row is a
+                // direct child of the body — matching how .lineup-player-card
+                // sits directly under .lineup-section-body. This preserves the
+                // race-condition guard via _histGen + dataset.gen.
+                if (myGen !== _histGen) return;
+                el.outerHTML = rowsHtml;
+            } catch (e) {
+                const el = document.getElementById(targetId);
+                if (el && el.dataset.gen === String(myGen)) el.textContent = '加载历史战绩失败';
+            }
+        }
+        let _histGen = 0;
+
+        // Cross-fixture navigation — open another match's lineup modal in place.
+        // Resets the side back to 'home' so the user starts at the home team of
+        // the new match, scrolls back to top so the new header is in view.
+        function navigateToLineup(fixtureId) {
+            if (!fixtureId || fixtureId === currentLineupFixtureId) return;
+            const body = document.getElementById('lineupBody');
+            if (body) body.scrollTop = 0;
+            openLineupModal(fixtureId);
         }
 
         function switchLineupSide(side) {
@@ -1305,35 +2208,57 @@
             if (currentLineupData) renderLineup(currentLineupData);
         }
 
-        function renderTeamPlayers(team, events, side) {
-            // Group starting players by position
-            const starters = team.starting || [];
-            const substitutes = team.substitutes || [];
+        // Renders the 阵容 section body for the active tab.
+        //   roster:         { starting, substitutes, coach } from lineup block,
+        //                   or null when FIFA hasn't published lineup yet.
+        //   events:         events block from match_state ({} when not started).
+        //   side:           'home' | 'away' — used to filter side-specific events.
+        //   fallbackReason: response.reason when roster is null
+        //                   ('fixture_not_mapped' | 'fixture_unmatched' | 'not_yet_published_by_fifa').
+        function renderTeamPlayers({ roster, events, side, fallbackReason }) {
+            let html = '';
+            html += '<div class="lineup-group-title"><span>阵容</span></div>';
+
+            // Pre-publication state — render placeholder inside the section body.
+            // Header / tabs / 战绩 are still rendered elsewhere by renderLineup.
+            if (!roster) {
+                const waitMsg = fallbackReason === 'fixture_not_mapped'
+                    ? 'FIFA 映射尚未建立（等待 cron 计算）'
+                    : fallbackReason === 'fixture_unmatched'
+                        ? '未在 FIFA 找到对应比赛'
+                        : 'FIFA 通常在开赛前 60-90 分钟公布首发';
+                html += `<div class="lineup-pre-publish">${waitMsg}</div>`;
+                return html;
+            }
+
+            const starters = roster.starting || [];
+            const substitutes = roster.substitutes || [];
+            const coach = roster.coach;
+
+            // Group starters by position
             const byPos = {};
             for (const p of starters) {
                 const pos = p.position ?? 6;
                 (byPos[pos] ||= []).push(p);
             }
 
-            // Index events by player_id for quick lookup
+            // Index events by player_id for quick lookup (filter to THIS side)
             const playerEvents = {};
-            // own-goal detection: FIFA Type=2 in Goals[] is regular goal; OGs come through differently.
-            // We rely on existing 'goal' type from KV. Differentiating OG would require checking
-            // if the scoring team matches the player's team — skip for now (no OG in current data).
             for (const g of events.goals || []) {
                 if (g.side === side) (playerEvents[g.player_id] ||= []).push({ type: 'goal', minute: g.minute });
             }
             for (const b of events.bookings || []) {
                 if (b.side === side) (playerEvents[b.player_id] ||= []).push({ type: 'card', card: b.card, minute: b.minute });
             }
-            // subs: store the on-player's NAME on the off-player's record (for "↑ <name>" subline)
-            // and store the minute on the on-player's record (for "↑NN'" event icon)
+            // subs: store on-player's NAME + shirt on the off-player's record (for "↑ #N <name>" subline)
+            // and minute on the on-player's record (for "↑NN'" event icon)
             for (const s of events.substitutions || []) {
                 if (s.side === side) {
                     (playerEvents[s.off_player_id] ||= []).push({
                         type: 'sub_out',
                         minute: s.minute,
-                        replaced_by_name: s.on_player_name || null
+                        replaced_by_name: s.on_player_name || null,
+                        replaced_by_shirt: s.on_player_shirt ?? null
                     });
                     (playerEvents[s.on_player_id] ||= []).push({
                         type: 'sub_in',
@@ -1342,19 +2267,41 @@
                 }
             }
 
-            let html = '';
-            html += '<div class="lineup-group-title">首发 11</div>';
             for (const pos of POS_ORDER) {
                 const list = byPos[pos];
                 if (!list?.length) continue;
-                html += `<div style="font-size:11px;color:#666;padding:4px 14px;">${POS_LABEL[pos] || '其他'} (${list.length})</div>`;
+                html += `<div class="lineup-position-divider">${POS_LABEL[pos] || '其他'}</div>`;
                 for (const p of list) html += renderPlayerCard(p, playerEvents[p.player_id] || []);
             }
             if (substitutes.length) {
-                html += `<div class="lineup-group-title">替补 ${substitutes.length}</div>`;
+                html += `<div class="lineup-position-divider">替补</div>`;
                 for (const p of substitutes) html += renderPlayerCard(p, playerEvents[p.player_id] || []);
             }
+            if (coach?.name) {
+                html += `<div class="lineup-position-divider">教练</div>`;
+                html += renderCoachCard(coach);
+            }
             return html;
+        }
+
+        // Coach card — uses the same .lineup-player-card shape as players so
+        // the visual rhythm of the section stays consistent. Coach has no
+        // shirt number, no per-match events, and we don't open a player sheet
+        // when clicking (FIFA doesn't expose coach stats in the same shape).
+        function renderCoachCard(coach) {
+            const photoUrl = coach.photo_url ? proxyPhotoUrl(coach.photo_url) : '';
+            const photoHtml = photoUrl
+                ? `<img class="lineup-player-photo" src="${photoUrl}" loading="lazy" alt="" onerror="this.outerHTML='<span class=lineup-player-photo placeholder>?</span>'">`
+                : `<span class="lineup-player-photo placeholder">?</span>`;
+            return `<div class="lineup-player-card" style="cursor:default">
+                ${photoHtml}
+                <span class="lineup-player-shirt"></span>
+                <div class="lineup-player-name">
+                    <div class="name-row">
+                        <span>${escapeHtml(coach.name)}</span>
+                    </div>
+                </div>
+            </div>`;
         }
 
         function renderPlayerCard(p, events) {
@@ -1363,38 +2310,45 @@
                 ? `<img class="lineup-player-photo" src="${photoUrl}" loading="lazy" alt="" onerror="this.outerHTML='<span class=lineup-player-photo placeholder>?</span>'">`
                 : `<span class="lineup-player-photo placeholder">?</span>`;
 
-            // Pull out the "replaced_by" info (the on-player's name) so we can show
-            // a separate "↑ <name>" subline under the player's name.
+            // Pull out the "replaced_by" info (the on-player's name + shirt) so we can show
+            // a separate "↑ #N <name>" subline under the player's name.
             const subOutEvent = events.find(e => e.type === 'sub_out');
             const replacedByName = subOutEvent?.replaced_by_name;
+            const replacedByShirt = subOutEvent?.replaced_by_shirt;
 
-            // The right-hand events column: goals, cards, sub-out arrow, sub-in arrow.
-            // Captain badge is NOT here — it's moved next to the name to avoid
-            // visual confusion with the yellow card.
+            // The right-hand events column: goals, cards, sub-in arrow.
+            // sub_out is RENDERED INLINE next to the player's name (mirrors the
+            // green "↑ name" subline), not in this rail — so the down/up arrows
+            // visually pair around the same player. Captain badge stays here too.
             const eventsHtml = events.map(e => {
                 if (e.type === 'goal') return `<span class="lineup-event-icon goal">${e.minute || ''}</span>`;
                 if (e.type === 'card') {
                     const cls = e.card === 2 ? 'red' : 'yellow';
                     return `<span class="lineup-event-icon ${cls}">${e.minute || ''}</span>`;
                 }
-                if (e.type === 'sub_out') return `<span class="lineup-event-icon sub-out">↓${e.minute || ''}</span>`;
                 if (e.type === 'sub_in')  return `<span class="lineup-event-icon sub-in">↑${e.minute || ''}</span>`;
+                // sub_out intentionally NOT rendered here — see name-row inline pill.
                 return '';
             }).join('');
 
             const captainHtml = p.captain ? '<span class="captain-badge">C</span>' : '';
+            // sub-out pill: red ↓ + minute (smaller font), inline next to name.
+            const subOutInlineHtml = subOutEvent
+                ? `<span class="sub-out-inline">↓<span class="sub-out-minute">${subOutEvent.minute || ''}</span></span>`
+                : '';
             const replacedByHtml = replacedByName
-                ? `<div class="sub-replaced"><span class="arrow">↑</span> ${escapeHtml(replacedByName)}</div>`
+                ? `<div class="sub-replaced"><span class="arrow">↑</span>${replacedByShirt != null ? `<span class="sub-replaced-shirt">${replacedByShirt}</span>` : ''} ${escapeHtml(replacedByName)}</div>`
                 : '';
 
             const safeName = (p.name || `Player ${p.player_id}`).replace(/"/g, '&quot;').replace(/'/g, "\\'");
             return `<div class="lineup-player-card" onclick="openPlayerSheet('${p.player_id}', '${safeName}')">
-                <span class="lineup-player-shirt">${p.shirt_number ?? ''}</span>
                 ${photoHtml}
+                <span class="lineup-player-shirt">${p.shirt_number ?? ''}</span>
                 <div class="lineup-player-name">
                     <div class="name-row">
                         <span>${escapeHtml(p.name || `Player ${p.player_id}`)}</span>
                         ${captainHtml}
+                        ${subOutInlineHtml}
                     </div>
                     ${replacedByHtml}
                 </div>
@@ -1419,7 +2373,11 @@
             document.getElementById('playerTitle').textContent = fallbackName || '球员';
             document.getElementById('playerBody').innerHTML = '<div class="empty-state">加载中…</div>';
             try {
-                const r = await fetch(`/api/fifa/player/${playerId}`, { cache: 'no-store' });
+                // Pass current fixture so server can attach this player's match_stats
+                // (goals/assists/shots/fouls/yellow/red FOR THIS MATCH) alongside the
+                // career-aggregate tournament_stats. UI shows them as "累计 N (本场 M)".
+                const fidQuery = currentLineupFixtureId ? `?fixture_id=${encodeURIComponent(currentLineupFixtureId)}` : '';
+                const r = await fetch(`/api/fifa/player/${playerId}${fidQuery}`, { cache: 'no-store' });
                 const player = await r.json();
                 if (player.found === false) {
                     document.getElementById('playerBody').innerHTML = `<div class="empty-state">${player.note || '暂无数据'}</div>`;
@@ -1439,6 +2397,7 @@
             const ts = p.tournament_stats || {};
             const att = ts.attacking || {};
             const dis = ts.discipline || {};
+            const ms = p.match_stats || null;   // null = no fixture context, hide all "(本场)" tags
             const photoUrl = p.photo_url ? proxyPhotoUrl(p.photo_url) : '';
 
             const nameZh = p.name?.zho || p.name_default || `Player ${p.id}`;
@@ -1451,11 +2410,19 @@
 
             document.getElementById('playerTitle').textContent = nameZh;
 
-            const statRow = (label, value, glossary) => {
+            // statRow(label, careerValue, glossary, matchValue?)
+            // - careerValue:  累计统计（tournament_stats），右侧粗体显示
+            // - matchValue:   本场（match_stats），追加 (本场 N) 紫色高亮；仅当 ms 存在
+            //   且 matchValue 是有效数值时才显示
+            const statRow = (label, value, glossary, matchValue) => {
                 const valDisplay = (value === null || value === undefined || value === '') ? '—' : value;
+                let matchTag = '';
+                if (ms && matchValue !== undefined && matchValue !== null) {
+                    matchTag = `<span class="stat-match-tag">(本场 ${matchValue})</span>`;
+                }
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f0;">
                     <span style="color:#666">${label}${glossary ? ` <span title="${glossary}" style="color:#bbb;font-size:11px;cursor:help">ⓘ</span>` : ''}</span>
-                    <span style="font-weight:600;color:#333">${valDisplay}</span>
+                    <span style="font-weight:600;color:#333">${valDisplay}${matchTag}</span>
                 </div>`;
             };
 
@@ -1468,20 +2435,20 @@
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>🥇</span><span>adidas Golden Boot</span>
                 </div>
-                ${statRow('进球 Goals', att.goals, '本届世界杯累计进球')}
-                ${statRow('助攻 Assists', att.assists, '本届世界杯累计助攻')}
+                ${statRow('进球 Goals', att.goals, '本届世界杯累计进球', ms?.goals)}
+                ${statRow('助攻 Assists', att.assists, '本届世界杯累计助攻', ms?.assists)}
                 ${statRow('上场时间（分钟）', ts.minutes_played, '本届世界杯累计参与比赛的总分钟数')}
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>⚽</span><span>Attacking 进攻</span>
                 </div>
-                ${statRow('射正 On Target', att.attempt_at_goal_on_target, '射门命中球门框内（含进球）')}
-                ${statRow('总射门 Attempts', att.attempt_at_goal, '所有射门次数')}
+                ${statRow('射正 On Target', att.attempt_at_goal_on_target, '射门命中球门框内（含进球）', ms?.shots_on_target)}
+                ${statRow('总射门 Attempts', att.attempt_at_goal, '所有射门次数', ms?.shots)}
                 ${statRow('射正率 (%)', att.attempt_at_goal_conversion_rate, '射正占总射门的百分比')}
                 ${statRow('禁区内射门', att.attempt_at_goal_inside_the_penalty_area, '在禁区内的射门次数')}
                 ${statRow('禁区外射门', att.attempt_at_goal_outside_the_penalty_area, '在禁区外的射门次数')}
@@ -1491,17 +2458,18 @@
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="font-size:13px;color:#1a73e8;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>🟨</span><span>Discipline 纪律</span>
                 </div>
-                ${statRow('黄牌 Yellow Cards', dis.yellow_cards)}
-                ${statRow('红牌 Red Cards', dis.red_cards)}
+                ${statRow('黄牌 Yellow Cards', dis.yellow_cards, null, ms?.yellow_cards)}
+                ${statRow('红牌 Red Cards', dis.red_cards, null, ms?.red_cards)}
                 ${statRow('间接红牌', dis.indirect_red_cards, '累计两黄变红')}
-                ${statRow('犯规对方 Fouls For', dis.fouls_for, '球员对对手的犯规次数')}
+                ${statRow('犯规对方 Fouls For', dis.fouls_for, '球员对对手的犯规次数', ms?.fouls_committed)}
                 ${statRow('被犯规 Fouls Against', dis.fouls_against, '球员被对手犯规的次数')}
                 ${statRow('越位 Offsides', dis.offsides)}
               </div>
 
+              ${ms ? `<div style="font-size:11px;color:#999;text-align:center;padding:4px 8px 0;">紫色 <span style="color:#7c3aed;font-weight:600">(本场 N)</span> 标注 = 当前比赛数据</div>` : ''}
               <div style="font-size:11px;color:#aaa;text-align:center;padding:8px;">
                 数据来源：FIFA · 最后更新 ${ts.fetched_at ? ts.fetched_at.slice(0, 16).replace('T',' ') : '—'}
               </div>
@@ -1602,36 +2570,290 @@
             { key: 'shots',           label: '射门',   glossary: '本场总射门次数' },
             { key: 'fouls_committed', label: '犯规',   glossary: '本场对对手的犯规次数' },
             { key: 'yellow_cards',    label: '黄牌',   glossary: '本场黄牌' },
+            { key: 'red_cards',       label: '红牌',   glossary: '本场红牌（含直接红 + 间接红）' },
         ];
 
         async function openLiveEventsSheet() {
             if (!currentLineupFixtureId) return;
             const sheet = document.getElementById('liveEventsSheet');
             sheet.classList.add('visible');
-            document.getElementById('liveEventsTableWrap').innerHTML = '<div class="stats-empty">加载中…</div>';
             currentLiveSort = { col: 'shots_on_target', dir: 'desc' };
+            // Idempotent: bind pull-to-refresh on this sheet's scroll container once
+            attachLiveSheetPullRefresh();
+            await loadLiveEvents();
+        }
 
+        async function loadLiveEvents(opts = {}) {
+            if (!currentLineupFixtureId) return;
+            const wrap = document.getElementById('liveEventsTableWrap');
+            // Keep the existing table visible during a refresh — only show spinner on cold open
+            if (!currentLiveEventsData) wrap.innerHTML = '<div class="stats-empty">加载中…</div>';
             try {
-                const r = await fetch(`/api/fifa/match-stats/${currentLineupFixtureId}`, { cache: 'no-store' });
+                // Manual pull-to-refresh: bust the CDN edge cache (s-maxage=30) by
+                // appending a timestamp. Without this, the manual refresh can hit a
+                // stale edge-cached response within the 30s window and the user sees
+                // no change. Auto-opens skip the buster so we benefit from CDN cache.
+                const url = opts.bustCache
+                    ? `/api/fifa/match-stats/${currentLineupFixtureId}?_t=${Date.now()}`
+                    : `/api/fifa/match-stats/${currentLineupFixtureId}`;
+                const r = await fetch(url, { cache: 'no-store' });
                 if (!r.ok) {
                     const err = await r.text();
-                    document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${err}</div>`;
+                    wrap.innerHTML = `<div class="stats-empty">加载失败: ${err}</div>`;
                     return;
                 }
                 const d = await r.json();
                 if (!d.available) {
-                    document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">${d.note || '本场尚无实时数据'}</div>`;
+                    wrap.innerHTML = `<div class="stats-empty">${d.note || '本场尚无实时数据'}</div>`;
                     return;
                 }
                 currentLiveEventsData = d;
                 renderLiveEventsTable();
             } catch (e) {
-                document.getElementById('liveEventsTableWrap').innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
+                wrap.innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
             }
         }
 
         function closeLiveEventsSheet() {
             document.getElementById('liveEventsSheet').classList.remove('visible');
+            // Clear cached data so next open starts fresh
+            currentLiveEventsData = null;
+        }
+
+        // === AI shot recommender sheet ===
+        // Two-tier render:
+        //   1. INPUTS — what the engine sees as decision factors (always shown):
+        //      - 亚盘 line + 水位 + 升降盘趋势 (open vs current)
+        //      - 强弱判断 + 6 次射中的人数分配（公式）
+        //      - 两队首发/替补人数、阵型
+        //      - 关键候选球员（按累计射正排名 top 5/team）
+        //   2. OUTPUT — engine recommendation (when ready):
+        //      - 6 picks with multi-shot stars + reasons
+        //      - placeholder「引擎尚未为本场生成方案」when KV is empty
+        async function openShotRecommenderSheet() {
+            const sheet = document.getElementById('shotRecommenderSheet');
+            sheet.classList.add('visible');
+            const body = document.getElementById('shotRecommenderBody');
+            if (!currentLineupFixtureId) {
+                body.innerHTML = '<div class="stats-empty">缺少比赛上下文</div>';
+                return;
+            }
+            body.innerHTML = '<div class="stats-empty">加载中…</div>';
+            try {
+                // Inputs come from the same /api/fifa/lineup response we already
+                // loaded; cheaper than 2nd fetch. Reuse currentLineupData if fresh.
+                const lineupResp = currentLineupData
+                    ? Promise.resolve(currentLineupData)
+                    : fetch(`/api/fifa/lineup/${currentLineupFixtureId}?_t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
+                // Recommendation output (may not exist yet)
+                const recResp = fetch(`/api/recommend/shots/${currentLineupFixtureId}?_t=${Date.now()}`, { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null);
+                const [lineupData, recommendation] = await Promise.all([lineupResp, recResp]);
+                renderShotRecommenderSheet(lineupData, recommendation);
+            } catch (e) {
+                body.innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function closeShotRecommenderSheet() {
+            document.getElementById('shotRecommenderSheet').classList.remove('visible');
+        }
+
+        // Format a number with sign and fixed precision (gracefully handles undefined).
+        function _fmtNum(n, digits = 2) {
+            if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+            return Number(n).toFixed(digits).replace(/\.?0+$/, '');
+        }
+
+        // Returns the strong-side decision narrative based on AH line.
+        // Mirrors v0_baseline.py logic so engine inputs visible to user match server-side calc.
+        function _decideStrongSideClient(line) {
+            const abs = Math.abs(line);
+            if (line > 0.01) return { side: 'home', label: '主队', abs };
+            if (line < -0.01) return { side: 'away', label: '客队', abs };
+            return { side: 'home', label: '平手盘', abs: 0 };
+        }
+        function _distributionForLine(abs) {
+            if (abs >= 1.5) return [6, 0, '让 2 球'];
+            if (abs >= 1.0) return [5, 1, '让 1 球'];
+            if (abs >= 0.25) return [4, 2, '让 0.5 球'];
+            return [3, 3, '平手盘'];
+        }
+
+        function renderShotRecommenderSheet(lineupData, rec) {
+            const body = document.getElementById('shotRecommenderBody');
+            const meta = lineupData?.fixture_meta;
+            const ah = lineupData?.asian_handicap;
+            const lineup = lineupData?.lineup;
+            if (!meta) { body.innerHTML = '<div class="stats-empty">比赛元数据缺失</div>'; return; }
+
+            // === SECTION 1: 亚盘决策依据 ===
+            let ahSection;
+            if (!ah || !ah.current) {
+                ahSection = `<div class="bot-section-title">📊 亚盘决策依据</div>
+                  <div class="bot-card bot-info">
+                    亚盘数据尚未拉到（500.com 抓取窗口为开赛前 48h）
+                  </div>`;
+            } else {
+                const cur = ah.current;
+                const open = ah.open || {};
+                const strong = _decideStrongSideClient(cur.line);
+                const [strongCnt, weakCnt, lineGrade] = _distributionForLine(strong.abs);
+                const lineDelta = (cur.line !== undefined && open.line !== undefined)
+                    ? (Math.abs(cur.line) - Math.abs(open.line)).toFixed(2).replace(/\.?0+$/, '')
+                    : null;
+                const homeWaterDelta = (open.home_water !== undefined)
+                    ? (cur.home_water - open.home_water).toFixed(3).replace(/\.?0+$/, '')
+                    : null;
+                const awayWaterDelta = (open.away_water !== undefined)
+                    ? (cur.away_water - open.away_water).toFixed(3).replace(/\.?0+$/, '')
+                    : null;
+                const trendLabel = ah.trend === 'rising' ? '↗ 升盘（让球加大，强队信心增强）'
+                                 : ah.trend === 'falling' ? '↘ 降盘（让球缩水，强队信心动摇）'
+                                 : '— 持平';
+                const trendCls = `trend-${ah.trend || 'stable'}`;
+
+                ahSection = `
+                  <div class="bot-section-title">📊 亚盘决策依据 · bet365</div>
+                  <div class="bot-card">
+                    <div class="bot-row"><span class="bot-k">即时盘口</span>
+                      <span class="bot-v">${strong.label} 让 ${_fmtNum(strong.abs)} 球</span></div>
+                    <div class="bot-row"><span class="bot-k">水位（上盘 / 下盘）</span>
+                      <span class="bot-v">${_fmtNum(cur.home_water)} / ${_fmtNum(cur.away_water)}</span></div>
+                    <div class="bot-row"><span class="bot-k">初盘</span>
+                      <span class="bot-v">让 ${_fmtNum(Math.abs(open.line))} 球 · 水位 ${_fmtNum(open.home_water)} / ${_fmtNum(open.away_water)}</span></div>
+                    <div class="bot-row"><span class="bot-k">让球变动</span>
+                      <span class="bot-v">${lineDelta != null ? (lineDelta > 0 ? '+' : '') + lineDelta : '—'}</span></div>
+                    <div class="bot-row"><span class="bot-k">水位变动</span>
+                      <span class="bot-v">上盘 ${homeWaterDelta ?? '—'} / 下盘 ${awayWaterDelta ?? '—'}</span></div>
+                    <div class="bot-row"><span class="bot-k">趋势</span>
+                      <span class="bot-v bot-trend ${trendCls}">${trendLabel}</span></div>
+                    <div class="bot-divider"></div>
+                    <div class="bot-row"><span class="bot-k">强弱判断</span>
+                      <span class="bot-v">${strong.label}强（${lineGrade}）</span></div>
+                    <div class="bot-row"><span class="bot-k">6 次射中分配</span>
+                      <span class="bot-v"><strong style="color:#0a2f5c">强 ${strongCnt}</strong> · <strong style="color:#c62828">弱 ${weakCnt}</strong></span></div>
+                  </div>`;
+            }
+
+            // === SECTION 2: 阵容 / 关键候选球员 ===
+            let lineupSection;
+            if (!lineup) {
+                lineupSection = `<div class="bot-section-title">⚽ 阵容信息</div>
+                  <div class="bot-card bot-info">
+                    阵容尚未公布（FIFA 通常在开赛前 60-90 分钟公布首发）<br>
+                    引擎将基于完整国家队大名单的累计统计进行赛前预测
+                  </div>`;
+            } else {
+                const homeTactics = lineup.home?.tactics || '?';
+                const awayTactics = lineup.away?.tactics || '?';
+                const homeStarters = (lineup.home?.starting || []).length;
+                const awayStarters = (lineup.away?.starting || []).length;
+                lineupSection = `
+                  <div class="bot-section-title">⚽ 阵容信息（已公布）</div>
+                  <div class="bot-card">
+                    <div class="bot-row"><span class="bot-k">${meta.home.country_zh}</span>
+                      <span class="bot-v">${homeStarters} 首发 · 阵型 ${homeTactics}</span></div>
+                    <div class="bot-row"><span class="bot-k">${meta.away.country_zh}</span>
+                      <span class="bot-v">${awayStarters} 首发 · 阵型 ${awayTactics}</span></div>
+                  </div>`;
+            }
+
+            // === SECTION 3: 引擎推荐输出 ===
+            let outputSection;
+            if (!rec || !rec.picks) {
+                outputSection = `
+                  <div class="bot-section-title">🎯 引擎推荐方案</div>
+                  <div class="bot-card bot-info">
+                    引擎尚未为本场比赛生成推荐方案<br>
+                    <span style="font-size:11px; color:#aaa; display:block; margin-top:4px">
+                      Python 引擎（v0 baseline / v1 LR / v2 GBT）离线计算<br>
+                      赛前定期写入 KV，请稍后再试
+                    </span>
+                  </div>`;
+            } else {
+                const picks = rec.picks || [];
+                const strong = picks.filter(p => p.side === rec.strong_side);
+                const weak = picks.filter(p => p.side !== rec.strong_side);
+                const renderPick = (p, i) => {
+                    const star = p.shots >= 2 ? `<span class="bot-shots-badge">⭐ ${p.shots} 次</span>` : '';
+                    return `<div class="bot-pick-card">
+                        <div class="bot-pick-head">
+                            <span class="bot-pick-rank">#${i+1}</span>
+                            <span class="bot-pick-name">${p.name || p.pid}</span>
+                            ${star}
+                            <span class="bot-pick-score">${(p.score || 0).toFixed(1)}</span>
+                        </div>
+                        ${p.reason ? `<div class="bot-pick-reason">${p.reason}</div>` : ''}
+                    </div>`;
+                };
+                outputSection = `
+                  <div class="bot-section-title">🎯 引擎推荐方案</div>
+                  ${strong.length ? `<div class="bot-subheader">🟦 强队（${strong.reduce((s,p)=>s+p.shots,0)} 次）</div>${strong.map((p,i)=>renderPick(p,i)).join('')}` : ''}
+                  ${weak.length ? `<div class="bot-subheader">🟥 弱队（${weak.reduce((s,p)=>s+p.shots,0)} 次）</div>${weak.map((p,i)=>renderPick(p,i)).join('')}` : ''}
+                  ${rec.model_version ? `<div class="bot-meta">模型 ${rec.model_version} · ${rec.generated_at?.slice(0,16).replace('T',' ') || ''}</div>` : ''}
+                `;
+            }
+
+            body.innerHTML = ahSection + lineupSection + outputSection;
+        }
+
+        // Sheet-scoped pull-to-refresh — independent of the page-level pull-refresh
+        // (which binds to document and only fires when window.scrollY === 0).
+        // The live events sheet is full-screen but its scroll container is liveEventsTableWrap,
+        // not the document, so we need a separate listener attached to the sheet itself.
+        let _liveSheetPullBound = false;
+        function attachLiveSheetPullRefresh() {
+            if (_liveSheetPullBound) return;
+            _liveSheetPullBound = true;
+            const sheet = document.getElementById('liveEventsSheet');
+            const wrap = document.getElementById('liveEventsTableWrap');
+            // Visual indicator anchored to the sheet's top (under the header)
+            const ind = document.createElement('div');
+            ind.id = 'liveSheetPullIndicator';
+            ind.style.cssText = 'height:0;display:flex;align-items:center;justify-content:center;background:#f0f0f0;overflow:hidden;transition:height 0.2s;font-size:13px;color:#666;flex-shrink:0;';
+            ind.textContent = '下拉刷新';
+            // Insert AFTER the header but BEFORE the table wrap
+            wrap.parentElement.insertBefore(ind, wrap);
+
+            let startY = 0, pulling = false, refreshing = false;
+            const threshold = 80;
+
+            sheet.addEventListener('touchstart', (e) => {
+                // Only when the scrollable container is at top
+                if (wrap.scrollTop === 0 && !refreshing) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            sheet.addEventListener('touchmove', (e) => {
+                if (!pulling || refreshing) return;
+                const dy = e.touches[0].clientY - startY;
+                if (dy > 0 && wrap.scrollTop === 0) {
+                    const h = Math.min(dy * 0.5, threshold + 20);
+                    ind.style.height = h + 'px';
+                    ind.textContent = h >= threshold ? '释放刷新' : '下拉刷新';
+                }
+            }, { passive: true });
+
+            sheet.addEventListener('touchend', () => {
+                if (!pulling) return;
+                pulling = false;
+                const h = parseInt(ind.style.height) || 0;
+                if (h >= threshold) {
+                    refreshing = true;
+                    ind.style.height = '50px';
+                    ind.textContent = '刷新中...';
+                    Promise.resolve(loadLiveEvents({ bustCache: true })).finally(() => {
+                        refreshing = false;
+                        ind.style.height = '0';
+                    });
+                } else {
+                    ind.style.height = '0';
+                }
+            });
         }
 
         function switchLiveSort(col) {
@@ -1673,22 +2895,43 @@
                 const shirt = p.shirt_number != null ? p.shirt_number : '';
                 // Sub context line under name: shows who they replaced (if came on)
                 // OR who replaced them (if went off)
-                let subLine = '';
-                if (p.replaces_player_name) {
-                    // This is a sub who came on for someone
-                    subLine = `<div class="live-sub-line">↑ ${p.replaces_at_minute || ''} 换下 ${p.replaces_player_name}</div>`;
-                } else if (p.replaced_player_name) {
-                    // This starter went off
-                    subLine = `<div class="live-sub-line">↓ ${p.replaced_at_minute || ''} 被 ${p.replaced_player_name} 换上</div>`;
+                // Sub indicator: minimal arrow + minute, inline next to name
+                //   ↑ 71'  = came on at 71' (sub who replaced a starter)
+                //   ↓ 71'  = went off at 71' (starter replaced)
+                // Color: green = on, red = off. No descriptive text — saves horizontal space.
+                // Sub badge presence is driven by the SUB RELATION (replaces_player_id /
+                // replaced_player_id), NOT by minute. Reason: FIFA records HT mass-subs
+                // with Minute='' (empty string) — e.g. KOR's 3 HT subs against RSA on
+                // 2026-06-25. Falling back to minute as the existence check skipped them.
+                // When minute is missing we tag it 'HT' (half-time, FIFA's convention).
+                //
+                // Counterpart name (LAST_NAME only — saves horizontal space) is shown
+                // INSIDE the badge: e.g. "↓HT SON" = went off at HT, replaced by SON.
+                // FIFA names are "FAMILY Given" (e.g. "SON Heungmin"), so the first
+                // whitespace-delimited token is the family name in uppercase.
+                const lastName = (n) => {
+                    if (!n) return '';
+                    const t = String(n).trim().split(/\s+/)[0];
+                    return t || '';
+                };
+                let subBadge = '';
+                if (p.replaces_player_id) {
+                    const t = p.replaces_at_minute || 'HT';
+                    const ln = lastName(p.replaces_player_name);
+                    subBadge = `<span class="live-sub-badge on">↑${t}${ln ? ' ' + escapeHtml(ln) : ''}</span>`;
+                } else if (p.replaced_player_id) {
+                    const t = p.replaced_at_minute || 'HT';
+                    const ln = lastName(p.replaced_player_name);
+                    subBadge = `<span class="live-sub-badge off">↓${t}${ln ? ' ' + escapeHtml(ln) : ''}</span>`;
                 }
 
                 html += `<div class="stats-row">
                     <div class="stats-player-block">
                         <img src="${flagUrl}" class="stats-player-flag" loading="lazy" onerror="this.style.display='none'">
                         <span class="stats-player-shirt">${shirt}</span>
-                        <div class="live-name-wrap">
+                        <div class="stats-player-info">
                             <span class="stats-player-name">${escapeHtml(p.name)}</span>
-                            ${subLine}
+                            ${subBadge}
                         </div>
                     </div>
                     <div class="stats-data-block">`;
@@ -1847,7 +3090,55 @@
             initPullRefresh({
                 onRefresh: () => { delete matchCache[currentPeriod]; return loadMatches(currentPeriod); }
             });
+            startLiveClockTickers();
         });
+
+        // Live clock & countdown ticker.
+        // 1Hz tick → re-renders all .live-clock and .countdown-clock DOM elements
+        //            without re-rendering the entire match card. Cheap; no layout thrash.
+        // 30s background refresh → silently re-fetch /api/matches so anchor (fetched_at)
+        //            stays fresh and FIFA period transitions (HT → 2H) are picked up.
+        function startLiveClockTickers() {
+            setInterval(updateLiveClocksTick, 1000);
+            setInterval(refreshMatchesQuietly, 30 * 1000);
+        }
+
+        function updateLiveClocksTick() {
+            const now = Date.now();
+            // Update live clocks (in-progress matches)
+            document.querySelectorAll('.live-clock').forEach(el => {
+                const lc = {
+                    period: parseInt(el.dataset.period) || null,
+                    match_time: el.dataset.matchTime || '',
+                    fetched_at: el.dataset.fetchedAt || '',
+                };
+                const next = formatLiveClock(lc, now);
+                if (el.textContent !== next) el.textContent = next;
+            });
+            // Update countdowns (pre-match within last hour)
+            document.querySelectorAll('.countdown-clock').forEach(el => {
+                const koMs = parseInt(el.dataset.koMs);
+                if (!koMs) return;
+                const delta = koMs - now;
+                if (delta < 0) {
+                    // Already kicked off — wait for next /api/matches refresh to flip status
+                    el.textContent = '00:00';
+                    return;
+                }
+                const next = formatCountdown(delta);
+                if (el.textContent !== next) el.textContent = next;
+            });
+        }
+
+        async function refreshMatchesQuietly() {
+            // Only when there are live matches or pre-match countdowns visible.
+            // Avoid wasteful traffic when the page only shows finished matches.
+            if (!document.querySelector('.live-clock, .countdown-clock')) return;
+            try {
+                delete matchCache[currentPeriod];
+                await loadMatches(currentPeriod);
+            } catch (_) {}
+        }
     </script>
 </body>
 </html>

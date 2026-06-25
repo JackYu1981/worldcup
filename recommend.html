@@ -13,17 +13,18 @@
             color: #333;
             padding: 0 0 100px 0;
         }
-        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: white; border-bottom: 1px solid #eee; }
-        .site-header .title { font-size: 20px; font-weight: 700; }
-        .site-header .user-badge { position: absolute; right: 12px; bottom: 6px; font-size: 10px; color: #999; }
-        .site-header .user-badge a { color: #bbb; margin-left: 4px; font-size: 10px; text-decoration: none; }
+        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 8px 16px; background: #000; max-height: 52px; box-sizing: border-box; overflow: hidden; flex-shrink: 0; }
+        .site-header .banner-img { height: 36px; width: auto; max-width: 80vw; aspect-ratio: 444 / 116; object-fit: contain; display: block; flex-shrink: 0; }
+        .site-header .user-badge { position: absolute; right: 12px; bottom: 4px; font-size: 10px; color: #888; }
+        .site-header .user-badge a { color: #aaa; margin-left: 4px; font-size: 10px; text-decoration: none; }
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
-            padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
+            padding: 10px 16px; background: #0a2f5c; border-bottom: 1px solid #08254a;
             flex-wrap: wrap;
         }
-        .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
-        .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+        .nav-tab { padding: 8px 14px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75); text-decoration: none; border-bottom: 2px solid transparent; transition: color 0.15s; }
+        .nav-tab:hover { color: #fff; }
+        .nav-tab.active { color: #00b04f; border-bottom-color: #00b04f; font-weight: 600; }
 
         .period-tabs {
             display: flex; overflow-x: auto; background: white;
@@ -74,6 +75,14 @@
             background: #e8f5e9; color: #2e7d32; transition: all 0.2s;
         }
         .btn-select-rec:active { opacity: 0.7; }
+        /* 直接生成（应急路径）— 橙色调，区分于绿色"提交预备方案"主路径 */
+        .btn-direct-gen {
+            flex: 0 0 auto; padding: 10px 14px; border: none; border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            background: #fff3e0; color: #e65100; transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-direct-gen:active { opacity: 0.7; }
         .btn-copy-rec {
             padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px;
             font-size: 12px; cursor: pointer; background: #f5f5f5; color: #333;
@@ -226,7 +235,7 @@
 </head>
 <body>
     <div class="site-header">
-        <span class="title">⚽ 投注助手</span>
+        <img class="banner-img" src="/assets/banner-fifa-2026.png" alt="FIFA World Cup 2026" width="444" height="116" loading="eager" decoding="async">
         <span class="user-badge" id="userBadge"></span>
     </div>
 
@@ -343,13 +352,18 @@
     <script>
         const WEEKDAY_SHORT = ['日','一','二','三','四','五','六'];
 
+        // Generate the period-tab strip covering the ENTIRE World Cup window
+        // (2026-06-11 → 2026-07-19), not just ±N days from today. Users need
+        // to be able to look back at the opening matches (6/11) and forward
+        // to any future fixture. The active tab auto-scrolls into view.
         function generateDates() {
+            const WC_START = '2026-06-11';
+            const WC_END   = '2026-07-19';
             const dates = [];
-            const now = new Date();
-            const baseDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-            for (let i = -7; i <= 3; i++) {
-                const d = new Date(baseDate + 'T00:00:00+08:00');
-                d.setDate(d.getDate() + i);
+            const start = new Date(WC_START + 'T00:00:00+08:00');
+            const end = new Date(WC_END + 'T00:00:00+08:00');
+            for (let t = start.getTime(); t <= end.getTime(); t += 86400_000) {
+                const d = new Date(t);
                 const y = d.getFullYear();
                 const m = String(d.getMonth() + 1).padStart(2, '0');
                 const dd = String(d.getDate()).padStart(2, '0');
@@ -621,6 +635,7 @@
                 </div>
                 <div class="rec-actions">
                     <button class="btn-select-rec" onclick="selectRec(${idx})"${isSubmitted || currentPeriod < todayStr ? ' disabled style="opacity:0.5"' : ''}>选择此推荐 → 提交预备方案</button>
+                    <button class="btn-direct-gen" onclick="directGenerate(${idx})" title="跳过 AI 直接生成笛卡尔积平均下注方案"${isSubmitted || currentPeriod < todayStr ? ' disabled style="opacity:0.5"' : ''}>⚡直接生成</button>
                     <button class="btn-copy-rec" onclick="copyRec(${idx})">📋</button>
                 </div>
             </div>`;
@@ -870,6 +885,131 @@
             selectedRec = null;
         }
 
+        // === 直接生成（bypass AI session） ===
+        // 简化路径：跳过口令弹窗 + 跳过 Claude AI 生成 → 直接把 rec.legs 笛卡尔积
+        // 出来、stake 平均分到每注、submit 成 source='plan' 终态。
+        //
+        // 适用：用户在手机上无法访问 AI session 时的应急路径。
+        //
+        // 笛卡尔积：按 match_id 分组（每场可能含多个 pick），N 组的笛卡尔积 = N
+        // 注组合。每注 stake = round(150/N/2)*2 取偶数（最小 2 元步长，对齐竞彩规则）。
+        async function directGenerate(idx) {
+            if (currentPeriod < todayStr) {
+                showToast(`${currentPeriod} 竞彩已停售，无法提交方案`);
+                return;
+            }
+            const rec = userRecs[idx];
+            if (!rec || !rec.legs?.length) {
+                showToast('推荐 legs 为空，无法生成');
+                return;
+            }
+
+            // 1. 按 match_id 分组
+            const byMatch = {};
+            for (const l of rec.legs) {
+                const mid = l.match_id;
+                (byMatch[mid] = byMatch[mid] || []).push(l);
+            }
+            const groups = Object.values(byMatch);
+
+            // 2. 笛卡尔积所有组合
+            const combos = [];
+            function cartesianBuild(idx, picked) {
+                if (idx === groups.length) {
+                    combos.push(picked.slice());
+                    return;
+                }
+                for (const leg of groups[idx]) {
+                    picked.push(leg);
+                    cartesianBuild(idx + 1, picked);
+                    picked.pop();
+                }
+            }
+            cartesianBuild(0, []);
+            const N = combos.length;
+            if (N === 0) { showToast('笛卡尔积生成失败'); return; }
+
+            // 3. 平均分配 stake（每注偶数元，对齐竞彩 2 元最小步长）
+            const TOTAL_TARGET = 150;
+            const stakePerBet = Math.max(2, Math.round(TOTAL_TARGET / N / 2) * 2);
+            const totalStake = stakePerBet * N;
+
+            // 4. 构造 bets[]（plan-compatible shape）
+            const bets = combos.map((legs, i) => {
+                const combinedOdds = legs.reduce((acc, l) => acc * l.odds, 1);
+                return {
+                    combo_id: `D${i + 1}`,   // D = direct generate
+                    stake: stakePerBet,
+                    combined_odds: Math.round(combinedOdds * 10000) / 10000,
+                    potential_return: Math.round(stakePerBet * combinedOdds),
+                    p_hit: null,
+                    is_user_combo: true,
+                    legs: legs.map(l => ({
+                        match_id: l.match_id,
+                        match_desc: l.match_desc,
+                        code: l.code,
+                        market: l.market,
+                        pick: l.pick,
+                        pick_desc: l.pick_desc,
+                        odds: l.odds,
+                    })),
+                    hit: null,
+                    actual_return: null,
+                };
+            });
+
+            // 5. 自动口令 `直生-MMDD-HHMM`
+            const now = new Date();
+            const tz = new Intl.DateTimeFormat('zh-CN', {
+                timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', hour12: false,
+            }).formatToParts(now);
+            const get = (t) => tz.find(p => p.type === t)?.value || '';
+            const passphrase = `直生-${get('month')}${get('day')}-${get('hour')}${get('minute')}`;
+
+            // 6. payload 走 plan 路径
+            const payload = {
+                passphrase,
+                date: currentPeriod,
+                period: currentPeriod,
+                source: 'plan',
+                submitted_at: new Date().toISOString().replace(/Z$/, '+00:00'),
+                algorithm_version: 'direct-generate-v1',
+                total_stake: totalStake,
+                user_stake: totalStake,
+                ai_stake: 0,
+                p_eff: null,
+                n_cov: N,
+                n_user: N,
+                selected_tier: rec.selected_tier || 'progressive',
+                bets,
+                status: 'pending',
+                optimization_narrative: `直接生成（笛卡尔积平均下注）：${groups.length} 场 → ${N} 注，每注 ${stakePerBet} 元，总 ${totalStake} 元`,
+            };
+
+            if (!confirm(`直接生成方案确认\n口令: ${passphrase}\n${groups.length} 场 → ${N} 注，每注 ¥${stakePerBet}，总 ¥${totalStake}\n点击确定提交`)) {
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: AUTH.headers(),
+                    body: JSON.stringify(payload),
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    showToast(`✓ 方案 ${passphrase} 已生成 (${N} 注, 总 ¥${totalStake})`);
+                    delete picksCache[currentPeriod];
+                    await loadData(currentPeriod, true);
+                } else {
+                    showToast(`失败：${result.error || '未知'}`);
+                }
+            } catch (e) {
+                showToast(`网络错误：${e.message}`);
+            }
+        }
+
         document.getElementById('passphraseInput').addEventListener('input', function() {
             document.getElementById('submitBtn').disabled = !this.value.trim();
         });
@@ -884,7 +1024,7 @@
 
             const payload = {
                 passphrase: passphrase,
-                submitted_at: new Date().toISOString(),
+                submitted_at: new Date().toISOString().replace(/Z$/, '+00:00'),
                 selected_tier: selectedRec.selected_tier,
                 source: 'pending_plan',
                 stake: 150,

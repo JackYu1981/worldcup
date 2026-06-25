@@ -1,15 +1,35 @@
 const AUTH = {
+    // One-time migration: if a token is in sessionStorage (old behavior), move
+    // it into localStorage so users stay logged in after closing the browser.
+    _migrate() {
+        try {
+            const oldTok = sessionStorage.getItem('auth_token');
+            if (oldTok && !localStorage.getItem('auth_token')) {
+                localStorage.setItem('auth_token', oldTok);
+                const u = sessionStorage.getItem('auth_user');
+                if (u) localStorage.setItem('auth_user', u);
+            }
+            // Clean up sessionStorage to avoid confusion
+            sessionStorage.removeItem('auth_token');
+            sessionStorage.removeItem('auth_user');
+        } catch (_) {}
+    },
     getToken() {
-        return sessionStorage.getItem('auth_token');
+        this._migrate();
+        return localStorage.getItem('auth_token');
     },
     getUser() {
-        const u = sessionStorage.getItem('auth_user');
+        this._migrate();
+        const u = localStorage.getItem('auth_user');
         return u ? JSON.parse(u) : null;
     },
     isLoggedIn() {
         return !!this.getToken();
     },
     logout() {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        // Also clean session storage in case anything is left
         sessionStorage.removeItem('auth_token');
         sessionStorage.removeItem('auth_user');
         location.reload();
@@ -28,8 +48,8 @@ const AUTH = {
         });
         const data = await resp.json();
         if (data.success) {
-            sessionStorage.setItem('auth_token', data.token);
-            sessionStorage.setItem('auth_user', JSON.stringify(data.user));
+            localStorage.setItem('auth_token', data.token);
+            localStorage.setItem('auth_user', JSON.stringify(data.user));
             return { success: true, user: data.user };
         }
         return { success: false, error: data.error };

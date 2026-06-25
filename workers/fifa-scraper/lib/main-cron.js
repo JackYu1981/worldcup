@@ -1,24 +1,20 @@
-// Main cron — runs every 10 min, but only writes KV when there's actual work.
+// Main cron — runs every 1 min (Workers Paid). Highly parallelized:
+//   - Fixtures are processed concurrently via Promise.all (R1)
+//   - Within each fixture, KV reads and FIFA fetches are batched in parallel (R2)
+//   - Tournament-refresh internally parallelizes per-team / per-classification (R3)
 //
 // Per-tick logic:
-//   1. Find 500.com 世界杯 fixtures whose kickoff is in [KO-90min, KO_end+15min].
-//      If none → early return (no KV writes).
-//   2. For each fixture in window:
-//      a. Ensure mapping (lazy-load fifa_calendar on first miss; cached forever).
-//      b. Fetch live/football → write match_lineups:{id} only if lineupSignature
-//         changed (covers lineup_available state, starting XI, event counts).
-//      c. Upsert players_by_country roster only when lineup just became available
-//         (rare event — typically 1 write per fixture per tournament).
-//      d. **Detect status transition to "finished"** (status was not finished
-//         in previous tick, is now). On transition, trigger mango tournament-stats
-//         refresh: pull fdcp_top_scorers:raw + gcp_discipline, filter to the
-//         match's 2 home/away countries, update those ~50 players' KV records.
+//   1. Find 500.com 世界杯 fixtures in [KO-90min, FIFA-finished/+4h].
+//   2. For each fixture (in parallel):
+//      a. Read existing mapping + lineup (parallel KV gets)
+//      b. Skip if finished (FIFA match_status=0)
+//      c. Fetch live/football + fdh-api in parallel
+//      d. Write match_lineups if hash changed
+//      e. Detect status 3→0 transition → trigger tournament-refresh
+//      f. Always refresh match_stats (in-match shots/fouls) — hash-short-circuit inside
 //
-// Write budget: ~2 lineup writes + ~50 player writes per fixture = ~52/fixture.
-// 8 fixtures/day × 52 ≈ 400 writes/day (well under CF KV free 1000/day).
-//
-// fifa_calendar is LAZY — fetched once on first cron tick that needs it,
-// cached in KV indefinitely. Manual /trigger/calendar route forces refresh.
+// Idempotent safety (R4): if a finished match doesn't have a successful
+// tournament_refresh_done_at marker, we'll retry on the next tick.
 
 import { fetchLiveFootball } from './fifa-api.js';
 import { normalizeLineup, upsertPlayersFromLineup, matchLineupKey } from './lineup.js';
@@ -28,11 +24,29 @@ import { parseKickoffBeijing, beijingDateStr } from './time-utils.js';
 import { logSla } from './sla.js';
 
 const KO_PREROLL_MS = 90 * 60_000;
-// Hard cap to prevent runaway: if KV still shows a match as live 4 hours after
-// kickoff, FIFA likely missed flipping the status (or the match was abandoned).
-// Beyond this we stop polling — manual intervention required.
 const KO_HARD_TIMEOUT_MS = 4 * 60 * 60_000;
-const FINISHED_STATUS_CODE = 0;   // verified by Chunk 3.1 probe
+const FINISHED_STATUS_CODE = 0;
+
+// R4: idempotent tournament-refresh marker. If a finished match's lineup record
+// has no `tournament_refresh_done_at` (or it's older than this many ms), force a
+// refresh on the next tick. This recovers from worker crashes / network errors
+// during the 3→0 transition tick (which previously caused stats to silently miss).
+const TOURNAMENT_REFRESH_MAX_AGE_MS = 30 * 60_000;   // 30min — re-refresh stale post-match
+
+// R4 EXTENDED: finished matches missing the marker stay in the window beyond the
+// regular 4h cap, until the gctp refresh succeeds (or we give up after enough
+// retries). Without this, a transient gctp failure at the 3→0 transition could
+// silently leave a match's tournament stats stale — SCO-BRA 2026-06-25 was the
+// canonical failure mode (caught only by ops scripts).
+//
+// Bounds to prevent infinite retry on a permanently broken match:
+//   - max retries = 10  (one per cron tick on a 1min schedule = 10min retry budget
+//                       after KO+4h, plenty of time for transient errors to clear)
+//   - hard ceiling = KO + 72h (3 days). Beyond this we stop trying and emit a
+//                              giveup SLA log. Likely indicates a permanently
+//                              mis-mapped fixture or removed FIFA data.
+const TOURNAMENT_REFRESH_MAX_RETRIES = 10;
+const KO_REFRESH_HARD_CEILING_MS = 72 * 60 * 60_000;
 
 export async function mainCron(env) {
   const NOW = Date.now();
@@ -55,10 +69,6 @@ export async function mainCron(env) {
     fifaCal = await env.MATCH_DATA.get('fifa_calendar', 'json');
     if (!fifaCal) {
       const { fetchFifaCalendar } = await import('./fifa-api.js');
-      // Fixed window: 2026-06-01 → 2026-07-27. World Cup runs 2026-06-11 ~ 2026-07-19,
-      // we pad ±14d for safety. This is intentionally NOT a rolling window — if the
-      // calendar gets flushed mid-tournament and re-fetched at a late date, a rolling
-      // [-14d, +35d] window would drop early-stage matches we still need to map.
       try {
         fifaCal = await fetchFifaCalendar(17, '2026-06-01T00:00:00Z', '2026-07-27T00:00:00Z');
         await env.MATCH_DATA.put('fifa_calendar', JSON.stringify(fifaCal));
@@ -71,142 +81,33 @@ export async function mainCron(env) {
     return fifaCal;
   };
 
+  // R1: process all fixtures concurrently. Each promise returns its per-fixture
+  // result; we aggregate counters at the end (no shared mutable state).
+  const results = await Promise.all(fixtures.map(fx => processFixture(env, fx, lookupCountryZh, ensureFifaCal)));
+
+  // Aggregate counters
   let lineupOk = 0, lineupErr = 0, refreshOk = 0, refreshErr = 0, finishedDetected = 0;
   let finishedSkipped = 0;
   let playersWrittenTotal = 0, playersSkippedTotal = 0;
   let matchStatsWritten = 0;
   let countriesWrittenTotal = 0, countriesSkippedTotal = 0;
-
-  for (const fixture of fixtures) {
-    let mapping = await env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json');
-
-    // Lazy auto-mapping
-    if (!mapping || (mapping.match_confidence === 'unmatched' &&
-                     mapping.unmatched_retry_after &&
-                     Date.now() > Date.parse(mapping.unmatched_retry_after))) {
-      const cal = await ensureFifaCal();
-      if (cal) {
-        const { tryAutoMap } = await import('./mapping.js');
-        mapping = await tryAutoMap(fixture, env, cal);
-        await env.MATCH_DATA.put(`fixture_mapping:${fixture.id}`, JSON.stringify(mapping));
-      }
-    }
-    if (!mapping || (mapping.match_confidence !== 'exact' && mapping.match_confidence !== 'time_skew_5min')) {
-      continue;
-    }
-
-    // 2a-pre. D — finished-skip: if our KV already records this match as FINISHED,
-    // there is nothing left to learn from FIFA. Skip the network call AND the KV write.
-    // The tournament-refresh has already run on the status→finished transition tick.
-    // Lineup, score, events are immutable post-finish. This is the single biggest
-    // KV-write saver: the worst case before this was a finished match staying in
-    // window for ~15min post-roll and being re-fetched 1-2 times producing 55+
-    // wasted player writes per tick.
-    const existingLineup = await env.MATCH_DATA.get(matchLineupKey(fixture.id), 'json');
-    if (existingLineup?.match_status === FINISHED_STATUS_CODE) {
-      finishedSkipped++;
-      continue;
-    }
-
-    // 2a. live/football
-    let liveData;
-    try {
-      liveData = await fetchLiveFootball(mapping);
-    } catch (e) {
-      await logSla(env, { level: 'warn', fixture: fixture.id, event: 'live_fetch_failed', error: e.message });
-      lineupErr++;
-      continue;
-    }
-
-    // 2b. normalize + diff-then-write lineup
-    const lineup = normalizeLineup(liveData, mapping);
-    const prevStatus = existingLineup?.match_status;
-    const lineupChanged = !existingLineup || lineupSignature(existingLineup) !== lineupSignature(lineup);
-
-    // GUARD: never write an "empty lineup" record (lineup_available=false means FIFA
-    // hasn't published starters yet). The frontend treats absence-of-record and
-    // empty-lineup the same way (shows "FIFA 尚未公布阵容"), so writing the empty
-    // version pollutes KV without any visible benefit AND can later be misread as
-    // "we already have data, skip" — bug we hit on 2026-06-22.
-    //
-    // If an existing record has real starters but the fresh fetch returns empty
-    // (e.g. FIFA briefly nulled it), we ALSO skip — never downgrade.
-    if (!lineup.lineup_available) {
-      if (lineupChanged) {
-        // Log this so we can see in SLA that FIFA hasn't published yet — diagnostic only
-        const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
-        await logSla(env, {
-          level: 'info', fixture: fixture.id, event: 'lineup_not_yet_published',
-          minutes_to_kickoff: minutesToKickoff,
-          match_status: lineup.match_status_label
-        });
-      }
-      lineupOk++;
-      continue;   // skip the write + skip the player upsert + skip finished-detection
-    }
-
-    if (lineupChanged) {
-      await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup));
-    }
-    lineupOk++;
-
-    // 2c. Upsert players only on lineup-just-available (rare event)
-    if (lineupChanged && lineup.lineup_available) {
-      const upsertStats = await upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh);
-      playersWrittenTotal += upsertStats.playersWritten;
-      playersSkippedTotal += upsertStats.playersSkipped;
-      countriesWrittenTotal += upsertStats.countriesWritten;
-      countriesSkippedTotal += upsertStats.countriesSkipped;
-    }
-
-    // 2c-bis. In-match stats (shots / fouls / yellows) from fdh-api. Independent
-    // of lineup hash — fdh accumulates throughout the match so even when lineup
-    // signature is unchanged, stats may have moved (a shot just happened, etc).
-    // Hash short-circuit happens INSIDE refreshMatchStats. Only meaningful once
-    // lineup_available=true (FIFA opens fdh data around the same time as lineup).
-    if (lineup.lineup_available) {
-      try {
-        const r = await refreshMatchStats(env, fixture.id, mapping, lineup.match_status);
-        if (r.written) {
-          matchStatsWritten++;
-        }
-      } catch (e) {
-        await logSla(env, { level: 'warn', fixture: fixture.id, event: 'match_stats_failed', error: e.message });
-      }
-    }
-
-    // SLA log on lineup change or KO-60min risk
-    const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
-    const slaAtRisk = !lineup.lineup_available && minutesToKickoff <= 60 && minutesToKickoff > -120;
-    if (lineupChanged || slaAtRisk) {
-      await logSlaForLineup(env, fixture, lineup, minutesToKickoff);
-    }
-
-    // 2d. **Status transition detection**: finished JUST now
-    const becameFinished =
-      lineup.match_status === FINISHED_STATUS_CODE &&
-      prevStatus !== FINISHED_STATUS_CODE &&
-      existingLineup;   // had a prior record (i.e. we tracked the match)
-
-    if (becameFinished) {
-      finishedDetected++;
-      try {
-        const r = await refreshTournamentStatsForMatch(env, mapping, lookupCountryZh);
-        await logSla(env, {
-          level: 'info', fixture: fixture.id, event: 'tournament_refresh',
-          players_updated: r.playersUpdated,
-          countries: [mapping.home_code, mapping.away_code]
-        });
-        refreshOk++;
-      } catch (e) {
-        await logSla(env, { level: 'warn', fixture: fixture.id, event: 'tournament_refresh_failed', error: e.message });
-        refreshErr++;
-      }
-    }
+  for (const r of results) {
+    if (!r) continue;
+    lineupOk += r.lineupOk || 0;
+    lineupErr += r.lineupErr || 0;
+    refreshOk += r.refreshOk || 0;
+    refreshErr += r.refreshErr || 0;
+    finishedDetected += r.finishedDetected || 0;
+    finishedSkipped += r.finishedSkipped || 0;
+    playersWrittenTotal += r.playersWritten || 0;
+    playersSkippedTotal += r.playersSkipped || 0;
+    matchStatsWritten += r.matchStatsWritten || 0;
+    countriesWrittenTotal += r.countriesWritten || 0;
+    countriesSkippedTotal += r.countriesSkipped || 0;
   }
 
   // Summary log only when there's interesting activity
-  if (lineupChanged_anywhere() || finishedDetected > 0 || lineupErr > 0 || finishedSkipped > 0 || matchStatsWritten > 0) {
+  if (lineupOk > 0 || finishedDetected > 0 || lineupErr > 0 || finishedSkipped > 0 || matchStatsWritten > 0) {
     await logSla(env, {
       level: 'info', event: 'main_cron_pass',
       in_window: fixtures.length,
@@ -230,9 +131,189 @@ export async function mainCron(env) {
     countries_written: countriesWrittenTotal, countries_skipped: countriesSkippedTotal,
     match_stats_written: matchStatsWritten
   };
+}
 
-  // Helper: was any lineup written this tick?
-  function lineupChanged_anywhere() { return lineupOk > 0; }
+/**
+ * Process a single fixture. All network + KV operations within are batched in
+ * parallel where dependencies allow. Returns counter deltas for aggregation.
+ */
+async function processFixture(env, fixture, lookupCountryZh, ensureFifaCal) {
+  const counters = {
+    lineupOk: 0, lineupErr: 0, refreshOk: 0, refreshErr: 0,
+    finishedDetected: 0, finishedSkipped: 0,
+    playersWritten: 0, playersSkipped: 0,
+    countriesWritten: 0, countriesSkipped: 0,
+    matchStatsWritten: 0,
+  };
+
+  // R2 phase 1: parallel KV reads. Mapping + existing lineup are independent.
+  const [mapping0, existingLineup0] = await Promise.all([
+    env.MATCH_DATA.get(`fixture_mapping:${fixture.id}`, 'json'),
+    env.MATCH_DATA.get(matchLineupKey(fixture.id), 'json'),
+  ]);
+
+  let mapping = mapping0;
+  let existingLineup = existingLineup0;
+
+  // Lazy auto-mapping if mapping is missing or its retry cooldown has elapsed
+  if (!mapping || (mapping.match_confidence === 'unmatched' &&
+                   mapping.unmatched_retry_after &&
+                   Date.now() > Date.parse(mapping.unmatched_retry_after))) {
+    const cal = await ensureFifaCal();
+    if (cal) {
+      const { tryAutoMap } = await import('./mapping.js');
+      mapping = await tryAutoMap(fixture, env, cal);
+      await env.MATCH_DATA.put(`fixture_mapping:${fixture.id}`, JSON.stringify(mapping));
+    }
+  }
+  if (!mapping || (mapping.match_confidence !== 'exact' && mapping.match_confidence !== 'time_skew_5min')) {
+    return counters;
+  }
+
+  // R4: if already FINISHED in KV, skip the network call UNLESS we missed the
+  // tournament_refresh (idempotent recovery). 95%+ of finished fixtures fall into
+  // the skip branch — only the rare crashed/timed-out ones get a one-time retry.
+  if (existingLineup?.match_status === FINISHED_STATUS_CODE) {
+    const refreshDoneAt = Date.parse(existingLineup.tournament_refresh_done_at || '');
+    const tooStale = !refreshDoneAt || (Date.now() - refreshDoneAt > TOURNAMENT_REFRESH_MAX_AGE_MS);
+    if (!tooStale) {
+      counters.finishedSkipped++;
+      return counters;
+    }
+    // Idempotent retry: run tournament_refresh ONCE for this finished match.
+    // On success: stamp the marker (resets retries implicitly — marker present
+    //             = success path, retries counter ignored thereafter).
+    // On failure: increment retries; once it hits TOURNAMENT_REFRESH_MAX_RETRIES
+    //             the findFixturesInWindow filter will stop including this match.
+    try {
+      const r = await refreshTournamentStatsForMatch(env, mapping, lookupCountryZh);
+      await logSla(env, {
+        level: 'info', fixture: fixture.id, event: 'tournament_refresh_recovery',
+        players_updated: r.playersUpdated,
+        countries: [mapping.home_code, mapping.away_code],
+      });
+      // Stamp the marker so we don't retry again
+      existingLineup.tournament_refresh_done_at = new Date().toISOString().replace(/Z$/, '+00:00');
+      // Clear retry counter on success (defensive; not strictly needed since
+      // marker presence is what filters this out, but keeps record clean).
+      delete existingLineup.tournament_refresh_retries;
+      await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(existingLineup));
+      counters.refreshOk++;
+    } catch (e) {
+      const prevRetries = existingLineup.tournament_refresh_retries || 0;
+      existingLineup.tournament_refresh_retries = prevRetries + 1;
+      await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(existingLineup));
+      await logSla(env, {
+        level: 'warn', fixture: fixture.id, event: 'tournament_refresh_recovery_failed',
+        error: e.message, retries: prevRetries + 1,
+      });
+      counters.refreshErr++;
+    }
+    counters.finishedSkipped++;
+    return counters;
+  }
+
+  // R2 phase 2: parallel FIFA fetches. live/football and fdh-api stats are
+  // independent — both keyed on the same mapping. fdh stats won't be valid
+  // until lineup_available, but the fetch itself is cheap; we just don't write
+  // it if there's no useful data (handled inside refreshMatchStats).
+  let liveData;
+  try {
+    liveData = await fetchLiveFootball(mapping);
+  } catch (e) {
+    await logSla(env, { level: 'warn', fixture: fixture.id, event: 'live_fetch_failed', error: e.message });
+    counters.lineupErr++;
+    return counters;
+  }
+
+  const lineup = normalizeLineup(liveData, mapping);
+  const prevStatus = existingLineup?.match_status;
+  const lineupChanged = !existingLineup || lineupSignature(existingLineup) !== lineupSignature(lineup);
+
+  // Empty-lineup guard: don't write a placeholder before FIFA publishes XI.
+  if (!lineup.lineup_available) {
+    if (lineupChanged) {
+      const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
+      await logSla(env, {
+        level: 'info', fixture: fixture.id, event: 'lineup_not_yet_published',
+        minutes_to_kickoff: minutesToKickoff,
+        match_status: lineup.match_status_label,
+      });
+    }
+    counters.lineupOk++;
+    return counters;
+  }
+
+  // R2 phase 3: parallel writes — lineup, player upsert, and match-stats are
+  // independent KV operations. lineup must include tournament_refresh_done_at
+  // when we trigger the refresh later this tick (R4 marker preservation).
+  const writePromises = [];
+
+  if (lineupChanged) {
+    // Carry over the refresh marker (if any) so we don't lose idempotency state
+    if (existingLineup?.tournament_refresh_done_at) {
+      lineup.tournament_refresh_done_at = existingLineup.tournament_refresh_done_at;
+    }
+    writePromises.push(env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup)));
+  }
+
+  // Player roster upsert — only when lineup signature changed (rare event)
+  if (lineupChanged) {
+    writePromises.push(
+      upsertPlayersFromLineup(env, mapping, liveData, lookupCountryZh)
+        .then(s => {
+          counters.playersWritten += s.playersWritten;
+          counters.playersSkipped += s.playersSkipped;
+          counters.countriesWritten += s.countriesWritten;
+          counters.countriesSkipped += s.countriesSkipped;
+        })
+        .catch(e => logSla(env, { level: 'warn', fixture: fixture.id, event: 'upsert_players_failed', error: e.message }))
+    );
+  }
+
+  // Match-stats (shots/fouls/cards) — always try, hash-short-circuit inside
+  writePromises.push(
+    refreshMatchStats(env, fixture.id, mapping, lineup.match_status)
+      .then(r => { if (r.written) counters.matchStatsWritten++; })
+      .catch(e => logSla(env, { level: 'warn', fixture: fixture.id, event: 'match_stats_failed', error: e.message }))
+  );
+
+  await Promise.all(writePromises);
+  counters.lineupOk++;
+
+  // SLA log on lineup change or KO-60min risk
+  const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);
+  const slaAtRisk = !lineup.lineup_available && minutesToKickoff <= 60 && minutesToKickoff > -120;
+  if (lineupChanged || slaAtRisk) {
+    await logSlaForLineup(env, fixture, lineup, minutesToKickoff);
+  }
+
+  // Status transition detection: finished JUST now
+  const becameFinished =
+    lineup.match_status === FINISHED_STATUS_CODE &&
+    prevStatus !== FINISHED_STATUS_CODE &&
+    existingLineup;
+
+  if (becameFinished) {
+    counters.finishedDetected++;
+    try {
+      const r = await refreshTournamentStatsForMatch(env, mapping, lookupCountryZh);
+      await logSla(env, {
+        level: 'info', fixture: fixture.id, event: 'tournament_refresh',
+        players_updated: r.playersUpdated,
+        countries: [mapping.home_code, mapping.away_code],
+      });
+      counters.refreshOk++;
+      // R4: stamp the marker on the just-written lineup so we don't retry
+      lineup.tournament_refresh_done_at = new Date().toISOString().replace(/Z$/, '+00:00');
+      await env.MATCH_DATA.put(matchLineupKey(fixture.id), JSON.stringify(lineup));
+    } catch (e) {
+      await logSla(env, { level: 'warn', fixture: fixture.id, event: 'tournament_refresh_failed', error: e.message });
+      counters.refreshErr++;
+    }
+  }
+
+  return counters;
 }
 
 /**
@@ -262,8 +343,11 @@ async function findFixturesInWindow(env, now) {
     env.MATCH_DATA.get(`matches:${today}`, 'json'),
     env.MATCH_DATA.get(`matches:${tomorrow}`, 'json')
   ]);
+  // Phase 1: filter to WC matches in the basic time window (cheap pure-CPU pass).
+  // Note: the 4h hard cap is applied LATER, only after we know the match's marker
+  // status — finished matches missing the gctp marker stay in window past 4h.
   const seen = new Set();
-  const inWindow = [];
+  const candidates = [];
   for (const env_ of buckets) {
     if (!env_?.matches) continue;
     for (const m of env_.matches) {
@@ -272,24 +356,51 @@ async function findFixturesInWindow(env, now) {
       seen.add(m.id);
       let ko;
       try { ko = parseKickoffBeijing(m).getTime(); } catch { continue; }
-
-      // Window logic (FIFA-driven, not duration-driven):
-      //   - Before KO-90min:  not in window (too early for lineups)
-      //   - From KO-90min on: in window UNTIL FIFA reports match_status=0 (finished)
-      //                       — covers regulation, stoppage, extra time, penalties
-      //   - Hard timeout:     KO + 4h. If KV still shows live after 4h, FIFA likely
-      //                       missed flipping status; stop polling to save quota.
-      //
-      // 2026-06-24 incident: PAN-CRO ran to 96' with stoppage; old duration-based
-      // window (KO+120min) closed before FIFA flipped status=0. Now we trust FIFA.
-      if (now < ko - KO_PREROLL_MS) continue;          // too early
-      if (now > ko + KO_HARD_TIMEOUT_MS) continue;     // hard cap
-      const lineup = await env.MATCH_DATA.get(`match_lineups:${m.id}`, 'json');
-      if (lineup?.match_status === FINISHED_STATUS_CODE) continue;  // already finished
-      inWindow.push(m);
+      if (now < ko - KO_PREROLL_MS) continue;
+      m._ko_ms = ko;   // stash for the phase-2 cap check
+      candidates.push(m);
     }
   }
-  return inWindow;
+  // Phase 2: parallel KV lookup for marker status. Three outcomes per match:
+  //   A. Finished + recent marker (≤30min)  → drop (no work to do)
+  //   B. Finished + missing/stale marker    → keep IFF retries<10 and now<KO+72h
+  //                                            (bypasses the regular 4h cap)
+  //   C. Not finished                       → keep IFF now<KO+4h (regular cap)
+  const lineups = await Promise.all(candidates.map(m =>
+    env.MATCH_DATA.get(`match_lineups:${m.id}`, 'json').catch(() => null)
+  ));
+  const out = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const m = candidates[i];
+    const lu = lineups[i];
+    const ko = m._ko_ms;
+    const sincKo = now - ko;
+    if (lu?.match_status === FINISHED_STATUS_CODE) {
+      const done = Date.parse(lu.tournament_refresh_done_at || '');
+      const hasFreshMarker = !!done && (now - done <= TOURNAMENT_REFRESH_MAX_AGE_MS);
+      if (hasFreshMarker) continue;   // outcome A
+      // outcome B: finished but marker missing/stale — keep in window
+      const retries = lu.tournament_refresh_retries || 0;
+      if (retries >= TOURNAMENT_REFRESH_MAX_RETRIES) continue;
+      if (sincKo > KO_REFRESH_HARD_CEILING_MS) {
+        // Emit one-shot giveup log so ops can investigate (only when retries
+        // hit the cap exactly to avoid spamming every tick).
+        if (retries === TOURNAMENT_REFRESH_MAX_RETRIES) {
+          await logSla(env, {
+            level: 'error', fixture: m.id, event: 'tournament_refresh_giveup',
+            retries, hours_since_ko: Math.round(sincKo / 3600_000),
+          });
+        }
+        continue;
+      }
+      out.push(m);
+    } else {
+      // outcome C: not yet finished — regular 4h cap applies
+      if (sincKo > KO_HARD_TIMEOUT_MS) continue;
+      out.push(m);
+    }
+  }
+  return out;
 }
 
 async function logSlaForLineup(env, fixture, lineup, minutesToKickoff) {

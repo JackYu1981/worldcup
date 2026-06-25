@@ -31,6 +31,7 @@ const FIELD_MAP = {
   AttemptAtGoalOnTarget: 'shots_on_target',
   FoulsFor:              'fouls_committed',  // FIFA naming: "FoulsFor" = fouls THIS player commits
   YellowCards:           'yellow_cards',
+  RedCards:              'red_cards',
 };
 
 function fnv1a(s) {

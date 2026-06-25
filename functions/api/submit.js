@@ -28,7 +28,9 @@ export async function onRequestPost(context) {
     }
 
     body.submitted_by = user.username;
-    body.submitted_at = new Date().toISOString();
+    // Server-side normalization: clients may forget, so force +00:00 offset
+    // (project rule: NEVER use the .Z shorthand for stored timestamps).
+    body.submitted_at = new Date().toISOString().replace(/Z$/, '+00:00');
 
     const kv = context.env.MATCH_DATA;
 

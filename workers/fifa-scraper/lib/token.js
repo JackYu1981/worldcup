@@ -36,7 +36,7 @@ export async function ensureGamedayToken(env) {
   const j = await r.json();
   if (!j.token) throw new Error(`gameDay token response missing token: ${JSON.stringify(j).slice(0, 200)}`);
   // Augment with our own timestamp for the fallback path
-  const augmented = { ...j, _cachedAt: new Date().toISOString() };
+  const augmented = { ...j, _cachedAt: new Date().toISOString().replace(/Z$/, '+00:00') };
   await env.MATCH_DATA.put('gameday_token', JSON.stringify(augmented), { expirationTtl: 86400 - 3600 });
   return j.token;
 }

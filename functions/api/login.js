@@ -20,7 +20,7 @@ export async function onRequestPost(context) {
     if (!secret) {
       return error('服务器配置错误: AUTH_SECRET未设置', 500);
     }
-    const payload = { username, role: user.role || 'member', exp: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+    const payload = { username, role: user.role || 'member', exp: Date.now() + 10 * 24 * 60 * 60 * 1000 };
     const token = btoa(JSON.stringify(payload)) + '.' + await sign(JSON.stringify(payload), secret);
 
     return json({ success: true, token, user: { username, role: user.role || 'member' } });

@@ -14,17 +14,18 @@
             color: #333;
             padding: 0 0 200px 0;
         }
-        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: white; border-bottom: 1px solid #eee; }
-        .site-header .title { font-size: 20px; font-weight: 700; }
-        .site-header .user-badge { position: absolute; right: 12px; bottom: 6px; font-size: 10px; color: #999; }
-        .site-header .user-badge a { color: #bbb; margin-left: 4px; font-size: 10px; text-decoration: none; }
+        .site-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 8px 16px; background: #000; max-height: 52px; box-sizing: border-box; overflow: hidden; flex-shrink: 0; }
+        .site-header .banner-img { height: 36px; width: auto; max-width: 80vw; aspect-ratio: 444 / 116; object-fit: contain; display: block; flex-shrink: 0; }
+        .site-header .user-badge { position: absolute; right: 12px; bottom: 4px; font-size: 10px; color: #888; }
+        .site-header .user-badge a { color: #aaa; margin-left: 4px; font-size: 10px; text-decoration: none; }
         .nav-tabs {
             display: flex; justify-content: center; gap: 12px;
-            padding: 10px 16px; background: white; border-bottom: 1px solid #eee;
+            padding: 10px 16px; background: #0a2f5c; border-bottom: 1px solid #08254a;
             flex-wrap: wrap;
         }
-        .nav-tab { padding: 6px 12px; font-size: 13px; color: #666; text-decoration: none; border-bottom: 2px solid transparent; }
-        .nav-tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+        .nav-tab { padding: 8px 14px; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.75); text-decoration: none; border-bottom: 2px solid transparent; transition: color 0.15s; }
+        .nav-tab:hover { color: #fff; }
+        .nav-tab.active { color: #00b04f; border-bottom-color: #00b04f; font-weight: 600; }
         .version-badge {
             text-align: center;
             margin: 12px 0 16px;
@@ -518,7 +519,7 @@
 </head>
 <body>
     <div class="site-header">
-        <span class="title">⚽ 投注助手</span>
+        <img class="banner-img" src="/assets/banner-fifa-2026.png" alt="FIFA World Cup 2026" width="444" height="116" loading="eager" decoding="async">
         <span class="user-badge" id="userBadge"></span>
     </div>
 
@@ -839,7 +840,7 @@
             cr.replies.push({
                 author: AUTH.getUser().username,
                 text: text,
-                time: new Date().toISOString()
+                time: new Date().toISOString().replace(/Z$/, '+00:00')
             });
 
             renderCRs();
@@ -896,7 +897,7 @@
                 author: AUTH.getUser().username,
                 type: selectedType,
                 text: text,
-                time: new Date().toISOString(),
+                time: new Date().toISOString().replace(/Z$/, '+00:00'),
                 status: 'pending',
                 resolved_in: null,
                 resolution: null,
@@ -1041,7 +1042,7 @@
                 const ext = file.name.split('.').pop() || 'jpg';
                 const filename = `${ts}.${ext}`;
                 try {
-                    const token = sessionStorage.getItem('auth_token');
+                    const token = AUTH.getToken();
                     const resp = await fetch('/api/upload', {
                         method: 'POST',
                         headers: {

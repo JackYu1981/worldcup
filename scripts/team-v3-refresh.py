@@ -299,8 +299,17 @@ def hash_record_payload(record):
     return fnv1a_32(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')))
 
 
-def refresh_team(team_meta, dry_run, sleep_between_cls=0.5, countries_lookup=None):
-    """Refresh all players in a single team. Returns (written_count, unchanged_count, errors)."""
+def refresh_team(team_meta, dry_run, countries_lookup=None, max_cls_workers=3, max_kv_workers=8):
+    """Refresh all players in a single team. Returns (written_count, unchanged_count, errors).
+
+    Parallelism:
+      - 3 classifications fetched concurrently (max_cls_workers, default 3 = all)
+      - 26 player KV get+put done concurrently (max_kv_workers, default 8)
+    These two pools run sequentially relative to each other (classifications must
+    complete before per-player merge+write), but each pool is fully parallel.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     team_eid = team_meta['_externalId']           # e.g. "285023_43922"
     team_id  = team_eid.split('_')[-1]
     team_name = team_meta.get('name',{}).get('eng','?')
@@ -308,45 +317,46 @@ def refresh_team(team_meta, dry_run, sleep_between_cls=0.5, countries_lookup=Non
     team_country_code = (team_meta.get('shortName') or {}).get('eng', '').upper() or None
     team_country_zh = (countries_lookup or {}).get(team_country_code) if team_country_code else None
 
-    # Fetch all 3 classifications for this team
+    # Stage 1: fetch all 3 classifications in PARALLEL
     merged_players = {}
-    for cls in CLASSIFICATIONS:
-        try:
-            stories = fetch_team_classification(team_eid, cls)
-        except Exception as e:
-            print(f'  [{team_name}] {cls} fetch err: {e}', file=sys.stderr)
-            return 0, 0, 1
-        cls_players = extract_players_from_stories(stories, cls)
-        # Merge into merged_players
-        for pid, info in cls_players.items():
-            tgt = merged_players.setdefault(pid, {
-                'stats': {}, 'name_multilang': {}, 'photo_url': None,
-                'country_code': None, 'team_id': None,
-            })
-            tgt['stats'].update(info['stats'])
-            tgt['name_multilang'].update(info['name_multilang'])
-            tgt['photo_url']    = tgt['photo_url'] or info['photo_url']
-            tgt['country_code'] = tgt['country_code'] or info['country_code']
-            tgt['team_id']      = tgt['team_id'] or info['team_id']
-        time.sleep(sleep_between_cls)
+    with ThreadPoolExecutor(max_workers=max_cls_workers) as pool:
+        futs = {pool.submit(fetch_team_classification, team_eid, cls): cls for cls in CLASSIFICATIONS}
+        for fut in as_completed(futs):
+            cls = futs[fut]
+            try:
+                stories = fut.result()
+            except Exception as e:
+                print(f'  [{team_name}] {cls} fetch err: {e}', file=sys.stderr)
+                return 0, 0, 1
+            cls_players = extract_players_from_stories(stories, cls)
+            # Merge into merged_players (single-threaded merge — safe)
+            for pid, info in cls_players.items():
+                tgt = merged_players.setdefault(pid, {
+                    'stats': {}, 'name_multilang': {}, 'photo_url': None,
+                    'country_code': None, 'team_id': None,
+                })
+                tgt['stats'].update(info['stats'])
+                tgt['name_multilang'].update(info['name_multilang'])
+                tgt['photo_url']    = tgt['photo_url'] or info['photo_url']
+                tgt['country_code'] = tgt['country_code'] or info['country_code']
+                tgt['team_id']      = tgt['team_id'] or info['team_id']
 
     print(f'  [{team_name} / {team_id}] {len(merged_players)} players from {len(CLASSIFICATIONS)} classifications', file=sys.stderr)
 
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', '+00:00')
-    written = 0
-    unchanged = 0
-    errored = 0
 
-    for pid, agg in merged_players.items():
+    # Stage 2: per-player KV get+put in PARALLEL.
+    # Each player needs: kv_get(existing) → build record → hash compare → kv_put (maybe).
+    # All three steps are independent across pids, so we run the full pipeline in
+    # a thread pool. KV ops are I/O bound; threading is the right tool.
+    def process_player(pid_agg):
+        pid, agg = pid_agg
         top, attacking, discipline = build_tournament_stats(agg['stats'])
-        # P2 noise cleanup: drop ranks/efficiency-strings that we don't surface in UI
         for noise_key in ('fdcp_top_scorer_rank', 'xg_goal_effiency_rate'):
             attacking.pop(noise_key, None)
         existing = kv_get(f'players:{pid}') or {}
         new_name = {**(existing.get('name') or {}), **agg['name_multilang']}
-        # country_code waterfall: actor tag → existing record → team_meta.shortName.eng
         country_code = agg['country_code'] or existing.get('country_code') or team_country_code
-        # country_zh: derived from countries seed when available
         country_zh = (countries_lookup or {}).get(country_code) if country_code else None
         new_record = {
             **existing,
@@ -372,17 +382,26 @@ def refresh_team(team_meta, dry_run, sleep_between_cls=0.5, countries_lookup=Non
         new_hash = hash_record_payload(new_record)
         new_record['_hash'] = new_hash
         if existing.get('_hash') == new_hash:
-            unchanged += 1
-            continue
+            return ('unchanged', pid, None)
         if dry_run:
-            written += 1
-            continue
+            return ('would_write', pid, None)
         try:
             kv_put(f'players:{pid}', new_record)
-            written += 1
+            return ('written', pid, None)
         except Exception as e:
-            print(f'    ERR {pid}: {e}', file=sys.stderr)
-            errored += 1
+            return ('error', pid, str(e))
+
+    written = unchanged = errored = 0
+    with ThreadPoolExecutor(max_workers=max_kv_workers) as pool:
+        for outcome, pid, err in pool.map(process_player, merged_players.items()):
+            if outcome == 'written' or outcome == 'would_write':
+                written += 1
+            elif outcome == 'unchanged':
+                unchanged += 1
+            else:
+                print(f'    ERR {pid}: {err}', file=sys.stderr)
+                errored += 1
+
     print(f'  [{team_name}] {("would write" if dry_run else "wrote")}={written} unchanged={unchanged} errors={errored}', file=sys.stderr)
     return written, unchanged, errored
 
@@ -394,7 +413,10 @@ def main():
     g.add_argument('--all-teams', action='store_true', help='refresh all 48 teams')
     ap.add_argument('--apply', action='store_true', help='actually write KV')
     ap.add_argument('--budget', type=int, default=DEFAULT_BUDGET)
-    ap.add_argument('--sleep-team', type=float, default=1.5)
+    ap.add_argument('--workers', type=int, default=6,
+                    help='Concurrent team refreshes (default 6). Each team also internally parallelizes 3 classifications + 8 player KV ops.')
+    ap.add_argument('--sleep-team', type=float, default=0,
+                    help='[deprecated] Inter-team delay — has no effect now that teams run in parallel; kept for arg compat.')
     args = ap.parse_args()
 
     global CF_TOK, GAMEDAY_TOK
@@ -443,21 +465,41 @@ def main():
 
     print(f'[team-refresh] refreshing {len(targets)} teams', file=sys.stderr)
 
+    # Teams refresh in PARALLEL too (default 6 concurrent). Each team internally
+    # runs 3 classifications + 26 player KV ops in their own thread pools, so
+    # the effective IO concurrency is ~6 × (3 + 8) = ~66 in-flight requests, well
+    # within CF KV's per-account limits. Tuned via --workers.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     total_written = 0
     total_unchanged = 0
     total_errored = 0
-    for i, team in enumerate(targets, 1):
-        print(f'\n[{i}/{len(targets)}] ===', file=sys.stderr)
-        w, u, e = refresh_team(team, not args.apply, sleep_between_cls=0.7, countries_lookup=countries_lookup)
-        total_written += w
-        total_unchanged += u
-        total_errored += e
-        if total_written >= args.budget:
-            print(f'\n[team-refresh] BUDGET HIT ({total_written} >= {args.budget}). Stopping.', file=sys.stderr)
-            break
-        time.sleep(args.sleep_team)
+    budget_hit = False
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        futs = {pool.submit(refresh_team, team, not args.apply, countries_lookup=countries_lookup): team
+                for team in targets}
+        i = 0
+        for fut in as_completed(futs):
+            i += 1
+            team = futs[fut]
+            team_short = (team.get('shortName',{}).get('eng','') or '?').upper()
+            try:
+                w, u, e = fut.result()
+            except Exception as exc:
+                print(f'\n[{i}/{len(targets)}] {team_short} CRASH: {exc}', file=sys.stderr)
+                total_errored += 1
+                continue
+            total_written += w
+            total_unchanged += u
+            total_errored += e
+            print(f'[{i}/{len(targets)}] {team_short} done', file=sys.stderr)
+            if total_written >= args.budget:
+                print(f'\n[team-refresh] BUDGET HIT ({total_written} >= {args.budget}). Letting in-flight finish, no new teams.', file=sys.stderr)
+                # Best-effort cancel — pool.map / submit don't support clean cancel
+                # of running futures, but we can avoid printing more "done" beyond
+                # the budget message. The in-flight teams will still finish their own work.
+                budget_hit = True
 
-    print(f'\n[team-refresh] DONE. {("APPLIED" if args.apply else "DRY-RUN")} | written={total_written} unchanged={total_unchanged} errored={total_errored}', file=sys.stderr)
+    print(f'\n[team-refresh] DONE. {("APPLIED" if args.apply else "DRY-RUN")} | written={total_written} unchanged={total_unchanged} errored={total_errored}{" (budget hit)" if budget_hit else ""}', file=sys.stderr)
 
 
 if __name__ == '__main__':

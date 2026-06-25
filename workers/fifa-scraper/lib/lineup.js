@@ -36,6 +36,26 @@ export function pickEnglish(localized) {
 }
 
 /**
+ * Pull the head coach out of FIFA's Coaches[] array. Role=0 = head coach;
+ * Role 1+ are assistants/fitness/etc. If no Role-0 entry, fall back to the
+ * first coach in the array (still a coaching staff member, just not the
+ * top one — better than nothing for display).
+ */
+export function pickHeadCoach(rawCoaches) {
+  if (!Array.isArray(rawCoaches) || rawCoaches.length === 0) return null;
+  const head = rawCoaches.find(c => c.Role === 0) || rawCoaches[0];
+  if (!head) return null;
+  const name = pickEnglish(head.Name) || pickEnglish(head.Alias);
+  if (!name) return null;
+  return {
+    coach_id: head.IdCoach || null,
+    name,
+    photo_url: head.PictureUrl || null,
+    country_code: head.IdCountry || null,
+  };
+}
+
+/**
  * Split FIFA Players[] into our normalized {starting, substitutes} shape.
  * Each entry has: player_id, name, shirt_number, position, captain, photo_url, lineup_x, lineup_y.
  */
@@ -134,7 +154,8 @@ export function normalizeLineup(liveData, mapping) {
       score: homeTeam.Score ?? null,         // FIFA full-time score
       score_ht: homeHt,                       // computed half-time goals
       starting: home.starting,
-      substitutes: home.substitutes
+      substitutes: home.substitutes,
+      coach: pickHeadCoach(homeTeam.Coaches),
     },
     away: {
       country_code: mapping.away_code || awayTeam.IdCountry,
@@ -144,7 +165,8 @@ export function normalizeLineup(liveData, mapping) {
       score: awayTeam.Score ?? null,
       score_ht: awayHt,
       starting: away.starting,
-      substitutes: away.substitutes
+      substitutes: away.substitutes,
+      coach: pickHeadCoach(awayTeam.Coaches),
     },
     events: {
       goals: [...homeEvents.goals, ...awayEvents.goals],
