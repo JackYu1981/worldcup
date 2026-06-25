@@ -1,0 +1,13 @@
+name = "worldcup-shot-recommender"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[triggers]
+# 每 5 分钟跑一次 — 与 AH scraper 同频；
+# 推荐的输入（亚盘、lineup）变化频率本来就不高，5min 足够；
+# 也避免对 500.com 的二级数据抓取造成压力（虽然这里只读 KV，但保持节奏一致）。
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "MATCH_DATA"
+id = "278f1209ffd84662bd51921370a2fbe9"

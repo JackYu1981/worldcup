@@ -173,12 +173,15 @@ def determine_distribution(line_abs):
 
 
 def determine_strong_side(handicap):
-    """Return ('home'|'away', |line|) from a single bet365 record.
-    line > 0 → home gives goals → home is strong. line < 0 → away strong."""
+    """500.com yapanList line sign convention (verified 2026-06-25 via raw HTML cross-check):
+      line > 0  → AWAY team gives goals → AWAY is strong (favored)
+      line < 0  → HOME team gives goals → HOME is strong (favored)
+      line == 0 → even / pick-em
+    """
     if not handicap: return None, 0
     line = float(handicap.get('line', 0))
-    if line > 0.01: return 'home', abs(line)
-    if line < -0.01: return 'away', abs(line)
+    if line > 0.01: return 'away', abs(line)
+    if line < -0.01: return 'home', abs(line)
     return 'home', 0   # pick-em — default to home, weak distinction
 
 

@@ -73,7 +73,34 @@ EOF
 step "4/7 部署 Cloudflare Pages"
 # 显式传 ASCII commit message：wrangler 自动从 git 取的字段经 Cloudflare API
 # 校验时偶发触发 "Invalid commit message UTF-8" (code 8000111)，强制 ASCII 绕过
+
+# Auto-export CF API token from macOS keychain so wrangler runs non-interactively
+if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+  export CLOUDFLARE_API_TOKEN="$(security find-generic-password -s cloudflare-api-token -w 2>/dev/null)"
+  if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    fail "无法从 keychain 取 cloudflare-api-token；请手动 export CLOUDFLARE_API_TOKEN"
+  fi
+fi
+
+# .venv stash/restore — Cloudflare Pages 上传时会扫描整个目录，遇到 .venv 里
+# playwright 自带的 node 二进制（114 MiB）就超过 25 MiB 单文件硬限制。
+# wrangler pages 不识别 .assetsignore，所以靠 stash 临时移走，trap 保证哪怕
+# deploy 失败 .venv 也能复原。
+VENV_STASH=""
+if [ -d ".venv" ]; then
+  VENV_STASH="/tmp/_worldcup_venv_$$"
+  mv .venv "$VENV_STASH"
+  trap '[ -n "$VENV_STASH" ] && [ -d "$VENV_STASH" ] && mv "$VENV_STASH" .venv' EXIT INT TERM
+fi
+
 npx wrangler pages deploy . --project-name=worldmoney --branch=main --commit-dirty=true --commit-message="$VERSION release" 2>&1 | tail -3
+
+# 立即恢复，并清掉 trap（后续步骤如果失败不应再触发）
+if [ -n "$VENV_STASH" ] && [ -d "$VENV_STASH" ]; then
+  mv "$VENV_STASH" .venv
+  VENV_STASH=""
+  trap - EXIT INT TERM
+fi
 
 # === 5. 同步 KV cr:current_version ===
 step "5/7 更新 KV cr:current_version"

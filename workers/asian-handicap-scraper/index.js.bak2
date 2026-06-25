@@ -259,46 +259,23 @@ function parseCrownRow(html) {
 
   const parseInnerTable = (tableHtml) => {
     if (!tableHtml) return null;
-    // Pull all <td...>VAL</td> in order, capturing both ref and class
-    const tds = [...tableHtml.matchAll(/<td[^>]*?(?:ref="([0-9.]+)")?[^>]*?(?:class="([^"]*)")?[^>]*>([\s\S]*?)<\/td>/g)];
+    // Pull all <td...>VAL</td> in order
+    const tds = [...tableHtml.matchAll(/<td[^>]*?(?:ref="([0-9.]+)")?[^>]*>([\s\S]*?)<\/td>/g)];
     if (tds.length < 3) return null;
-    // 500.com yazhi inner table column layout — TWO possible variants:
-    //   Variant A (current/即时盘, when class IS set):
-    //     td[0] class="ping" → 上盘水位 (favourite/giver of goals)
-    //     td[1] ref="X"      → 让球
-    //     td[2] class="ying" → 下盘水位 (underdog/receiver of goals)
-    //   Variant B (open/初盘 + finished/历史 比赛, when class IS NOT set):
-    //     td[0]              → 下盘水位 (ying) ← REVERSED!
-    //     td[1] ref="X"      → 让球
-    //     td[2]              → 上盘水位 (ping)
+    // 500.com yazhi inner table column layout (CRITICAL — verified 2026-06-25):
+    //   td[0] = class="ping" → 上盘水位 (favourite/giver of goals)
+    //   td[1] = ref="X"       → 让球 (line magnitude + 受/让 label)
+    //   td[2] = class="ying" → 下盘水位 (underdog/receiver of goals)
     //
-    // The "class" attribute is the ground truth when present. When absent
-    // (the 初盘 sub-table almost always lacks class), we fall back to
-    // Variant B's ordering. This was verified 2026-06-25 by cross-checking
-    // both TUN-NED (live: ping=0.91/ying=0.97) and finished MEX-RSA (open:
-    // td[0]=1.12 ying, td[2]=0.77 ping → MEX 主让 → MEX strong → ping=0.77).
-    const td0Text = stripHtml(tds[0][3]);
-    const td0Class = tds[0][2] || '';
+    // ping/ying are NOT home/away — they're 上盘/下盘. Which side is home depends
+    // on the line sign:
+    //   line > 0  (主队受让) → 主队=下盘 → home_water = ying ; away_water = ping
+    //   line < 0  (主队让)   → 主队=上盘 → home_water = ping ; away_water = ying
+    //   line == 0 (平手)     → no 上/下盘 distinction → ping=home, ying=away (convention)
+    const pingStr = stripHtml(tds[0][2]);
     const lineRef = tds[1][1] ? parseFloat(tds[1][1]) : null;
-    const lineText = stripHtml(tds[1][3]);
-    const td2Text = stripHtml(tds[2][3]);
-    const td2Class = tds[2][2] || '';
-
-    let pingStr, yingStr;
-    if (/ping/.test(td0Class) || /ying/.test(td2Class)) {
-      // Variant A — class present
-      pingStr = td0Text;
-      yingStr = td2Text;
-    } else if (/ying/.test(td0Class) || /ping/.test(td2Class)) {
-      // Variant B — class present but flipped (rare on 500.com but seen on
-      // finished-match current rows)
-      yingStr = td0Text;
-      pingStr = td2Text;
-    } else {
-      // No class — fall back to Variant B ordering (verified on 初盘 + finished)
-      yingStr = td0Text;
-      pingStr = td2Text;
-    }
+    const lineText = stripHtml(tds[1][2]);
+    const yingStr = stripHtml(tds[2][2]);
     const pingWater = parseFloat(pingStr);
     const yingWater = parseFloat(yingStr);
 
@@ -398,17 +375,11 @@ function parseSingleTerm(t) {
 }
 
 async function findWcFixturesInWindow(env, now) {
-  // 500.com 用「销售期日期」给 matches:{date} 命名（凌晨场常归前一日）— 跟
-  // 北京日历不一致。所以不能假定 BJ "今天 / 明天" 就覆盖到所有未来 48h 的赛事。
-  // 改成 list 所有 matches:* 然后按 fixture.kickoff 过滤。
-  // KV namespace 最多 ~50 个 date bucket，list+read 完全在配额内。
-  // (此前的 today/+1/+2 BJ 扫描存在边界漏抓：晚上 BJ 日翻新后会丢失"销售期在
-  // 昨日"的凌晨场，验证于 2026-06-26 00:37 BJ 时 6/26 早场 6 个 fixture
-  // last_attempted_at 锁在 23:30 BJ 后再不更新。)
-  const listRes = await env.MATCH_DATA.list({ prefix: 'matches:' });
-  const buckets = await Promise.all(
-    listRes.keys.map(k => env.MATCH_DATA.get(k.name, 'json'))
-  );
+  const buckets = await Promise.all([
+    env.MATCH_DATA.get(`matches:${beijingDateStr(now)}`, 'json'),
+    env.MATCH_DATA.get(`matches:${beijingDateStr(now + 86400_000)}`, 'json'),
+    env.MATCH_DATA.get(`matches:${beijingDateStr(now + 2 * 86400_000)}`, 'json'),
+  ]);
   const seen = new Set();
   const out = [];
   for (const bucket of buckets) {

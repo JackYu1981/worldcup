@@ -335,14 +335,15 @@ function lineupSignature(lineup) {
 }
 
 async function findFixturesInWindow(env, now) {
-  const today = beijingDateStr(now);
-  const yesterday = beijingDateStr(now - 86400_000);
-  const tomorrow = beijingDateStr(now + 86400_000);
-  const buckets = await Promise.all([
-    env.MATCH_DATA.get(`matches:${yesterday}`, 'json'),
-    env.MATCH_DATA.get(`matches:${today}`, 'json'),
-    env.MATCH_DATA.get(`matches:${tomorrow}`, 'json')
-  ]);
+  // 500.com names matches:{date} buckets by "销售期 (settlement period)" date,
+  // not by Beijing kickoff date. Late-night fixtures (e.g. 04:00 BJ) frequently
+  // file under the PREVIOUS day's bucket. To avoid border misses, scan all
+  // matches:* buckets and filter by each fixture's kickoff field directly.
+  // KV namespace has at most ~50 date buckets — list+read fits comfortably.
+  const listRes = await env.MATCH_DATA.list({ prefix: 'matches:' });
+  const buckets = await Promise.all(
+    listRes.keys.map(k => env.MATCH_DATA.get(k.name, 'json'))
+  );
   // Phase 1: filter to WC matches in the basic time window (cheap pure-CPU pass).
   // Note: the 4h hard cap is applied LATER, only after we know the match's marker
   // status — finished matches missing the gctp marker stay in window past 4h.

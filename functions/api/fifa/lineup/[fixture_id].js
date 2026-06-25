@@ -100,14 +100,30 @@ export async function onRequestGet(context) {
     let match_state = null;
     if (lineup) {
       const ht = computeHalfTimeScore(lineup.events);
+      // FIFA's HomeTeam.Score / AwayTeam.Score is sometimes null even after a
+      // match is finished (observed on ARG-AUT, FRA-IRQ, NOR-SEN — most likely
+      // a FIFA Live-API quirk where they stop populating Score post-match).
+      // Fall back to counting `events.goals` by side, which is always reliable.
+      // The lineup's `match_status_label === 'finished'` gates this fallback so
+      // we don't show partial in-progress scores as final.
+      const goals = lineup.events?.goals || [];
+      const goalsBySide = (side) => goals.filter(g => g.side === side).length;
+      const isFinished = lineup.match_status_label === 'finished'
+                       || (typeof lineup.period === 'number' && lineup.period >= 10);
+      const homeScore = (lineup.home?.score != null) ? lineup.home.score
+                      : isFinished                    ? goalsBySide('home')
+                      : null;
+      const awayScore = (lineup.away?.score != null) ? lineup.away.score
+                      : isFinished                    ? goalsBySide('away')
+                      : null;
       match_state = {
         match_status: lineup.match_status ?? null,
         match_status_label: lineup.match_status_label || null,
         period: lineup.period ?? null,
         match_time: lineup.match_time ?? null,
         fetched_at: lineup.fetched_at || null,
-        home_score: lineup.home?.score ?? null,
-        away_score: lineup.away?.score ?? null,
+        home_score: homeScore,
+        away_score: awayScore,
         home_score_ht: ht.home,
         away_score_ht: ht.away,
         events: lineup.events || { goals: [], bookings: [], substitutions: [] },

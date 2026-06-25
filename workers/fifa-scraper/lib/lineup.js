@@ -137,6 +137,21 @@ export function normalizeLineup(liveData, mapping) {
   for (const g of homeEvents.goals) if ((g.period ?? 99) <= 3) homeHt++;
   for (const g of awayEvents.goals) if ((g.period ?? 99) <= 3) awayHt++;
 
+  // Final score fallback: FIFA occasionally leaves HomeTeam.Score / AwayTeam.Score
+  // null even after the match is finished (observed on ARG-AUT, FRA-IRQ, NOR-SEN
+  // among others on 2026-06-25). When that happens, count `events.goals` instead
+  // — it's authoritative because each goal event is a confirmed FIFA-tracked
+  // event. Only apply the fallback when the match is finished, otherwise leave
+  // null so the UI shows the "not yet started / in progress" state correctly.
+  const isFinished = matchStatusLabel(liveData.MatchStatus) === 'finished'
+                  || (typeof liveData.Period === 'number' && liveData.Period >= 10);
+  const homeScore = (homeTeam.Score != null) ? homeTeam.Score
+                  : isFinished                ? homeEvents.goals.length
+                  : null;
+  const awayScore = (awayTeam.Score != null) ? awayTeam.Score
+                  : isFinished                ? awayEvents.goals.length
+                  : null;
+
   return {
     fifa_id_match: mapping.fifa_id_match || liveData.IdMatch,
     fetched_at: new Date().toISOString().replace(/Z$/, '+00:00'),
@@ -151,7 +166,7 @@ export function normalizeLineup(liveData, mapping) {
       team_id: homeTeam.IdTeam,
       team_name_en: pickEnglish(homeTeam.TeamName),
       tactics: homeTeam.Tactics || null,
-      score: homeTeam.Score ?? null,         // FIFA full-time score
+      score: homeScore,                       // FIFA full-time score, with goal-count fallback
       score_ht: homeHt,                       // computed half-time goals
       starting: home.starting,
       substitutes: home.substitutes,
@@ -162,7 +177,7 @@ export function normalizeLineup(liveData, mapping) {
       team_id: awayTeam.IdTeam,
       team_name_en: pickEnglish(awayTeam.TeamName),
       tactics: awayTeam.Tactics || null,
-      score: awayTeam.Score ?? null,
+      score: awayScore,
       score_ht: awayHt,
       starting: away.starting,
       substitutes: away.substitutes,

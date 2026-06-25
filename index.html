@@ -365,6 +365,20 @@
             padding: 10px 14px 4px;
             font-size: 12px; font-weight: 600; color: #555;
         }
+        .bot-stage-badge {
+            display: inline-block; margin-left: 6px;
+            font-size: 10px; font-weight: 700;
+            padding: 1px 7px; border-radius: 9px;
+            vertical-align: middle;
+        }
+        .bot-stage-preview {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #78350f;
+        }
+        .bot-stage-confirmed {
+            background: linear-gradient(135deg, #d1fae5, #6ee7b7);
+            color: #064e3b;
+        }
         .bot-pick-card {
             background: white;
             margin: 0 12px 8px;
@@ -379,6 +393,19 @@
         .bot-pick-rank {
             font-weight: 700; color: #7c3aed;
             font-variant-numeric: tabular-nums;
+            min-width: 14px; text-align: center;
+        }
+        .bot-pick-flag {
+            width: 20px; height: 14px;
+            object-fit: cover; border-radius: 2px;
+            flex-shrink: 0; box-shadow: 0 0 1px rgba(0,0,0,0.2);
+        }
+        .bot-pick-shirt {
+            font-size: 11px; font-weight: 700;
+            color: #555; background: #f0f0f0;
+            padding: 1px 6px; border-radius: 9px;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
         }
         .bot-pick-name {
             font-weight: 600; color: #333;
@@ -1317,14 +1344,16 @@
             return { date: '', time: kickoff };
         }
         // Compact bet365 asian handicap label for index match cards.
-        // Format: "让0.5 ↘" (one line, fits in the narrow kickoff-box).
-        // Long form (water values) lives in lineup modal; here just line + trend.
+        // Format: "主队让0.5 ↘" or "主队受让0.5 ↗" or "平手"
+        // Always phrased from the HOME team's perspective (站点统一约定).
         function renderIndexAhBlock(ah) {
             const line = Number(ah?.current?.line);
             if (!Number.isFinite(line)) return '';
             const absStr = Math.abs(line).toFixed(2).replace(/\.?0+$/, '');
-            const sideLabel = line > 0.01 ? '主让' : line < -0.01 ? '客让' : '平手';
-            const lineDisplay = (sideLabel === '平手') ? sideLabel : `${sideLabel}${absStr}`;
+            // 500.com Crown sign: + = 主队受让 (away strong)；- = 主队让 (home strong)；0 = 平手
+            const lineDisplay = (Math.abs(line) < 0.01) ? '平手'
+                              : (line > 0)              ? `主队受让${absStr}`
+                                                        : `主队让${absStr}`;
             const trendArrow = ah.trend === 'rising' ? '<span class="card-ah-trend rising">↗</span>'
                              : ah.trend === 'falling' ? '<span class="card-ah-trend falling">↘</span>'
                              : '';
@@ -2099,27 +2128,32 @@
 
         // Render the asian handicap block shown in the modal's scoreboard area
         // when the match hasn't started yet. Pulls from data.asian_handicap.
-        // Format: "主队让 0.5 ↘  上 1.00 / 下 0.85  bet365"
+        //
+        // Display rules (per site convention — always HOME-perspective):
+        //   line > 0  → "主队受让 X 球"  (away team is stronger / 上盘)
+        //   line < 0  → "主队让 X 球"    (home team is stronger / 上盘)
+        //   line == 0 → "平手"
+        //
+        // Waters are labeled by team (主/客), not by 上/下盘, to avoid confusion:
+        //   home_water 始终是主队水位（赔率）
+        //   away_water 始终是客队水位
         function renderAsianHandicapBlock(ah) {
             const cur = ah.current || {};
             const line = Number(cur.line);
             if (!Number.isFinite(line)) return '';
             const homeWater = Number(cur.home_water);
             const awayWater = Number(cur.away_water);
-            // line > 0: 主队让 (home gives goals); line < 0: 客队让
-            const isHomeGiving = line > 0.01;
-            const isAwayGiving = line < -0.01;
-            let lineLabel;
-            if (isHomeGiving) lineLabel = `主队让 ${line.toFixed(2).replace(/\.?0+$/, '')}`;
-            else if (isAwayGiving) lineLabel = `客队让 ${Math.abs(line).toFixed(2).replace(/\.?0+$/, '')}`;
-            else lineLabel = '平手';
+            const absStr = Math.abs(line).toFixed(2).replace(/\.?0+$/, '');
+            const lineLabel = (Math.abs(line) < 0.01) ? '平手'
+                            : (line > 0)              ? `主队受让 ${absStr}`
+                                                      : `主队让 ${absStr}`;
             const trendArrow = ah.trend === 'rising' ? '<span class="ah-trend rising">↗ 升盘</span>'
                              : ah.trend === 'falling' ? '<span class="ah-trend falling">↘ 降盘</span>'
                              : '';
             return `<div class="lineup-ah-block">
                 <div class="ah-line">${lineLabel} ${trendArrow}</div>
-                <div class="ah-waters">上 ${isFinite(homeWater) ? homeWater.toFixed(2) : '—'} / 下 ${isFinite(awayWater) ? awayWater.toFixed(2) : '—'}</div>
-                <div class="ah-source">bet365</div>
+                <div class="ah-waters">主 ${isFinite(homeWater) ? homeWater.toFixed(2) : '—'} / 客 ${isFinite(awayWater) ? awayWater.toFixed(2) : '—'}</div>
+                <div class="ah-source">皇冠</div>
             </div>`;
         }
 
@@ -2714,19 +2748,47 @@
                                  : '— 持平';
                 const trendCls = `trend-${ah.trend || 'stable'}`;
 
+                // Phrase line from HOME perspective (per user spec — no "客让"):
+                //   line > 0  → 主队受让 X 球    (away strong)
+                //   line < 0  → 主队让 X 球      (home strong)
+                //   line == 0 → 平手
+                const absLineStr = _fmtNum(Math.abs(cur.line));
+                const curLineLabel = (Math.abs(cur.line) < 0.01) ? '平手'
+                                   : (cur.line > 0)              ? `主队受让 ${absLineStr} 球`
+                                                                 : `主队让 ${absLineStr} 球`;
+                const openAbsStr = _fmtNum(Math.abs(open.line ?? 0));
+                const openLineLabel = (open.line === undefined || open.line === null) ? '—'
+                                    : (Math.abs(open.line) < 0.01) ? '平手'
+                                    : (open.line > 0)              ? `主队受让 ${openAbsStr} 球`
+                                                                   : `主队让 ${openAbsStr} 球`;
+
+                // 即时盘口/初盘 行：水位按「主水位/客水位」固定顺序展示，但用上下盘文字标注
+                //   line > 0 (主受让): 主=下盘, 客=上盘 → 显示 "下 0.90 / 上 0.98"
+                //   line < 0 (主让):   主=上盘, 客=下盘 → 显示 "上 X / 下 Y"
+                //   line == 0 (平手):  无上下盘 → 显示 "主 X / 客 Y"
+                function _hostLabels(lineForSign) {
+                    // returns [homeLabel, awayLabel]
+                    if (lineForSign > 0.01) return ['下', '上'];
+                    if (lineForSign < -0.01) return ['上', '下'];
+                    return ['主', '客'];
+                }
+                const [curHomeL, curAwayL] = _hostLabels(cur.line);
+                const [openHomeL, openAwayL] = _hostLabels(open.line ?? cur.line);
+
+                // 水位变动也用主/客固定顺序 + 上下盘标签
+                const [deltaHomeL, deltaAwayL] = _hostLabels(cur.line);
+
                 ahSection = `
-                  <div class="bot-section-title">📊 亚盘决策依据 · bet365</div>
+                  <div class="bot-section-title">📊 亚盘决策依据 · 皇冠</div>
                   <div class="bot-card">
                     <div class="bot-row"><span class="bot-k">即时盘口</span>
-                      <span class="bot-v">${strong.label} 让 ${_fmtNum(strong.abs)} 球</span></div>
-                    <div class="bot-row"><span class="bot-k">水位（上盘 / 下盘）</span>
-                      <span class="bot-v">${_fmtNum(cur.home_water)} / ${_fmtNum(cur.away_water)}</span></div>
+                      <span class="bot-v">${curLineLabel} · ${curHomeL} ${_fmtNum(cur.home_water)} / ${curAwayL} ${_fmtNum(cur.away_water)}</span></div>
                     <div class="bot-row"><span class="bot-k">初盘</span>
-                      <span class="bot-v">让 ${_fmtNum(Math.abs(open.line))} 球 · 水位 ${_fmtNum(open.home_water)} / ${_fmtNum(open.away_water)}</span></div>
+                      <span class="bot-v">${openLineLabel} · ${openHomeL} ${_fmtNum(open.home_water)} / ${openAwayL} ${_fmtNum(open.away_water)}</span></div>
                     <div class="bot-row"><span class="bot-k">让球变动</span>
                       <span class="bot-v">${lineDelta != null ? (lineDelta > 0 ? '+' : '') + lineDelta : '—'}</span></div>
                     <div class="bot-row"><span class="bot-k">水位变动</span>
-                      <span class="bot-v">上盘 ${homeWaterDelta ?? '—'} / 下盘 ${awayWaterDelta ?? '—'}</span></div>
+                      <span class="bot-v">${deltaHomeL} ${homeWaterDelta ?? '—'} / ${deltaAwayL} ${awayWaterDelta ?? '—'}</span></div>
                     <div class="bot-row"><span class="bot-k">趋势</span>
                       <span class="bot-v bot-trend ${trendCls}">${trendLabel}</span></div>
                     <div class="bot-divider"></div>
@@ -2768,19 +2830,53 @@
                   <div class="bot-card bot-info">
                     引擎尚未为本场比赛生成推荐方案<br>
                     <span style="font-size:11px; color:#aaa; display:block; margin-top:4px">
-                      Python 引擎（v0 baseline / v1 LR / v2 GBT）离线计算<br>
-                      赛前定期写入 KV，请稍后再试
+                      推荐每 5 分钟自动刷新，开赛前 8 小时内生成预测版（🔮），<br>
+                      FIFA 公布首发后切换为确认版（✅）。请稍候再试
                     </span>
                   </div>`;
             } else {
                 const picks = rec.picks || [];
                 const strong = picks.filter(p => p.side === rec.strong_side);
                 const weak = picks.filter(p => p.side !== rec.strong_side);
+
+                // Build pid → {shirt, country_code} lookup from lineupData
+                // (preview stage may not have lineup; fall back gracefully)
+                const shirtByPid = {};
+                const countryBySide = {
+                    home: meta?.home?.country_code || null,
+                    away: meta?.away?.country_code || null,
+                };
+                if (lineup) {
+                    for (const side of ['home', 'away']) {
+                        const team = lineup[side] || {};
+                        for (const grp of ['starting', 'substitutes']) {
+                            for (const p of (team[grp] || [])) {
+                                if (p.player_id != null) {
+                                    shirtByPid[String(p.player_id)] = p.shirt_number;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Helper: country code → flag emoji via /api/fifa/flag/{code}
+                // is too heavy for the lineup-bot sheet — use inline <img>
+                const flagImg = (code) => code
+                    ? `<img src="/api/fifa/flag/${code}" alt="${code}" class="bot-pick-flag" onerror="this.style.display='none'">`
+                    : '';
                 const renderPick = (p, i) => {
+                    const cc = countryBySide[p.side];
+                    const flag = flagImg(cc);
+                    // Worker 写 KV 时可能已自带 shirt_number / country_code（向前兼容）；
+                    // 否则用前端 lookup 兜底
+                    const shirt = p.shirt_number ?? shirtByPid[String(p.pid)];
+                    // 球衣号去掉 # 前缀，仅显示数字（#留给最左列序号）
+                    const shirtHtml = (shirt != null) ? `<span class="bot-pick-shirt">${shirt}</span>` : '';
                     const star = p.shots >= 2 ? `<span class="bot-shots-badge">⭐ ${p.shots} 次</span>` : '';
                     return `<div class="bot-pick-card">
                         <div class="bot-pick-head">
                             <span class="bot-pick-rank">#${i+1}</span>
+                            ${flag}
+                            ${shirtHtml}
                             <span class="bot-pick-name">${p.name || p.pid}</span>
                             ${star}
                             <span class="bot-pick-score">${(p.score || 0).toFixed(1)}</span>
@@ -2789,9 +2885,9 @@
                     </div>`;
                 };
                 outputSection = `
-                  <div class="bot-section-title">🎯 引擎推荐方案</div>
-                  ${strong.length ? `<div class="bot-subheader">🟦 强队（${strong.reduce((s,p)=>s+p.shots,0)} 次）</div>${strong.map((p,i)=>renderPick(p,i)).join('')}` : ''}
-                  ${weak.length ? `<div class="bot-subheader">🟥 弱队（${weak.reduce((s,p)=>s+p.shots,0)} 次）</div>${weak.map((p,i)=>renderPick(p,i)).join('')}` : ''}
+                  <div class="bot-section-title">🎯 引擎推荐方案 ${rec.stage === 'confirmed' ? '<span class="bot-stage-badge bot-stage-confirmed">✅ 确认版</span>' : '<span class="bot-stage-badge bot-stage-preview">🔮 预测版</span>'}</div>
+                  ${strong.map((p,i)=>renderPick(p,i)).join('')}
+                  ${weak.map((p,i)=>renderPick(p,i+strong.length)).join('')}
                   ${rec.model_version ? `<div class="bot-meta">模型 ${rec.model_version} · ${rec.generated_at?.slice(0,16).replace('T',' ') || ''}</div>` : ''}
                 `;
             }
