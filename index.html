@@ -378,15 +378,15 @@
         }
         .bot-candidate-team-head .bot-pick-flag { width: 16px; height: 11px; }
         .bot-candidate-row {
-            display: flex; align-items: center; gap: 6px;
+            display: flex; align-items: center; gap: 4px;
             font-size: 12px; padding: 4px 0;
             border-bottom: 1px dashed #f0f0f0;
         }
         .bot-candidate-row:last-child { border-bottom: none; }
         .bot-candidate-row .bot-pick-rank { color: #999; font-weight: 600; min-width: 18px; }
         .bot-candidate-row .bot-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .bot-candidate-pos { font-size: 10px; color: #888; min-width: 24px; }
-        .bot-candidate-row .bot-pick-score { font-weight: 600; color: #0a2f5c; }
+        .bot-candidate-pos { font-size: 10px; color: #888; margin-left: 2px; }
+        .bot-candidate-row .bot-pick-score { font-weight: 600; color: #0a2f5c; margin-left: 4px; }
         .bot-stage-badge {
             display: inline-block; margin-left: 6px;
             font-size: 10px; font-weight: 700;
@@ -717,7 +717,7 @@
             font-size: 14px; font-weight: 700; color: #333;
             letter-spacing: 0.4px;
         }
-        /* Row 2: tactics formation (only when FIFA has published it) */
+        /* Row 2: tactics formation (FIFA published value, or 灰色"阵型待定" 占位) */
         .lineup-team-tab .tab-tactics {
             font-size: 10px; color: #888; font-variant-numeric: tabular-nums;
         }
@@ -2123,14 +2123,14 @@
                         ${tabFlagImg(homeAbbr)}
                         <span class="tab-code">${homeAbbr}</span>
                     </div>
-                    ${homeTactics ? `<span class="tab-tactics">${homeTactics}</span>` : ''}
+                    <span class="tab-tactics">${homeTactics || '阵型待定'}</span>
                 </div>
                 <div class="lineup-team-tab ${currentLineupSide==='away'?'active':''}" onclick="switchLineupSide('away')">
                     <div class="tab-row-1">
-                        ${tabFlagImg(awayAbbr)}
                         <span class="tab-code">${awayAbbr}</span>
+                        ${tabFlagImg(awayAbbr)}
                     </div>
-                    ${awayTactics ? `<span class="tab-tactics">${awayTactics}</span>` : ''}
+                    <span class="tab-tactics">${awayTactics || '阵型待定'}</span>
                 </div>
               </div>
             `;
@@ -2923,8 +2923,8 @@
                     引擎将基于完整国家队大名单的累计统计进行赛前预测
                   </div>`;
             } else {
-                const homeTactics = lineup.home?.tactics || '?';
-                const awayTactics = lineup.away?.tactics || '?';
+                const homeTactics = lineup.home?.tactics || '阵型待定';
+                const awayTactics = lineup.away?.tactics || '阵型待定';
                 const homeStarters = (lineup.home?.starting || []).length;
                 const awayStarters = (lineup.away?.starting || []).length;
                 lineupSection = `
@@ -3035,7 +3035,7 @@
                     previewBlock = `
                         <details class="bot-preview-snapshot">
                             <summary>
-                                <span class="bot-preview-summary-title">🔮 之前的预测版</span>
+                                <span class="bot-preview-summary-title">🔮 预测版快照</span>
                                 ${diffSummary}
                             </summary>
                             <div class="bot-preview-meta">预测于 ${prevAt} · 确认于 ${trAt}</div>
@@ -3070,7 +3070,6 @@
                         const shirtHtml = (c.shirt_number != null) ? `<span class="bot-pick-shirt">${c.shirt_number}</span>` : '';
                         const probPct = (c.prob * 100).toFixed(0);
                         return `<div class="bot-candidate-row">
-                            <span class="bot-pick-rank">#${i+1}</span>
                             ${shirtHtml}
                             <span class="bot-pick-name">${c.name || c.pid}</span>
                             <span class="bot-candidate-pos">${posLbl}</span>
