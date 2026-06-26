@@ -122,6 +122,14 @@ async function findEligibleFixtures(env, now) {
   const buckets = await Promise.all(
     listRes.keys.map(k => env.MATCH_DATA.get(k.name, 'json'))
   );
+
+  // Manual force-regen: a KV key `force_regen:<fid>` bypasses the ko>now gate.
+  // Set the key (any non-empty value) to force this worker tick to regenerate
+  // that fid even if kickoff has passed; cron then auto-deletes the key so it
+  // only fires once. Useful for backfilling past fixtures after a bug fix.
+  const forceList = await env.MATCH_DATA.list({ prefix: 'force_regen:' });
+  const forceFids = new Set((forceList.keys || []).map(k => k.name.split(':', 2)[1]));
+
   const seen = new Set();
   const out = [];
   for (const bucket of buckets) {
@@ -129,15 +137,27 @@ async function findEligibleFixtures(env, now) {
     for (const m of bucket.matches) {
       if (!m.id || seen.has(m.id)) continue;
       if (m.league !== '世界杯') continue;
-      if (m.status === 'finished') continue;
       seen.add(m.id);
       let ko;
       try { ko = parseKickoffBeijing(m).getTime(); } catch { continue; }
-      if (ko <= now) continue;
-      if (ko - now > PREVIEW_WINDOW_MS) continue;
+      const isForced = forceFids.has(m.id);
+      if (!isForced) {
+        if (m.status === 'finished') continue;
+        if (ko <= now) continue;
+        if (ko - now > PREVIEW_WINDOW_MS) continue;
+      }
       m._ko_ms = ko;
+      m._forced = isForced;
       out.push(m);
     }
+  }
+
+  // After collecting forced fids, delete their trigger keys so this only
+  // fires once per request (cron-safe).
+  if (forceFids.size > 0) {
+    await Promise.all([...forceFids].map(fid =>
+      env.MATCH_DATA.delete(`force_regen:${fid}`).catch(() => {})
+    ));
   }
   return out;
 }
