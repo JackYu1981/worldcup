@@ -365,6 +365,18 @@
             padding: 10px 14px 4px;
             font-size: 12px; font-weight: 600; color: #555;
         }
+        /* === Recommendation completion highlight (live) ===
+         * 名字红色 = 本场已射正 ≥ 分配人次（pick）或 ≥1（候选）
+         */
+        .bot-pick-fulfilled { color: #c62828 !important; font-weight: 700; }
+        .bot-pick-fulfilled-tag {
+            font-size: 10px; font-weight: 700; color: #c62828;
+            background: #fde8e8; padding: 1px 5px; border-radius: 8px; margin-left: 4px;
+        }
+        .bot-pick-progress-tag {
+            font-size: 10px; font-weight: 600; color: #f59e0b;
+            background: #fef3c7; padding: 1px 5px; border-radius: 8px; margin-left: 4px;
+        }
         .bot-section-sub {
             font-size: 10px; font-weight: 400; color: #999; margin-left: 4px;
         }
@@ -2778,8 +2790,13 @@
                 const recResp = fetch(`/api/recommend/shots/${currentLineupFixtureId}?_t=${Date.now()}`, { cache: 'no-store' })
                     .then(r => r.ok ? r.json() : null)
                     .catch(() => null);
-                const [lineupData, recommendation] = await Promise.all([lineupResp, recResp]);
-                renderShotRecommenderSheet(lineupData, recommendation);
+                // Live match stats — for showing which recommended players have
+                // already met / exceeded their assigned shot quota (red highlight).
+                const msResp = fetch(`/api/fifa/match-stats/${currentLineupFixtureId}?_t=${Date.now()}`, { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null);
+                const [lineupData, recommendation, matchStats] = await Promise.all([lineupResp, recResp, msResp]);
+                renderShotRecommenderSheet(lineupData, recommendation, matchStats);
             } catch (e) {
                 body.innerHTML = `<div class="stats-empty">加载失败: ${e.message}</div>`;
             }
@@ -2817,12 +2834,19 @@
             return [3, 3];
         }
 
-        function renderShotRecommenderSheet(lineupData, rec) {
+        function renderShotRecommenderSheet(lineupData, rec, matchStats) {
             const body = document.getElementById('shotRecommenderBody');
             const meta = lineupData?.fixture_meta;
             const ah = lineupData?.asian_handicap;
             const lineup = lineupData?.lineup;
             if (!meta) { body.innerHTML = '<div class="stats-empty">比赛元数据缺失</div>'; return; }
+
+            // Build pid → actual shots_on_target map for live "exceeded quota" highlight.
+            // match-stats API returns players[] array; map by player_id.
+            const actualStByPid = {};
+            for (const p of (matchStats?.players || [])) {
+                if (p.player_id != null) actualStByPid[String(p.player_id)] = p.shots_on_target ?? 0;
+            }
 
             // Set sheet header to "主队 vs 客队" — per user spec, the matchup is
             // more informative than a generic "射门推荐" label. Use Chinese
@@ -2987,12 +3011,23 @@
                     // 球衣号去掉 # 前缀，仅显示数字（#留给最左列序号）
                     const shirtHtml = (shirt != null) ? `<span class="bot-pick-shirt">${shirt}</span>` : '';
                     const star = p.shots >= 2 ? `<span class="bot-shots-badge">⭐ ${p.shots} 次</span>` : '';
-                    return `<div class="bot-pick-card">
+                    // 实时核对推荐完成情况：如果本场实际射正数 ≥ 分配人次，名字标红
+                    // (已达成；含已超额) 。actualSt 由 match_stats:{fid} 实时更新（fdh-api
+                    // 每 cron tick 拉新数据），未抓到的球员视为 0 射正。
+                    const actualSt = actualStByPid[String(p.pid)] ?? 0;
+                    const fulfilled = actualSt >= p.shots;
+                    const nameCls = fulfilled ? 'bot-pick-name bot-pick-fulfilled' : 'bot-pick-name';
+                    const fulfilledTag = fulfilled
+                        ? `<span class="bot-pick-fulfilled-tag" title="本场实际射正 ${actualSt} ≥ 分配 ${p.shots}">✓${actualSt}</span>`
+                        : (actualSt > 0 ? `<span class="bot-pick-progress-tag" title="本场已射正 ${actualSt} / 分配 ${p.shots}">${actualSt}/${p.shots}</span>` : '');
+                    const safeName = (p.name || p.pid).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    return `<div class="bot-pick-card" onclick="openPlayerSheet('${p.pid}','${safeName}')" style="cursor:pointer">
                         <div class="bot-pick-head">
                             <span class="bot-pick-rank">#${i+1}</span>
                             ${flag}
                             ${shirtHtml}
-                            <span class="bot-pick-name">${p.name || p.pid}</span>
+                            <span class="${nameCls}">${p.name || p.pid}</span>
+                            ${fulfilledTag}
                             ${star}
                             <span class="bot-pick-score">${(p.score || 0).toFixed(1)}</span>
                         </div>
@@ -3069,9 +3104,17 @@
                         const posLbl = POS_LABEL_ZH[c.position] || '';
                         const shirtHtml = (c.shirt_number != null) ? `<span class="bot-pick-shirt">${c.shirt_number}</span>` : '';
                         const probPct = (c.prob * 100).toFixed(0);
-                        return `<div class="bot-candidate-row">
+                        // Candidate 已射正 ≥1 视为"已打出表现"，名字红色 + 显示当前射正数
+                        const actualSt = actualStByPid[String(c.pid)] ?? 0;
+                        const nameCls = actualSt >= 1 ? 'bot-pick-name bot-pick-fulfilled' : 'bot-pick-name';
+                        const stTag = actualSt >= 1
+                            ? `<span class="bot-pick-fulfilled-tag" title="本场已射正 ${actualSt} 次">✓${actualSt}</span>`
+                            : '';
+                        const safeName = (c.name || c.pid).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        return `<div class="bot-candidate-row" onclick="openPlayerSheet('${c.pid}','${safeName}')" style="cursor:pointer">
                             ${shirtHtml}
-                            <span class="bot-pick-name">${c.name || c.pid}</span>
+                            <span class="${nameCls}">${c.name || c.pid}</span>
+                            ${stTag}
                             <span class="bot-candidate-pos">${posLbl}</span>
                             <span class="bot-pick-score">${probPct}%</span>
                         </div>`;
