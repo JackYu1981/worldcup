@@ -2843,9 +2843,37 @@
 
             // Build pid → actual shots_on_target map for live "exceeded quota" highlight.
             // match-stats API returns players[] array; map by player_id.
-            const actualStByPid = {};
+            //
+            // 替补归并 (shot-rec 专用，不污染其他场景): A 被换下后 B 上场，B 的
+            // 射正归到 A；如果 B 又被 C 换下，C 的射正继续归到 A (chain)。
+            // 通过 lineup.events.substitutions 的 off_player_id→on_player_id 链
+            // 反向追溯找到 chain 起点 (首发)，把整条 chain 的射正合并到首发。
+            const rawStByPid = {};
             for (const p of (matchStats?.players || [])) {
-                if (p.player_id != null) actualStByPid[String(p.player_id)] = p.shots_on_target ?? 0;
+                if (p.player_id != null) rawStByPid[String(p.player_id)] = p.shots_on_target ?? 0;
+            }
+            const actualStByPid = {};
+            const subs = (lineup?.events?.substitutions) || [];
+            // 建 on_pid → off_pid 反向映射，沿 chain 追溯每个 pid 的"原首发"
+            const onToOff = {};
+            for (const s of subs) {
+                if (s.on_player_id != null && s.off_player_id != null) {
+                    onToOff[String(s.on_player_id)] = String(s.off_player_id);
+                }
+            }
+            function chainRoot(pid) {
+                // 沿链上溯 (含防环 — chain 长度极少超过 3)
+                let cur = String(pid);
+                const seen = new Set();
+                while (onToOff[cur] && !seen.has(cur)) {
+                    seen.add(cur);
+                    cur = onToOff[cur];
+                }
+                return cur;
+            }
+            for (const [pid, st] of Object.entries(rawStByPid)) {
+                const root = chainRoot(pid);
+                actualStByPid[root] = (actualStByPid[root] || 0) + st;
             }
 
             // Set sheet header to "主队 vs 客队" — per user spec, the matchup is
