@@ -2120,15 +2120,15 @@
               <div class="lineup-team-tabs">
                 <div class="lineup-team-tab ${currentLineupSide==='home'?'active':''}" onclick="switchLineupSide('home')">
                     <div class="tab-row-1">
-                        ${tabFlagImg(homeAbbr)}
                         <span class="tab-code">${homeAbbr}</span>
+                        ${tabFlagImg(homeAbbr)}
                     </div>
                     <span class="tab-tactics">${homeTactics || '阵型待定'}</span>
                 </div>
                 <div class="lineup-team-tab ${currentLineupSide==='away'?'active':''}" onclick="switchLineupSide('away')">
                     <div class="tab-row-1">
-                        <span class="tab-code">${awayAbbr}</span>
                         ${tabFlagImg(awayAbbr)}
+                        <span class="tab-code">${awayAbbr}</span>
                     </div>
                     <span class="tab-tactics">${awayTactics || '阵型待定'}</span>
                 </div>
