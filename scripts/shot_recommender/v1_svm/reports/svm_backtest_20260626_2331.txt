@@ -1,0 +1,8 @@
+SVM v1 walk-forward backtest
+Trained at: 2026-06-26 15:31 UTC
+Samples: 529, fixtures: 36
+Features (17): ['ot_overall', 'ot_vs_weak', 'ot_vs_strong', 'ot_vs_medium', 'att_overall', 'matches_played', 'n_vs_weak', 'n_vs_strong', 'n_vs_medium', 'is_FW', 'is_MF', 'is_DF', 'is_GK', 'ot_x_FW', 'ot_x_DF', 'opp_gc_per_match', 'team_favoredness']
+
+Backtested fixtures: 33
+Mean precision@6: 39.39%
+Median: 33.33%

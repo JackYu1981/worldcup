@@ -1,0 +1,32 @@
+{
+  "n_samples": 529,
+  "positive_rate": 0.2722117202268431,
+  "features_x": [
+    "ot_overall",
+    "ot_vs_weak",
+    "ot_vs_strong",
+    "ot_vs_medium",
+    "att_overall",
+    "matches_played",
+    "n_vs_weak",
+    "n_vs_strong",
+    "n_vs_medium",
+    "is_FW",
+    "is_MF",
+    "is_DF",
+    "is_GK",
+    "ot_x_FW",
+    "ot_x_DF",
+    "opp_gc_per_match",
+    "team_favoredness"
+  ],
+  "label_y": "shots_on_target_actual >= 1",
+  "cold_start_dropped": 791,
+  "fixtures_used": 60,
+  "opponent_definition": {
+    "weak": "this-match AH own-favoredness >= 2.0",
+    "strong": "this-match AH own-favoredness <= -0.5",
+    "medium": "everything else (incl. AH missing)"
+  },
+  "note": "ot_vs_* uses -1 as \"no historical data\" sentinel; n_vs_* gives sample count"
+}

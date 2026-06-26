@@ -365,6 +365,28 @@
             padding: 10px 14px 4px;
             font-size: 12px; font-weight: 600; color: #555;
         }
+        .bot-section-sub {
+            font-size: 10px; font-weight: 400; color: #999; margin-left: 4px;
+        }
+        /* === Candidate pool section (top-4 per team, side-by-side) === */
+        .bot-candidate-card { padding: 8px 14px; display: flex; gap: 16px; flex-wrap: wrap; }
+        .bot-candidate-team { flex: 1 1 0; min-width: 0; }
+        .bot-candidate-team-head {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; font-weight: 600; color: #0a2f5c;
+            padding: 4px 0 6px; border-bottom: 1px solid #eaeaea; margin-bottom: 4px;
+        }
+        .bot-candidate-team-head .bot-pick-flag { width: 16px; height: 11px; }
+        .bot-candidate-row {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; padding: 4px 0;
+            border-bottom: 1px dashed #f0f0f0;
+        }
+        .bot-candidate-row:last-child { border-bottom: none; }
+        .bot-candidate-row .bot-pick-rank { color: #999; font-weight: 600; min-width: 18px; }
+        .bot-candidate-row .bot-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bot-candidate-pos { font-size: 10px; color: #888; min-width: 24px; }
+        .bot-candidate-row .bot-pick-score { font-weight: 600; color: #0a2f5c; }
         .bot-stage-badge {
             display: inline-block; margin-left: 6px;
             font-size: 10px; font-weight: 700;
@@ -3030,7 +3052,42 @@
                 `;
             }
 
-            body.innerHTML = ahSection + lineupSection + outputSection;
+            // === SECTION 4: 候选射手名单（每队 top-4） ===
+            // 由 worker 写入 rec.candidate_pools，按 SVM 概率排序前 4 人/队。
+            // 用于人工核对/调整推荐方案 — 看看引擎在"几乎入选"的边界上选了谁。
+            let candidatesSection = '';
+            if (rec?.candidate_pools) {
+                const pools = rec.candidate_pools;
+                const POS_LABEL_ZH = { 0: '门将', 1: '后卫', 2: '中场', 3: '前锋', 6: '其他' };
+                const sideHtml = ['home', 'away'].map(side => {
+                    const list = pools[side] || [];
+                    if (!list.length) return '';
+                    const cc = side === 'home' ? meta.home?.country_code : meta.away?.country_code;
+                    const zh = side === 'home' ? (meta.home?.country_zh || cc) : (meta.away?.country_zh || cc);
+                    const flag = cc ? `<img src="/api/fifa/flag/${cc}" alt="${cc}" class="bot-pick-flag" onerror="this.style.display='none'">` : '';
+                    const rows = list.map((c, i) => {
+                        const posLbl = POS_LABEL_ZH[c.position] || '';
+                        const shirtHtml = (c.shirt_number != null) ? `<span class="bot-pick-shirt">${c.shirt_number}</span>` : '';
+                        const probPct = (c.prob * 100).toFixed(0);
+                        return `<div class="bot-candidate-row">
+                            <span class="bot-pick-rank">#${i+1}</span>
+                            ${shirtHtml}
+                            <span class="bot-pick-name">${c.name || c.pid}</span>
+                            <span class="bot-candidate-pos">${posLbl}</span>
+                            <span class="bot-pick-score">${probPct}%</span>
+                        </div>`;
+                    }).join('');
+                    return `<div class="bot-candidate-team">
+                        <div class="bot-candidate-team-head">${flag}<span>${zh}</span></div>
+                        ${rows}
+                    </div>`;
+                }).join('');
+                candidatesSection = `
+                  <div class="bot-section-title">🔍 候选射手名单 <span class="bot-section-sub">(SVM 概率 top-4 / 队，便于人工调整)</span></div>
+                  <div class="bot-card bot-candidate-card">${sideHtml}</div>`;
+            }
+
+            body.innerHTML = ahSection + lineupSection + outputSection + candidatesSection;
         }
 
         // Sheet-scoped pull-to-refresh — independent of the page-level pull-refresh

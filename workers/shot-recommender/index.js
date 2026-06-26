@@ -20,42 +20,25 @@
 //   - well within the 10M reads/day, 1M invocations/day allowances.
 // =============================================================================
 
-// ============= Scoring config (v0.5; thresholds will be ML-tuned via backtest later) =============
-const WEIGHTS = {
-  on_target_per_match: 0.45,
-  attempt_per_match:   0.20,
-  position_bonus:      0.15,
-  xg_per_match:        0.10,
-  starter_bonus:       0.03,
-  successor_bonus:     0.07,   // 替补保证: starter-only, +5%w from typical replacement
-};
-const POSITION_SCORE = { 3: 100, 2: 60, 1: 20, 0: 0, 6: 30 };
-// strong/weak split table — same as Python inference for parity
-const DISTRIBUTION_RULES = [
-  { min: 1.5, strong_frac: 1.0  },  // 让 2 球以上 → 全压强方
-  { min: 1.0, strong_frac: 5/6  },  // 让 1 球   → 5:1
-  { min: 0.25, strong_frac: 4/6 },  // 让半球    → 4:2
-  { min: 0,   strong_frac: 0.5  },  // 平手      → 3:3
-];
-// Multi-shot score thresholds (will be tuned by backtest later)
-const SHOT_T1 = 75;   // score ≥ T1 → 3 shots (elite shooter, can monopolize)
-const SHOT_T2 = 60;   // score ≥ T2 → 2 shots
-// Total shot budget: 6 default, 7 if either team is ultra-attacking
-const BASE_TOTAL_SHOTS = 6;
-const TEAM_CAPACITY_BONUS_THRESHOLD = 15;  // sum of on-target/match
-// Preview stage: generate 8h before kickoff. Earlier than that, the
-// recommendation can be misleading because (a) AH may still be moving, (b)
-// FIFA lineup is too far out to matter. Confirmed stage takes over once
-// `lineup_available === true` (typically KO - 60min).
-// (Widened from 6h to 8h on 2026-06-26: user reported TUN-NED at 6.3h to KO
-// had no preview, just outside the boundary. 8h covers all reasonable
-// "check-before-bed" use cases without excessive writes.)
-const PREVIEW_WINDOW_MS = 8 * 60 * 60_000;  // 8 hours
-// Trend bonus to elite shooters when line is rising in their favor
-const TREND_BONUS = { rising: 5, falling: -5, stable: 0, null: 0 };
+// ============= Imports =============
+import {
+  buildFeatureVector,
+  scorePlayer as svmScorePlayer,
+  buildCumulativeTables,
+  getPlayerPerMatch,
+  decideBudget as svmDecideBudget,
+  quotaSplit as svmQuotaSplit,
+  allocateMultiShot as svmAllocateMultiShot,
+  BUDGET_TO_PLAYERS,
+  MODEL,
+} from './lib/svm-score.js';
 
-const MODEL_VERSION_PREVIEW = 'v0.5-preview';
-const MODEL_VERSION_CONFIRMED = 'v0.5-confirmed';
+// ============= Scoring config =============
+// Window for preview-stage recommendations: generate ≤ 8h before kickoff.
+// Earlier than that, the recommendation can be misleading because (a) AH may
+// still be moving, (b) FIFA lineup is too far out to matter. Confirmed stage
+// takes over once `lineup_available === true` (typically KO - 60min).
+const PREVIEW_WINDOW_MS = 8 * 60 * 60_000;  // 8 hours
 
 // ============= Worker entry =============
 export default {
@@ -75,8 +58,10 @@ export default {
     }
     if (url.pathname.startsWith('/test/')) {
       const fid = url.pathname.split('/').pop();
-      try { return Response.json(await computeOne(env, fid, true)); }
-      catch (e) { return Response.json({ error: e.message, stack: e.stack }, { status: 500 }); }
+      try {
+        const cumTables = await buildCumulativeTables(env);
+        return Response.json(await computeOne(env, fid, true, null, cumTables));
+      } catch (e) { return Response.json({ error: e.message, stack: e.stack }, { status: 500 }); }
     }
     return new Response('worldcup-shot-recommender alive — /trigger or /test/{fid}', { status: 200 });
   },
@@ -87,15 +72,29 @@ async function runRecommender(env) {
   const now = Date.now();
   const fixtures = await findEligibleFixtures(env, now);
   let stats = { eligible: fixtures.length, preview: 0, confirmed: 0, unchanged: 0, skipped: 0, errored: 0 };
+  if (!fixtures.length) return stats;
+
+  // Build walk-forward cumulative tables ONCE per tick (in-memory), reuse
+  // across all fixtures. Same data shape that train.py walks forward through —
+  // guaranteeing inference features match training distribution.
+  let cumTables;
+  try {
+    cumTables = await buildCumulativeTables(env);
+  } catch (e) {
+    console.error(`[recommender] buildCumulativeTables failed: ${e?.message}`, e?.stack);
+    stats.errored = fixtures.length;
+    return stats;
+  }
+
   for (const fix of fixtures) {
     try {
-      const r = await computeOne(env, fix.id, false, fix);
-      if (r.wrote === false) stats.unchanged++;
-      else if (r.stage === 'preview') stats.preview++;
-      else if (r.stage === 'confirmed') stats.confirmed++;
+      const r = await computeOne(env, fix.id, false, fix, cumTables);
+      if (r.wrote === false && !r.skipped) stats.unchanged++;
+      else if (r.stage === 'preview' && r.wrote) stats.preview++;
+      else if (r.stage === 'confirmed' && r.wrote) stats.confirmed++;
       else stats.skipped++;
     } catch (e) {
-      console.warn(`[recommender] ${fix.id} failed:`, e?.message);
+      console.warn(`[recommender] ${fix.id} failed:`, e?.message, e?.stack);
       stats.errored++;
     }
   }
@@ -148,7 +147,7 @@ async function findEligibleFixtures(env, now) {
  * Compute (and optionally write) a recommendation for one fixture.
  * fixtureHint: optional match object from findEligibleFixtures (avoids re-read).
  */
-async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
+async function computeOne(env, fid, includeDebug = false, fixtureHint = null, cumTables = null) {
   if (!fid.startsWith('f')) fid = `f${fid}`;
   const nowIso = new Date().toISOString().replace(/Z$/, '+00:00');
 
@@ -165,48 +164,73 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
   const hasLineup = !!(lineup && lineup.lineup_available);
   const stage = hasLineup ? 'confirmed' : 'preview';
 
-  // === Strong-side decision from AH (Crown sign convention) ===
-  const { strongSide, lineAbs, trend } = decideStrongSide(handicap);
-  const totalShots = await decideTotalShots(env, mapping, lineup, strongSide);
-  const { strongCount, weakCount } = decideDistribution(lineAbs, totalShots);
-
   // === Build candidate pools per stage ===
   const pools = await buildPools(env, mapping, lineup, stage);
   if (!pools.home.length || !pools.away.length) {
     return { wrote: false, skipped: `empty_pool_${stage}`, home: pools.home.length, away: pools.away.length };
   }
 
-  // === Score everyone (successor_bonus deferred to phase C; pass 0 for now) ===
+  // === SVM scoring: features + Platt-calibrated probability per player ===
+  if (!cumTables) cumTables = await buildCumulativeTables(env);
+  const { playerCum, teamCum } = cumTables;
+  const ahLine = handicap.current?.line ?? null;
+  const trend = handicap.trend || 'stable';
+  const homeTeamCum = teamCum.get(mapping.home_code) || { matches: 0, goals_conceded: 0 };
+  const awayTeamCum = teamCum.get(mapping.away_code) || { matches: 0, goals_conceded: 0 };
+
+  function scoreOne(player, sideIsHome) {
+    const oppCum = sideIsHome ? awayTeamCum : homeTeamCum;
+    const pm = getPlayerPerMatch(playerCum, player.id);
+    const feats = buildFeatureVector(player, oppCum, ahLine, sideIsHome, pm);
+    const { prob, decision } = svmScorePlayer(feats);
+    return { total: Math.round(prob * 1000) / 10, prob, decision };
+  }
   const scored = {
-    home: pools.home.map(({ player, isStarter }) => ({ player, isStarter, score: scorePlayer(player, isStarter, 0) })),
-    away: pools.away.map(({ player, isStarter }) => ({ player, isStarter, score: scorePlayer(player, isStarter, 0) })),
+    home: pools.home.map(({ player, isStarter }) => ({ player, isStarter, score: scoreOne(player, true) })),
+    away: pools.away.map(({ player, isStarter }) => ({ player, isStarter, score: scoreOne(player, false) })),
   };
 
-  // === Pick with multi-shot threshold buckets ===
-  const trendBonus = TREND_BONUS[trend] ?? 0;
-  const strongPicks = pickWithMultiShot(scored[strongSide], strongCount, trendBonus);
+  // === Allocator-driven quota + multi-shot (hard rule: 6/7/8 → 4/5/5 players) ===
+  // Strong side = the one favored by AH (positive own-favoredness from that side).
+  const homeOwnFav = ahLine != null ? -ahLine : 0;  // home favored when ah_line < 0
+  const awayOwnFav = ahLine != null ?  ahLine : 0;
+  const strongSide = homeOwnFav >= awayOwnFav ? 'home' : 'away';
   const weakSide = strongSide === 'home' ? 'away' : 'home';
-  const weakPicks = pickWithMultiShot(scored[weakSide], weakCount, 0);
+  const strongFav = strongSide === 'home' ? homeOwnFav : awayOwnFav;
+  const lineAbs = Math.abs(ahLine ?? 0);
+
+  // Team attacking capacity (sum of historical on_target / matches over candidates)
+  const teamCap = (sidePool) => sidePool.reduce((acc, e) => {
+    const pm = getPlayerPerMatch(playerCum, e.player.id);
+    const otpm = pm.matches_overall > 0 ? pm.ot_overall / pm.matches_overall : 0;
+    return acc + Math.max(0, otpm);
+  }, 0);
+  const homeCapacity = teamCap(pools.home);
+  const awayCapacity = teamCap(pools.away);
+
+  const budget = svmDecideBudget(homeCapacity, awayCapacity, ahLine);
+  const maxPlayers = BUDGET_TO_PLAYERS[budget];
+  const { strong: strongCount, weak: weakCount } = svmQuotaSplit(budget, strongFav);
+  const strongMaxP = strongCount > 0
+    ? Math.max(1, Math.round(maxPlayers * strongCount / budget)) : 0;
+  const weakMaxP = weakCount > 0 ? (maxPlayers - strongMaxP) : 0;
+
+  // Sort by prob desc within each side
+  const sortedStrong = scored[strongSide]
+    .slice().sort((a, b) => b.score.prob - a.score.prob)
+    .map(e => ({ player: e.player, prob: e.score.prob, score: e.score, isStarter: e.isStarter }));
+  const sortedWeak = scored[weakSide]
+    .slice().sort((a, b) => b.score.prob - a.score.prob)
+    .map(e => ({ player: e.player, prob: e.score.prob, score: e.score, isStarter: e.isStarter }));
+
+  const strongAlloc = svmAllocateMultiShot(sortedStrong, strongCount, strongMaxP);
+  const weakAlloc = svmAllocateMultiShot(sortedWeak, weakCount, weakMaxP);
 
   // === Compose final payload picks list ===
-  // Include `shirt_number` + `country_code` so the UI doesn't need a separate
-  // lookup. In preview stage `shirt_number` may be null (no lineup yet);
-  // confirmed stage always has it because pools come from the lineup itself.
   const strongCountry = strongSide === 'home' ? mapping.home_code : mapping.away_code;
   const weakCountry = weakSide === 'home' ? mapping.home_code : mapping.away_code;
-  // Bug fix #1782443374169: shot-rec UI must show ENGLISH names, never Chinese.
-  // (Chinese names are reserved for player-card multilang display only.)
-  //
-  // Root cause: both `name_default` AND occasionally `name.eng` can be polluted
-  // with Chinese characters — lineup.js writes `name_default = enName || existing
-  // .name_default`, and a single bad lineup payload (FIFA returns Chinese in the
-  // `eng` slot at times) sticks because subsequent writes use OR-fallback. We've
-  // verified this on f1359193 / 2026-06-26: Pepi pid=419082 had name_default =
-  // '里卡多 佩皮' at recommendation gen time, then team-v3-refresh repaired it.
-  //
-  // Defense in depth: pick the first candidate that's both present AND CJK-free.
-  // CJK range U+4E00–U+9FFF covers all common Han characters; we don't care about
-  // exotic CJK extensions for player names.
+  // Defense-in-depth: shot-rec UI must show ENGLISH names, never Chinese.
+  // (CJK in name_default + name.eng has been observed — pick first ASCII candidate.)
   const CJK = /[一-鿿]/;
   const isAscii = (s) => typeof s === 'string' && s.length > 0 && !CJK.test(s);
   const enName = (p) => {
@@ -214,64 +238,57 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
     for (const c of candidates) if (isAscii(c)) return c;
     return `Player ${p.id}`;
   };
+  const allocToPickObj = (entry, side, country, isStrong) => ({
+    pid: String(entry.player.id),
+    name: enName(entry.player),
+    side,
+    shots: entry.shots,
+    score: Math.round(entry.score.total * 10) / 10,   // 0..100 derived from prob
+    prob: Math.round(entry.score.prob * 1000) / 1000, // 0..1 raw
+    via: entry.isStarter ? 'starting' : 'substitute',
+    shirt_number: entry.player.shirt_number ?? null,
+    country_code: country,
+    reason: buildReason({ ...entry, score: entry.score }, isStrong, lineAbs, trend),
+  });
   const picks = [
-    ...strongPicks.map(p => ({
-      pid: String(p.player.id),
-      name: enName(p.player),
-      side: strongSide,
-      shots: p.shots,
-      score: p.score.total,
-      via: p.isStarter ? 'starting' : 'substitute',
-      shirt_number: p.player.shirt_number ?? null,
-      country_code: strongCountry,
-      reason: buildReason(p, true, lineAbs, trend),
-    })),
-    ...weakPicks.map(p => ({
-      pid: String(p.player.id),
-      name: enName(p.player),
-      side: weakSide,
-      shots: p.shots,
-      score: p.score.total,
-      via: p.isStarter ? 'starting' : 'substitute',
-      shirt_number: p.player.shirt_number ?? null,
-      country_code: weakCountry,
-      reason: buildReason(p, false, lineAbs, trend),
-    })),
-    ...strongPicks.map(p => ({
-      pid: String(p.player.id),
-      name: enName(p.player),
-      side: strongSide,
-      shots: p.shots,
-      score: p.score.total,
-      via: p.isStarter ? 'starting' : 'substitute',
-      shirt_number: p.player.shirt_number ?? null,
-      country_code: strongCountry,
-      reason: buildReason(p, true, lineAbs, trend),
-    })),
-    ...weakPicks.map(p => ({
-      pid: String(p.player.id),
-      name: enName(p.player),
-      side: weakSide,
-      shots: p.shots,
-      score: p.score.total,
-      via: p.isStarter ? 'starting' : 'substitute',
-      shirt_number: p.player.shirt_number ?? null,
-      country_code: weakCountry,
-      reason: buildReason(p, false, lineAbs, trend),
-    })),
+    ...strongAlloc.map(e => allocToPickObj(e, strongSide, strongCountry, true)),
+    ...weakAlloc.map(e => allocToPickObj(e, weakSide, weakCountry, false)),
   ];
 
+  // === Candidate pools: top-4 per side for UI manual-adjust reference ===
+  const TOP_N_CANDIDATES = 4;
+  const candidatePoolFor = (sortedSide, sideName, country) =>
+    sortedSide.slice(0, TOP_N_CANDIDATES).map(e => ({
+      pid: String(e.player.id),
+      name: enName(e.player),
+      side: sideName,
+      prob: Math.round(e.prob * 1000) / 1000,
+      score: Math.round(e.prob * 1000) / 10,
+      shirt_number: e.player.shirt_number ?? null,
+      country_code: country,
+      position: e.player.position ?? null,
+      is_starter: e.isStarter,
+    }));
+  const candidate_pools = {
+    [strongSide]: candidatePoolFor(sortedStrong, strongSide, strongCountry),
+    [weakSide]: candidatePoolFor(sortedWeak, weakSide, weakCountry),
+  };
+
   // === Build payload ===
-  const modelVersion = stage === 'confirmed' ? MODEL_VERSION_CONFIRMED : MODEL_VERSION_PREVIEW;
+  const baseVersion = (MODEL && MODEL.version) || 'v1_svm';
+  const modelVersion = `${baseVersion}-${stage}`;
   const payload = {
     fixture_id: fid,
     stage,
     strong_side: strongSide,
     line_abs: lineAbs,
     distribution: [strongCount, weakCount],
+    budget,
+    max_players: maxPlayers,
     trend,
     total_shots: picks.reduce((s, p) => s + p.shots, 0),
     picks,
+    candidate_pools,
     model_version: modelVersion,
     generated_at: nowIso,
     inputs_snapshot: {
@@ -310,155 +327,6 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
 
   await env.MATCH_DATA.put(`recommendation:${fid}`, JSON.stringify(payload));
   return { wrote: true, stage, fid, snapshot: includeDebug ? payload : undefined };
-}
-
-// ============= Scoring =============
-function safeDiv(a, b) { return b ? a / b : 0; }
-
-function scorePlayer(player, isStarter, successorNorm = 0) {
-  const ts = player.tournament_stats || {};
-  const att = ts.attacking || {};
-  const mp = ts.matches_played || 0;
-  const minutes = ts.minutes_played || 0;
-
-  const onTarget = safeDiv(att.attempt_at_goal_on_target || 0, mp);
-  const onTargetNorm = Math.min(100, onTarget * 15);
-  const attempt = safeDiv(att.attempt_at_goal || 0, mp);
-  const attemptNorm = Math.min(100, attempt * 10);
-  const pos = player.position ?? 6;
-  const positionNorm = POSITION_SCORE[pos] ?? 30;
-  const xg = safeDiv(att.xg || 0, mp);
-  const xgNorm = Math.min(100, xg * 30);
-  const starterNorm = isStarter ? 100 : 0;
-  const effSuccessorNorm = isStarter ? successorNorm : 0;
-
-  const total =
-      WEIGHTS.on_target_per_match * onTargetNorm
-    + WEIGHTS.attempt_per_match   * attemptNorm
-    + WEIGHTS.position_bonus      * positionNorm
-    + WEIGHTS.xg_per_match        * xgNorm
-    + WEIGHTS.starter_bonus       * starterNorm
-    + WEIGHTS.successor_bonus     * effSuccessorNorm;
-
-  return {
-    total: Math.round(total * 100) / 100,
-    raw: {
-      on_target_per_match: Math.round(onTarget * 100) / 100,
-      attempt_per_match:   Math.round(attempt * 100) / 100,
-      xg_per_match:        Math.round(xg * 100) / 100,
-      matches_played:      mp,
-      minutes_played:      minutes,
-      is_starter:          isStarter,
-      position:            pos,
-      successor_norm:      Math.round(effSuccessorNorm * 10) / 10,
-    },
-  };
-}
-
-/**
- * Score-bucket multi-shot allocation: pure threshold mapping, no rank cap.
- * Elite shooters CAN monopolize the whole quota (per user 2026-06-25:
- * "强队的优秀射手可以独占两次甚至更高").
- *
- *   score (+ trend_bonus) ≥ SHOT_T1 → 3 shots
- *   score (+ trend_bonus) ≥ SHOT_T2 → 2 shots
- *   else                            → 1 shot
- * Truncate to quotaRemaining; iterate until quota=0.
- */
-function pickWithMultiShot(scored, quota, trendBonus = 0) {
-  if (quota <= 0) return [];
-  // sort desc by score
-  const sorted = [...scored].sort((a, b) => b.score.total - a.score.total);
-  const out = [];
-  let remaining = quota;
-  for (const entry of sorted) {
-    if (remaining <= 0) break;
-    const adj = entry.score.total + trendBonus;
-    let shots;
-    if (adj >= SHOT_T1)      shots = 3;
-    else if (adj >= SHOT_T2) shots = 2;
-    else                     shots = 1;
-    shots = Math.min(shots, remaining);
-    out.push({ ...entry, shots });
-    remaining -= shots;
-  }
-  return out;
-}
-
-function decideStrongSide(handicap) {
-  // 500.com Crown sign convention (verified 2026-06-25):
-  //   line > 0 → 主队受让 → AWAY is strong
-  //   line < 0 → 主队让   → HOME is strong
-  //   line == 0 → pick-em
-  const cur = handicap.current || handicap;
-  const line = Number(cur.line) || 0;
-  const trend = handicap.trend ?? 'stable';
-  if (line > 0.01)  return { strongSide: 'away', lineAbs: Math.abs(line), trend };
-  if (line < -0.01) return { strongSide: 'home', lineAbs: Math.abs(line), trend };
-  return { strongSide: 'home', lineAbs: 0, trend };  // pick-em fallback to home
-}
-
-/**
- * Total shot budget: default 6; bump to 7 if EITHER team's attacking capacity
- * is "ultra-elite" (sum of starter on_target/match ≥ 15 across the lineup, OR
- * — preview stage — sum across the country roster top 14 ≥ 15).
- */
-async function decideTotalShots(env, mapping, lineup, strongSide) {
-  const capacities = await Promise.all([
-    teamAttackCapacity(env, mapping.home_code, lineup, 'home'),
-    teamAttackCapacity(env, mapping.away_code, lineup, 'away'),
-  ]);
-  if (Math.max(...capacities) >= TEAM_CAPACITY_BONUS_THRESHOLD) return BASE_TOTAL_SHOTS + 1;
-  return BASE_TOTAL_SHOTS;
-}
-
-async function teamAttackCapacity(env, countryCode, lineup, side) {
-  // If lineup published, sum on_target/match across starters + 0.5×substitutes.
-  // Otherwise use top 14 (rough starter+key-sub estimate) from country roster.
-  let players = [];
-  let isFromLineup = false;
-  if (lineup && lineup.lineup_available && lineup[side]) {
-    const team = lineup[side];
-    const starting = team.starting || [];
-    const subs = team.substitutes || [];
-    const starterPids = starting.map(s => s.player_id);
-    const subPids = subs.map(s => s.player_id);
-    const [starterP, subP] = await Promise.all([
-      Promise.all(starterPids.map(pid => env.MATCH_DATA.get(`players:${pid}`, 'json'))),
-      Promise.all(subPids.map(pid => env.MATCH_DATA.get(`players:${pid}`, 'json'))),
-    ]);
-    players = [
-      ...starterP.filter(Boolean).map(p => ({ p, weight: 1.0 })),
-      ...subP.filter(Boolean).map(p => ({ p, weight: 0.5 })),
-    ];
-    isFromLineup = true;
-  } else {
-    const roster = await env.MATCH_DATA.get(`players_by_country:${countryCode}`, 'json');
-    if (!roster?.roster) return 0;
-    const allP = await Promise.all(roster.roster.slice(0, 14).map(s => env.MATCH_DATA.get(`players:${s.player_id}`, 'json')));
-    players = allP.filter(Boolean).map(p => ({ p, weight: 0.8 }));  // top 14 ≈ likely lineup, light discount
-  }
-  let cap = 0;
-  for (const { p, weight } of players) {
-    const att = p.tournament_stats?.attacking || {};
-    const mp = p.tournament_stats?.matches_played || 0;
-    if (!mp) continue;
-    cap += weight * safeDiv(att.attempt_at_goal_on_target || 0, mp);
-  }
-  return cap;
-}
-
-function decideDistribution(lineAbs, totalShots) {
-  let strongFrac;
-  for (const rule of DISTRIBUTION_RULES) {
-    if (lineAbs >= rule.min) { strongFrac = rule.strong_frac; break; }
-  }
-  if (strongFrac == null) strongFrac = 0.5;
-  let strongCount = Math.round(totalShots * strongFrac);
-  if (strongFrac === 1.0) strongCount = totalShots;  // 让 2 球+ 全压
-  let weakCount = totalShots - strongCount;
-  if (strongCount + weakCount !== totalShots) weakCount = totalShots - strongCount;
-  return { strongCount, weakCount };
 }
 
 // ============= Pool construction =============
@@ -505,18 +373,17 @@ async function buildPools(env, mapping, lineup, stage) {
 }
 
 // ============= Reason builder (Chinese — UI-facing) =============
-const POS_LABEL = { 0: '门将', 1: '后卫', 2: '中场', 3: '前锋', 6: '其他' };
+// buildReason — SVM v1.1: 不再依赖 v0 的 score.raw 结构，直接基于 prob + 上下文。
+// pickEntry 形状: { player, prob, shots, isStarter, score:{total, prob, decision} }
 function buildReason(pickEntry, isStrongSide, lineAbs, trend) {
   const p = pickEntry.player;
-  const raw = pickEntry.score.raw;
+  const score = pickEntry.score || {};
+  const prob = (score.prob ?? pickEntry.prob ?? 0);
+  const probPct = (prob * 100).toFixed(0);
   const parts = [];
   if (pickEntry.shots > 1) parts.push(`顶级权重投 ${pickEntry.shots} 次`);
-  if (raw.on_target_per_match > 0) {
-    let kpi = `均场射正 ${raw.on_target_per_match}、均场射门 ${raw.attempt_per_match}`;
-    if (raw.xg_per_match) kpi += `、xG ${raw.xg_per_match}/场`;
-    parts.push(kpi);
-  }
-  parts.push(raw.is_starter ? '首发' : '替补');
+  parts.push(`SVM 射正概率 ${probPct}%`);
+  parts.push(pickEntry.isStarter ? '首发' : '替补');
   if (isStrongSide) {
     if (lineAbs >= 1.5)       parts.push(`对手让 ${lineAbs} 球，进攻空间大`);
     else if (lineAbs >= 1.0)  parts.push(`对手让 ${lineAbs} 球，机会多`);
@@ -527,7 +394,6 @@ function buildReason(pickEntry, isStrongSide, lineAbs, trend) {
   } else {
     parts.push(`弱队进攻威胁（对手让 ${lineAbs}）`);
   }
-  parts.push(`综合 ${pickEntry.score.total.toFixed(1)}/100`);
   return parts.join(' · ');
 }
 

@@ -1,0 +1,275 @@
+SVM v1 walk-forward backtest
+Trained at: 2026-06-26 15:30 UTC
+Samples: 529, fixtures: 36
+Features (17): ['ot_overall', 'ot_vs_weak', 'ot_vs_strong', 'ot_vs_medium', 'att_overall', 'matches_played', 'n_vs_weak', 'n_vs_strong', 'n_vs_medium', 'is_FW', 'is_MF', 'is_DF', 'is_GK', 'ot_x_FW', 'ot_x_DF', 'opp_gc_per_match', 'team_favoredness']
+
+Backtested fixtures: 33
+Mean precision@6: 39.39%
+Median: 33.33%
+vs v0 (52.78%): -13.39pp
+
+=== Per-fixture breakdown ===
+
+f1359177 train_n=42 test_n=14 pos_rate_train=0.26 hits=0 precision=0%
+  ✗ LEE Hanbeom               cc=KOR prob=0.464 actual_st=0
+  ✗ SON Heungmin              cc=KOR prob=0.455 actual_st=0
+  ✗ PAIK Seungho              cc=KOR prob=0.425 actual_st=0
+  ✗ LEE Gihyuk                cc=KOR prob=0.425 actual_st=0
+  ✗ LEE Jaesung               cc=KOR prob=0.413 actual_st=0
+  ✗ Brian GUTIERREZ           cc=MEX prob=0.402 actual_st=0
+
+f1359191 train_n=56 test_n=11 pos_rate_train=0.23 hits=1 precision=17%
+  ✗ Folarin BALOGUN           cc=USA prob=0.398 actual_st=0
+  ✗ Malik TILLMAN             cc=USA prob=0.35 actual_st=0
+  ✓ Mohamed TOURE             cc=AUS prob=0.33 actual_st=1
+  ✗ Aiden ONEILL              cc=AUS prob=0.259 actual_st=0
+  ✗ Ricardo PEPI              cc=USA prob=0.25 actual_st=0
+  ✗ Tyler ADAMS               cc=USA prob=0.236 actual_st=0
+
+f1359231 train_n=67 test_n=12 pos_rate_train=0.21 hits=2 precision=33%
+  ✓ Ismael SAIBARI            cc=MAR prob=0.414 actual_st=1
+  ✗ Neil EL AYNAOUI           cc=MAR prob=0.382 actual_st=0
+  ✓ Bilal EL KHANNOUSS        cc=MAR prob=0.308 actual_st=1
+  ✗ Achraf HAKIMI             cc=MAR prob=0.297 actual_st=0
+  ✗ Ayyoub BOUADDI            cc=MAR prob=0.268 actual_st=0
+  ✗ Brahim DIAZ               cc=MAR prob=0.217 actual_st=0
+
+f1359198 train_n=79 test_n=17 pos_rate_train=0.20 hits=3 precision=50%
+  ✓ RAPHINHA                  cc=BRA prob=0.537 actual_st=1
+  ✓ VINICIUS JUNIOR           cc=BRA prob=0.512 actual_st=2
+  ✓ MATHEUS CUNHA             cc=BRA prob=0.402 actual_st=1
+  ✗ LUCAS PAQUETA             cc=BRA prob=0.402 actual_st=0
+  ✗ BRUNO GUIMARAES           cc=BRA prob=0.3 actual_st=0
+  ✗ CASEMIRO                  cc=BRA prob=0.277 actual_st=0
+
+f1359234 train_n=96 test_n=14 pos_rate_train=0.21 hits=1 precision=17%
+  ✗ Arda GULER                cc=TUR prob=0.938 actual_st=0
+  ✗ Kerem AKTURKOGLU          cc=TUR prob=0.833 actual_st=0
+  ✓ Kenan YILDIZ              cc=TUR prob=0.82 actual_st=1
+  ✗ Hakan CALHANOGLU          cc=TUR prob=0.774 actual_st=0
+  ✗ Julio ENCISO              cc=PAR prob=0.685 actual_st=0
+  ✗ Ismail YUKSEK             cc=TUR prob=0.603 actual_st=0
+
+f1359204 train_n=110 test_n=14 pos_rate_train=0.21 hits=3 precision=50%
+  ✗ Donyell Malen             cc=NED prob=0.309 actual_st=0
+  ✓ Cody GAKPO                cc=NED prob=0.3 actual_st=4
+  ✓ Alexander Isak            cc=SWE prob=0.274 actual_st=1
+  ✓ Viktor GYOKERES           cc=SWE prob=0.241 actual_st=3
+  ✗ Frenkie DE JONG           cc=NED prob=0.163 actual_st=0
+  ✗ Jan Paul VAN HECKE        cc=NED prob=0.16 actual_st=0
+
+f1359201 train_n=124 test_n=18 pos_rate_train=0.23 hits=2 precision=33%
+  ✗ Amad DIALLO               cc=CIV prob=0.413 actual_st=0
+  ✓ Kai HAVERTZ               cc=GER prob=0.411 actual_st=1
+  ✓ Ange-Yoan BONNY           cc=CIV prob=0.307 actual_st=1
+  ✗ Felix NMECHA              cc=GER prob=0.303 actual_st=0
+  ✗ Yan DIOMANDE              cc=CIV prob=0.285 actual_st=0
+  ✗ Nico SCHLOTTERBECK        cc=GER prob=0.238 actual_st=0
+
+f1359237 train_n=142 test_n=12 pos_rate_train=0.23 hits=5 precision=83%
+  ✓ Gonzalo PLATA             cc=ECU prob=0.372 actual_st=3
+  ✓ Enner VALENCIA            cc=ECU prob=0.338 actual_st=5
+  ✗ Juergen LOCADIA           cc=CUW prob=0.312 actual_st=0
+  ✓ John YEBOAH               cc=ECU prob=0.304 actual_st=2
+  ✓ Livano COMENENCIA         cc=CUW prob=0.288 actual_st=1
+  ✓ Moises CAICEDO            cc=ECU prob=0.236 actual_st=1
+
+f1359240 train_n=154 test_n=11 pos_rate_train=0.27 hits=2 precision=33%
+  ✗ Keito Nakamura            cc=JPN prob=0.692 actual_st=0
+  ✓ Ayase UEDA                cc=JPN prob=0.596 actual_st=3
+  ✓ Junya ITO                 cc=JPN prob=0.481 actual_st=1
+  ✗ Elias SAAD                cc=TUN prob=0.406 actual_st=0
+  ✗ Takehiro TOMIYASU         cc=JPN prob=0.383 actual_st=0
+  ✗ Hiroki ITO                cc=JPN prob=0.373 actual_st=0
+
+f1359210 train_n=165 test_n=14 pos_rate_train=0.26 hits=3 precision=50%
+  ✓ Lamine YAMAL              cc=ESP prob=0.486 actual_st=2
+  ✓ Mikel OYARZABAL           cc=ESP prob=0.436 actual_st=3
+  ✗ RODRI                     cc=ESP prob=0.347 actual_st=0
+  ✗ PEDRI                     cc=ESP prob=0.336 actual_st=0
+  ✗ FERAS ALBRIKAN            cc=KSA prob=0.307 actual_st=0
+  ✓ SALEM ALDAWSARI           cc=KSA prob=0.294 actual_st=1
+
+f1359207 train_n=179 test_n=14 pos_rate_train=0.26 hits=3 precision=50%
+  ✗ Romelu LUKAKU             cc=BEL prob=0.351 actual_st=0
+  ✗ Leandro TROSSARD          cc=BEL prob=0.332 actual_st=0
+  ✓ Mehdi TAREMI              cc=IRN prob=0.294 actual_st=1
+  ✓ Youri TIELEMANS           cc=BEL prob=0.211 actual_st=1
+  ✓ Kevin DE BRUYNE           cc=BEL prob=0.208 actual_st=1
+  ✗ Thomas MEUNIER            cc=BEL prob=0.201 actual_st=0
+
+f1359246 train_n=193 test_n=16 pos_rate_train=0.26 hits=2 precision=33%
+  ✗ RYAN MENDES               cc=CPV prob=0.354 actual_st=0
+  ✗ Federico VINAS            cc=URU prob=0.338 actual_st=0
+  ✓ KEVIN PINA                cc=CPV prob=0.231 actual_st=1
+  ✓ Maxi ARAUJO               cc=URU prob=0.223 actual_st=1
+  ✗ Federico VALVERDE         cc=URU prob=0.218 actual_st=0
+  ✗ Manuel UGARTE             cc=URU prob=0.209 actual_st=0
+
+f1359243 train_n=209 test_n=20 pos_rate_train=0.26 hits=4 precision=67%
+  ✓ Elijah JUST               cc=NZL prob=0.567 actual_st=1
+  ✗ Sarpreet SINGH            cc=NZL prob=0.558 actual_st=0
+  ✓ MOSTAFA ZICO              cc=EGY prob=0.457 actual_st=1
+  ✗ EMAM ASHOUR               cc=EGY prob=0.457 actual_st=0
+  ✓ Callum McCOWATT           cc=NZL prob=0.408 actual_st=2
+  ✓ OMAR MARMOUSH             cc=EGY prob=0.371 actual_st=1
+
+f1359216 train_n=229 test_n=15 pos_rate_train=0.27 hits=1 precision=17%
+  ✓ Lionel MESSI              cc=ARG prob=0.448 actual_st=4
+  ✗ Lautaro MARTINEZ          cc=ARG prob=0.404 actual_st=0
+  ✗ Thiago ALMADA             cc=ARG prob=0.379 actual_st=0
+  ✗ Alexis MAC ALLISTER       cc=ARG prob=0.259 actual_st=0
+  ✗ Enzo FERNANDEZ            cc=ARG prob=0.25 actual_st=0
+  ✗ Rodrigo DE PAUL           cc=ARG prob=0.25 actual_st=0
+
+f1359213 train_n=244 test_n=12 pos_rate_train=0.26 hits=2 precision=33%
+  ✓ Kylian MBAPPE             cc=FRA prob=0.635 actual_st=3
+  ✗ Michael OLISE             cc=FRA prob=0.571 actual_st=0
+  ✗ Bradley BARCOLA           cc=FRA prob=0.538 actual_st=0
+  ✓ Ousmane DEMBELE           cc=FRA prob=0.504 actual_st=2
+  ✗ IBRAHIM BAYESH            cc=IRQ prob=0.245 actual_st=0
+  ✗ Dayot UPAMECANO           cc=FRA prob=0.237 actual_st=0
+
+f1359249 train_n=256 test_n=11 pos_rate_train=0.25 hits=3 precision=50%
+  ✓ Erling HAALAND            cc=NOR prob=0.514 actual_st=3
+  ✗ Alexander SORLOTH         cc=NOR prob=0.453 actual_st=0
+  ✗ Antonio NUSA              cc=NOR prob=0.426 actual_st=0
+  ✓ Nicolas JACKSON           cc=SEN prob=0.408 actual_st=1
+  ✓ Ismaila SARR              cc=SEN prob=0.402 actual_st=3
+  ✗ Sander BERGE              cc=NOR prob=0.291 actual_st=0
+
+f1359252 train_n=267 test_n=13 pos_rate_train=0.26 hits=5 precision=83%
+  ✓ Riyad Mahrez              cc=ALG prob=0.525 actual_st=1
+  ✓ Amine GOUIRI              cc=ALG prob=0.521 actual_st=2
+  ✓ Fares CHAIBI              cc=ALG prob=0.395 actual_st=1
+  ✓ Ibrahim MAZA              cc=ALG prob=0.387 actual_st=2
+  ✓ NIZAR ALRASHDAN           cc=JOR prob=0.344 actual_st=1
+  ✗ MOHANNAD ABUTAHA          cc=JOR prob=0.344 actual_st=0
+
+f1359219 train_n=280 test_n=12 pos_rate_train=0.28 hits=3 precision=50%
+  ✓ CRISTIANO RONALDO         cc=POR prob=0.485 actual_st=5
+  ✗ PEDRO NETO                cc=POR prob=0.451 actual_st=0
+  ✓ Abbosbek FAYZULLAEV       cc=UZB prob=0.382 actual_st=1
+  ✗ JOAO NEVES                cc=POR prob=0.368 actual_st=0
+  ✓ BRUNO FERNANDES           cc=POR prob=0.367 actual_st=1
+  ✗ Otabek Shukurov           cc=UZB prob=0.26 actual_st=0
+
+f1359222 train_n=292 test_n=15 pos_rate_train=0.28 hits=2 precision=33%
+  ✓ Harry KANE                cc=ENG prob=0.435 actual_st=1
+  ✓ Anthony GORDON            cc=ENG prob=0.359 actual_st=1
+  ✗ Noni MADUEKE              cc=ENG prob=0.346 actual_st=0
+  ✗ Jordan AYEW               cc=GHA prob=0.322 actual_st=0
+  ✗ Jude BELLINGHAM           cc=ENG prob=0.287 actual_st=0
+  ✗ Antoine SEMENYO           cc=GHA prob=0.268 actual_st=0
+
+f1359258 train_n=307 test_n=15 pos_rate_train=0.27 hits=0 precision=0%
+  ✗ Martin BATURINA           cc=CRO prob=0.478 actual_st=0
+  ✗ Mateo KOVACIC             cc=CRO prob=0.478 actual_st=0
+  ✗ Edgar Yoel BARCENAS       cc=PAN prob=0.329 actual_st=0
+  ✗ Luka MODRIC               cc=CRO prob=0.321 actual_st=0
+  ✗ Cristian MARTINEZ         cc=PAN prob=0.313 actual_st=0
+  ✗ Petar Musa                cc=CRO prob=0.277 actual_st=0
+
+f1359255 train_n=322 test_n=16 pos_rate_train=0.26 hits=1 precision=17%
+  ✗ Cedric BAKAMBU            cc=COD prob=0.395 actual_st=0
+  ✗ Edo Kayembe               cc=COD prob=0.371 actual_st=0
+  ✓ Luis DIAZ                 cc=COL prob=0.368 actual_st=2
+  ✗ Luis SUAREZ               cc=COL prob=0.33 actual_st=0
+  ✗ Samuel Moutoussamy        cc=COD prob=0.283 actual_st=0
+  ✗ Jefferson LERMA           cc=COL prob=0.27 actual_st=0
+
+f1359188 train_n=338 test_n=17 pos_rate_train=0.27 hits=4 precision=67%
+  ✗ Jonathan DAVID            cc=CAN prob=0.473 actual_st=0
+  ✓ Cyle LARIN                cc=CAN prob=0.431 actual_st=1
+  ✗ Tajon BUCHANAN            cc=CAN prob=0.378 actual_st=0
+  ✓ Breel EMBOLO              cc=SUI prob=0.369 actual_st=2
+  ✓ Ali AHMED                 cc=CAN prob=0.358 actual_st=1
+  ✓ Ruben VARGAS              cc=SUI prob=0.352 actual_st=1
+
+f1359229 train_n=355 test_n=14 pos_rate_train=0.28 hits=3 precision=50%
+  ✗ Edin DZEKO                cc=BIH prob=0.552 actual_st=0
+  ✓ Esmir BAJRAKTAREVIC       cc=BIH prob=0.504 actual_st=1
+  ✓ Kerim ALAJBEGOVIC         cc=BIH prob=0.504 actual_st=1
+  ✓ Ermedin DEMIROVIC         cc=BIH prob=0.397 actual_st=1
+  ✗ AKRAM AFIF                cc=QAT prob=0.304 actual_st=0
+  ✗ Nikola KATIC              cc=BIH prob=0.274 actual_st=0
+
+f1359199 train_n=369 test_n=16 pos_rate_train=0.28 hits=3 precision=50%
+  ✓ VINICIUS JUNIOR           cc=BRA prob=0.622 actual_st=4
+  ✓ MATHEUS CUNHA             cc=BRA prob=0.533 actual_st=2
+  ✓ RAYAN                     cc=BRA prob=0.394 actual_st=1
+  ✗ BRUNO GUIMARAES           cc=BRA prob=0.345 actual_st=0
+  ✗ CASEMIRO                  cc=BRA prob=0.335 actual_st=0
+  ✗ John McGinn               cc=SCO prob=0.318 actual_st=0
+
+f1359232 train_n=385 test_n=15 pos_rate_train=0.28 hits=4 precision=67%
+  ✓ Ismael SAIBARI            cc=MAR prob=0.683 actual_st=1
+  ✗ Brahim DIAZ               cc=MAR prob=0.557 actual_st=0
+  ✓ Bilal EL KHANNOUSS        cc=MAR prob=0.515 actual_st=2
+  ✓ Neil EL AYNAOUI           cc=MAR prob=0.497 actual_st=1
+  ✓ Achraf HAKIMI             cc=MAR prob=0.391 actual_st=3
+  ✗ Josue CASIMIR             cc=HAI prob=0.342 actual_st=0
+
+f1359179 train_n=400 test_n=12 pos_rate_train=0.28 hits=1 precision=17%
+  ✓ Julian QUINONES           cc=MEX prob=0.536 actual_st=1
+  ✗ Roberto ALVARADO          cc=MEX prob=0.474 actual_st=0
+  ✗ Adam HLOZEK               cc=CZE prob=0.376 actual_st=0
+  ✗ Pavel SULC                cc=CZE prob=0.3 actual_st=0
+  ✗ Luis ROMO                 cc=MEX prob=0.272 actual_st=0
+  ✗ Michal SADILEK            cc=CZE prob=0.259 actual_st=0
+
+f1359226 train_n=412 test_n=19 pos_rate_train=0.28 hits=2 precision=33%
+  ✓ OH Hyeongyu               cc=KOR prob=0.652 actual_st=1
+  ✗ HWANG Inbeom              cc=KOR prob=0.578 actual_st=0
+  ✗ LEE Kangin                cc=KOR prob=0.517 actual_st=0
+  ✓ Thapelo MASEKO            cc=RSA prob=0.445 actual_st=1
+  ✗ HWANG Heechan             cc=KOR prob=0.424 actual_st=0
+  ✗ PAIK Seungho              cc=KOR prob=0.424 actual_st=0
+
+f1359202 train_n=431 test_n=20 pos_rate_train=0.28 hits=4 precision=67%
+  ✓ Enner VALENCIA            cc=ECU prob=0.71 actual_st=1
+  ✓ Gonzalo PLATA             cc=ECU prob=0.664 actual_st=1
+  ✓ Kai HAVERTZ               cc=GER prob=0.654 actual_st=1
+  ✗ John YEBOAH               cc=ECU prob=0.597 actual_st=0
+  ✗ Felix NMECHA              cc=GER prob=0.518 actual_st=0
+  ✓ Nilson ANGULO             cc=ECU prob=0.467 actual_st=1
+
+f1359238 train_n=451 test_n=17 pos_rate_train=0.28 hits=1 precision=17%
+  ✗ Amad DIALLO               cc=CIV prob=0.762 actual_st=0
+  ✗ Yan DIOMANDE              cc=CIV prob=0.722 actual_st=0
+  ✗ Franck KESSIE             cc=CIV prob=0.68 actual_st=0
+  ✓ Nicolas PEPE              cc=CIV prob=0.613 actual_st=2
+  ✗ Ange-Yoan BONNY           cc=CIV prob=0.597 actual_st=0
+  ✗ Ibrahim SANGARE           cc=CIV prob=0.348 actual_st=0
+
+f1359205 train_n=468 test_n=17 pos_rate_train=0.27 hits=2 precision=33%
+  ✗ Cody GAKPO                cc=NED prob=0.646 actual_st=0
+  ✓ Brian BROBBEY             cc=NED prob=0.619 actual_st=1
+  ✗ Donyell Malen             cc=NED prob=0.619 actual_st=0
+  ✓ Tijjani REIJNDERS         cc=NED prob=0.386 actual_st=2
+  ✗ Ryan GRAVENBERCH          cc=NED prob=0.386 actual_st=0
+  ✗ Frenkie DE JONG           cc=NED prob=0.334 actual_st=0
+
+f1359241 train_n=485 test_n=17 pos_rate_train=0.27 hits=3 precision=50%
+  ✗ Ayase UEDA                cc=JPN prob=0.657 actual_st=0
+  ✗ Yasin AYARI               cc=SWE prob=0.495 actual_st=0
+  ✓ Keito Nakamura            cc=JPN prob=0.481 actual_st=1
+  ✓ Alexander Isak            cc=SWE prob=0.415 actual_st=2
+  ✗ Viktor GYOKERES           cc=SWE prob=0.344 actual_st=0
+  ✓ Anthony ELANGA            cc=SWE prob=0.306 actual_st=2
+
+f1359193 train_n=502 test_n=13 pos_rate_train=0.27 hits=2 precision=33%
+  ✗ Kenan YILDIZ              cc=TUR prob=0.487 actual_st=0
+  ✓ Arda GULER                cc=TUR prob=0.478 actual_st=1
+  ✗ Timothy WEAH              cc=USA prob=0.412 actual_st=0
+  ✗ Ricardo PEPI              cc=USA prob=0.399 actual_st=0
+  ✗ Baris Alper YILMAZ        cc=TUR prob=0.344 actual_st=0
+  ✓ Weston McKENNIE           cc=USA prob=0.246 actual_st=1
+
+f1359235 train_n=515 test_n=14 pos_rate_train=0.28 hits=1 precision=17%
+  ✓ Cristian VOLPATO          cc=AUS prob=0.446 actual_st=1
+  ✗ Matias GALARZA            cc=PAR prob=0.394 actual_st=0
+  ✗ Julio ENCISO              cc=PAR prob=0.33 actual_st=0
+  ✗ Connor METCALFE           cc=AUS prob=0.311 actual_st=0
+  ✗ Nestory IRANKUNDA         cc=AUS prob=0.278 actual_st=0
+  ✗ Andres CUBAS              cc=PAR prob=0.264 actual_st=0
