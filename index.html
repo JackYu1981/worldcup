@@ -2308,9 +2308,21 @@
             }
 
             // Index events by player_id for quick lookup (filter to THIS side)
+            // Own goals are special: FIFA stores them on the SCORING team's
+            // Goals[] array, but `player_id` is the defender from the OTHER
+            // team. So we attach the event to the opposing side's player card
+            // (using `is_own_goal` as the side-flip signal) and render with
+            // the red .own-goal icon instead of the blue .goal icon.
             const playerEvents = {};
             for (const g of events.goals || []) {
-                if (g.side === side) (playerEvents[g.player_id] ||= []).push({ type: 'goal', minute: g.minute });
+                if (g.is_own_goal) {
+                    // Own goal: attach to the opposing side's player card.
+                    if (g.side !== side) {
+                        (playerEvents[g.player_id] ||= []).push({ type: 'own_goal', minute: g.minute });
+                    }
+                } else if (g.side === side) {
+                    (playerEvents[g.player_id] ||= []).push({ type: 'goal', minute: g.minute });
+                }
             }
             for (const b of events.bookings || []) {
                 if (b.side === side) (playerEvents[b.player_id] ||= []).push({ type: 'card', card: b.card, minute: b.minute });
@@ -2387,6 +2399,7 @@
             // visually pair around the same player. Captain badge stays here too.
             const eventsHtml = events.map(e => {
                 if (e.type === 'goal') return `<span class="lineup-event-icon goal">${e.minute || ''}</span>`;
+                if (e.type === 'own_goal') return `<span class="lineup-event-icon own-goal" title="乌龙球">${e.minute || ''}</span>`;
                 if (e.type === 'card') {
                     const cls = e.card === 2 ? 'red' : 'yellow';
                     return `<span class="lineup-event-icon ${cls}">${e.minute || ''}</span>`;
@@ -2462,7 +2475,15 @@
             const ts = p.tournament_stats || {};
             const att = ts.attacking || {};
             const dis = ts.discipline || {};
+            const gk  = ts.goalkeeping || {};
             const ms = p.match_stats || null;   // null = no fixture context, hide all "(本场)" tags
+            // Position-based view split:
+            //   keeper (position===0)  → ONLY Goalkeeping section
+            //   everyone else          → Golden Boot + Attacking + Discipline
+            // No goalkeeping-bucket fallback — pure position check. Outfielders
+            // who happen to have non-zero goalkeeping stats (won't happen) would
+            // otherwise lose their attacking/discipline tabs.
+            const isKeeper = p.position === 0;
             const photoUrl = p.photo_url ? proxyPhotoUrl(p.photo_url) : '';
 
             const nameZh = p.name?.zho || p.name_default || `Player ${p.id}`;
@@ -2499,6 +2520,7 @@
                 <div style="margin-top:8px;font-size:12px;color:#666">${countryDisplay}${positionDisplay ? ' · ' + positionDisplay : ''}${p.shirt_number ? ' · #' + p.shirt_number : ''}</div>
               </div>
 
+              ${!isKeeper ? `
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                 <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>🥇</span><span>adidas Golden Boot</span>
@@ -2507,7 +2529,19 @@
                 ${statRow('助攻 Assists', att.assists, '本届世界杯累计助攻', ms?.assists)}
                 ${statRow('上场时间（分钟）', ts.minutes_played, '本届世界杯累计参与比赛的总分钟数')}
               </div>
+              ` : ''}
 
+              ${isKeeper ? `
+              <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                    <span>🧤</span><span>Goalkeeping 守门</span>
+                </div>
+                ${statRow('扑救 Saves', gk.goalkeeper_saves, '本届世界杯累计扑救次数')}
+                ${statRow('禁区内防守动作', gk.goalkeeper_defensive_actions_inside_penalty_area, '在自己禁区内的防守动作总数（扑救、出击、解围等）')}
+                ${statRow('禁区外防守动作', gk.goalkeeper_defensive_actions_outside_penalty_area, '冲出禁区参与的防守动作总数')}
+                ${statRow('失球 Goals Conceded', gk.goals_conceded, '本届世界杯累计被进球数')}
+              </div>
+              ` : `
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                 <div style="font-size:13px;color:#0a2f5c;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <span>⚽</span><span>Attacking 进攻</span>
@@ -2520,6 +2554,7 @@
                 ${statRow('头球射门', att.headed_attempt_at_goal, '头球攻门次数')}
                 ${statRow('xG（预期进球）', att.xg, '基于射门位置/角度/防守压力等估算的进球概率总和')}
                 ${statRow('角球 Corners', att.corners, '攻方获得的角球次数')}
+                ${(att.own_goals || ms?.own_goals) ? statRow('乌龙球 Own Goals', att.own_goals || 0, '本届世界杯累计乌龙球（FIFA 标记 Type=3 的进球事件）', ms?.own_goals) : ''}
               </div>
 
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
@@ -2533,6 +2568,7 @@
                 ${statRow('被犯规 Fouls Against', dis.fouls_against, '球员被对手犯规的次数')}
                 ${statRow('越位 Offsides', dis.offsides)}
               </div>
+              `}
 
               ${ms ? `<div style="font-size:11px;color:#999;text-align:center;padding:4px 8px 0;">紫色 <span style="color:#7c3aed;font-weight:600">(本场 N)</span> 标注 = 当前比赛数据</div>` : ''}
               <div style="font-size:11px;color:#aaa;text-align:center;padding:8px;">

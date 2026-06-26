@@ -194,10 +194,30 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
   // confirmed stage always has it because pools come from the lineup itself.
   const strongCountry = strongSide === 'home' ? mapping.home_code : mapping.away_code;
   const weakCountry = weakSide === 'home' ? mapping.home_code : mapping.away_code;
+  // Bug fix #1782443374169: shot-rec UI must show ENGLISH names, never Chinese.
+  // (Chinese names are reserved for player-card multilang display only.)
+  //
+  // Root cause: both `name_default` AND occasionally `name.eng` can be polluted
+  // with Chinese characters — lineup.js writes `name_default = enName || existing
+  // .name_default`, and a single bad lineup payload (FIFA returns Chinese in the
+  // `eng` slot at times) sticks because subsequent writes use OR-fallback. We've
+  // verified this on f1359193 / 2026-06-26: Pepi pid=419082 had name_default =
+  // '里卡多 佩皮' at recommendation gen time, then team-v3-refresh repaired it.
+  //
+  // Defense in depth: pick the first candidate that's both present AND CJK-free.
+  // CJK range U+4E00–U+9FFF covers all common Han characters; we don't care about
+  // exotic CJK extensions for player names.
+  const CJK = /[一-鿿]/;
+  const isAscii = (s) => typeof s === 'string' && s.length > 0 && !CJK.test(s);
+  const enName = (p) => {
+    const candidates = [p.name?.eng, p.name_default];
+    for (const c of candidates) if (isAscii(c)) return c;
+    return `Player ${p.id}`;
+  };
   const picks = [
     ...strongPicks.map(p => ({
       pid: String(p.player.id),
-      name: p.player.name_default,
+      name: enName(p.player),
       side: strongSide,
       shots: p.shots,
       score: p.score.total,
@@ -208,7 +228,29 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null) {
     })),
     ...weakPicks.map(p => ({
       pid: String(p.player.id),
-      name: p.player.name_default,
+      name: enName(p.player),
+      side: weakSide,
+      shots: p.shots,
+      score: p.score.total,
+      via: p.isStarter ? 'starting' : 'substitute',
+      shirt_number: p.player.shirt_number ?? null,
+      country_code: weakCountry,
+      reason: buildReason(p, false, lineAbs, trend),
+    })),
+    ...strongPicks.map(p => ({
+      pid: String(p.player.id),
+      name: enName(p.player),
+      side: strongSide,
+      shots: p.shots,
+      score: p.score.total,
+      via: p.isStarter ? 'starting' : 'substitute',
+      shirt_number: p.player.shirt_number ?? null,
+      country_code: strongCountry,
+      reason: buildReason(p, true, lineAbs, trend),
+    })),
+    ...weakPicks.map(p => ({
+      pid: String(p.player.id),
+      name: enName(p.player),
       side: weakSide,
       shots: p.shots,
       score: p.score.total,

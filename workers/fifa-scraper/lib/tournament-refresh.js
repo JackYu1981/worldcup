@@ -6,27 +6,46 @@
 // stat's TOP 50 — bench/non-top players are missed. gctp_* (Team-Player variant)
 // filters by teamId and returns the full 26-player squad with every stat.
 //
-// Three classifications fetched per team:
+// Four classifications fetched per team:
 //   gctp_top_scorer  → goals, assists, total_competition_minutes_played, matches_played
 //   gctp_attack      → attempt_at_goal_*, xg, corners, possession, etc. (~10 fields)
 //   gctp_discipline  → fouls_for, fouls_against, yellow_cards, red_cards,
 //                      indirect_red_cards, offsides
+//   gctp_goalkeeping → goalkeeper_saves, goalkeeper_defensive_actions_inside_penalty_area,
+//                      goalkeeper_defensive_actions_outside_penalty_area
+//                      (added 2026-06-26 — verified via probe; only goalkeepers have
+//                       non-null values for these slugs)
+//
+// Plus a derived field NOT served by FIFA:
+//   attacking.own_goals — reconciled from match_lineups:* events where Type=3
+//                          (the "scoring team holds an own goal, IdPlayer is the
+//                           OPPOSING team's defender" signature). Idempotent
+//                           re-count from truth, same pattern as counters.js.
 //
 // Mirrors scripts/team-v3-refresh.py logic verbatim. Hash-short-circuit ensures
 // only changed players write to KV — typical post-match refresh is 5-20 writes.
 //
-// Total time: 2 teams × 3 classifications × ~1s = ~6s, well under 30s CPU.
+// Total time: 2 teams × 4 classifications × ~1s = ~8s, well under 30s CPU.
 
 import { ensureGamedayToken, fifaBrowserHeaders } from './token.js';
 
 const SEASON_ID = '285023';
-const CLASSIFICATIONS = ['gctp_top_scorer', 'gctp_attack', 'gctp_discipline'];
+const CLASSIFICATIONS = ['gctp_top_scorer', 'gctp_attack', 'gctp_discipline', 'gctp_goalkeeping'];
 
 // v3 schema bucket assignment (matches index.html STATS_CATEGORIES + countries seed
 // integration). Source of truth: scripts/team-v3-refresh.py
 const DISCIPLINE_KEYS = new Set([
   'fouls_for', 'fouls_against', 'yellow_cards', 'red_cards',
   'indirect_red_cards', 'offsides'
+]);
+const GOALKEEPING_KEYS = new Set([
+  'goalkeeper_saves',
+  'goalkeeper_defensive_actions_inside_penalty_area',
+  'goalkeeper_defensive_actions_outside_penalty_area',
+  // goals_conceded is reclassified here (was being silently dropped into
+  // `attacking` before 2026-06-26). It's a goalkeeping concept: only keepers
+  // accumulate non-trivial values, mirroring FIFA's classification grouping.
+  'goals_conceded',
 ]);
 const TOP_LEVEL_MAP = {
   total_competition_minutes_played: 'minutes_played',
@@ -66,6 +85,7 @@ function hashRecordPayload(record) {
     matches_played: ts.matches_played,
     attacking: ts.attacking,
     discipline: ts.discipline,
+    goalkeeping: ts.goalkeeping,
   };
   return fnv1a(canonJson(payload));
 }
@@ -118,6 +138,8 @@ const AUTHORITATIVE_CLS = {
   attempt_at_goal_outside_the_penalty_area: 'gctp_attack',
   headed_attempt_at_goal: 'gctp_attack',
   number_of_shot_ending_sequences: 'gctp_attack',
+  // goals_conceded: FIFA serves this on gctp_attack (verified pre-2026-06-26)
+  // but conceptually it's a goalkeeping stat — see GOALKEEPING_KEYS routing.
   goals_conceded: 'gctp_attack',
   corners: 'gctp_attack',
   xg: 'gctp_attack',
@@ -130,6 +152,10 @@ const AUTHORITATIVE_CLS = {
   red_cards: 'gctp_discipline',
   indirect_red_cards: 'gctp_discipline',
   offsides: 'gctp_discipline',
+  // gctp_goalkeeping — added 2026-06-26 after probe confirmed 3 slugs
+  goalkeeper_saves: 'gctp_goalkeeping',
+  goalkeeper_defensive_actions_inside_penalty_area: 'gctp_goalkeeping',
+  goalkeeper_defensive_actions_outside_penalty_area: 'gctp_goalkeeping',
 };
 
 function storyPrimaryStat(story) {
@@ -186,10 +212,12 @@ function extractPlayersFromStories(stories, classification) {
 }
 
 function buildTournamentStats(stats) {
-  const top = {}, attacking = {}, discipline = {};
+  const top = {}, attacking = {}, discipline = {}, goalkeeping = {};
   for (const [k, v] of Object.entries(stats)) {
     if (DISCIPLINE_KEYS.has(k)) {
       discipline[k] = v;
+    } else if (GOALKEEPING_KEYS.has(k)) {
+      goalkeeping[k] = v;
     } else if (TOP_LEVEL_MAP[k]) {
       top[TOP_LEVEL_MAP[k]] = v;
     } else if (NOISE_KEYS.has(k)) {
@@ -198,7 +226,7 @@ function buildTournamentStats(stats) {
       attacking[k] = v;
     }
   }
-  return { top, attacking, discipline };
+  return { top, attacking, discipline, goalkeeping };
 }
 
 /**
@@ -210,8 +238,10 @@ function buildTournamentStats(stats) {
  * @param teamExternalId "{seasonId}_{teamId}" — from fifa_calendar mapping
  * @param teamCountryCode 3-letter ISO (fallback when actor tag missing)
  * @param countriesLookup { code → zh } for country_zh enrichment
+ * @param ownGoalsByPid  Map<pid, count> from reconcileOwnGoals (may be null if
+ *                       caller skipped own-goal reconciliation)
  */
-async function refreshTeam(env, token, teamExternalId, teamCountryCode, countriesLookup) {
+async function refreshTeam(env, token, teamExternalId, teamCountryCode, countriesLookup, ownGoalsByPid) {
   const teamId = teamExternalId.split('_').pop();
 
   // R3-a: 3 classifications fetched in parallel (~1s each → ~1s total instead of ~3s).
@@ -250,12 +280,18 @@ async function refreshTeam(env, token, teamExternalId, teamCountryCode, countrie
   // Now: all reads + writes overlap, bounded only by CF KV concurrent-IO limits.
   const playerOps = await Promise.allSettled(
     Object.entries(merged).map(async ([pid, agg]) => {
-      const { top, attacking, discipline } = buildTournamentStats(agg.stats);
+      const { top, attacking, discipline, goalkeeping } = buildTournamentStats(agg.stats);
       const existing = (await env.MATCH_DATA.get(`players:${pid}`, 'json')) || {};
       const newName = { ...(existing.name || {}), ...agg.name_multilang };
       const countryCode = agg.country_code || existing.country_code || teamCountryCode;
       const countryZh =
         (countryCode && countriesLookup[countryCode]) || existing.country_zh || null;
+      // own_goals override: take what reconcileOwnGoals computed (truth from
+      // match_lineups), even if FIFA's classification doesn't list it. Pass
+      // through `ownGoalsByPid` populated at top-level. 0 is a legitimate
+      // value and should overwrite an existing stale count.
+      const og = ownGoalsByPid && ownGoalsByPid.has(pid) ? ownGoalsByPid.get(pid) : null;
+      if (og !== null) attacking.own_goals = og;
       const newRecord = {
         ...existing,
         id: pid,
@@ -272,6 +308,7 @@ async function refreshTeam(env, token, teamExternalId, teamCountryCode, countrie
           ...top,
           attacking,
           discipline,
+          goalkeeping,
         },
         last_updated: now,
       };
@@ -321,6 +358,14 @@ export async function refreshTournamentStatsForMatch(env, mapping, lookupCountry
     throw new Error('refreshTournamentStatsForMatch: mapping missing home_code/away_code');
   }
 
+  // Own-goals reconcile from match_lineups (run early — we need it before
+  // per-team refresh so each player's record can be patched in one write).
+  // This is independent of mangodev team fetches, so run in parallel with them.
+  const ownGoalsPromise = reconcileOwnGoals(env).catch(e => {
+    console.warn(`[tournament-refresh] reconcileOwnGoals failed: ${e.message}`);
+    return new Map();
+  });
+
   // Map country code → mangodev team external id via fifa_calendar.
   // fifa_calendar.matches[].home_code + fdh_match_id won't help; we need the
   // _externalId from /teams endpoint. Cache it in KV.
@@ -358,16 +403,54 @@ export async function refreshTournamentStatsForMatch(env, mapping, lookupCountry
   // R3-c: home + away teams refreshed in parallel. They share token+countries+
   // teamCache reads (already done above) but their player writes target disjoint
   // KV keys, so there's no write conflict.
+  const ownGoalsByPid = await ownGoalsPromise;
   const [home, away] = await Promise.all([
-    refreshTeam(env, token, homeEid, homeCode, countriesLookup),
-    refreshTeam(env, token, awayEid, awayCode, countriesLookup),
+    refreshTeam(env, token, homeEid, homeCode, countriesLookup, ownGoalsByPid),
+    refreshTeam(env, token, awayEid, awayCode, countriesLookup, ownGoalsByPid),
   ]);
 
   return {
     playersUpdated: home.writes + away.writes,
+    ownGoalsReconciled: ownGoalsByPid.size,
     home: { code: homeCode, ...home },
     away: { code: awayCode, ...away },
   };
+}
+
+/**
+ * Reconcile own_goals counts from match_lineups:* (source of truth).
+ *
+ * For each player who has at least one own-goal event in any finished match,
+ * return the total. Players with 0 own goals are NOT in the returned map
+ * (callers should leave their existing `attacking.own_goals` untouched —
+ * but when a player IS present, we always overwrite with the recomputed value,
+ * so re-runs are idempotent and self-correcting.
+ *
+ * Why reconcile-from-truth rather than increment-on-finish: same reasoning as
+ * counters.js. Increment-on-finish loses data when a cron tick is missed; a
+ * full re-scan from match_lineups never drifts. Cost: 1 list + ~60 parallel
+ * gets, identical to the matches_played reconciler that runs each tick.
+ *
+ * @returns Map<pid, ownGoalCount> for pids with ≥1 own goal
+ */
+async function reconcileOwnGoals(env) {
+  const listRes = await env.MATCH_DATA.list({ prefix: 'match_lineups:' });
+  const lineupKeys = listRes.keys.map(k => k.name);
+  const records = await Promise.all(
+    lineupKeys.map(k => env.MATCH_DATA.get(k, 'json').catch(() => null))
+  );
+
+  const pidToCount = new Map();
+  for (const lu of records) {
+    if (!lu) continue;
+    for (const g of (lu.events?.goals || [])) {
+      if (g.is_own_goal && g.player_id) {
+        const pid = String(g.player_id);
+        pidToCount.set(pid, (pidToCount.get(pid) || 0) + 1);
+      }
+    }
+  }
+  return pidToCount;
 }
 
 /** Fetch all teams from mangodev (paginated, limit≤20). */

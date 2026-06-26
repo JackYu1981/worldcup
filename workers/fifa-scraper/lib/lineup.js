@@ -80,7 +80,22 @@ export function splitPlayersByStatus(rawPlayers) {
   return { starting, substitutes };
 }
 
-/** Map FIFA event records to our normalized event shape. */
+/** Map FIFA event records to our normalized event shape.
+ *
+ * FIFA `Goals[].Type` integer encoding (verified 2026-06-26 via probe across 60
+ * fixtures with 175 goal events in KV):
+ *   Type=1: penalty goal (6 occurrences)
+ *   Type=2: normal goal (157 occurrences — the common case)
+ *   Type=3: own goal (12 occurrences — all matched the "player_id belongs to
+ *           the OPPOSING side" signature with 100% precision)
+ *
+ * Note: an own-goal is stored on the SCORING team's `Goals[]` array (i.e. the
+ * team that benefited), but `IdPlayer` is the unfortunate defender from the
+ * OTHER team. So a Type=3 goal has `side = scorer's team`, and the player_id
+ * belongs to the opposing roster — UIs that key off side will need to use
+ * `is_own_goal` to flip the visual cue (red icon) and to NOT credit the
+ * "scorer" with a goal in their personal stats.
+ */
 function normalizeEvents(side, team) {
   const goals = (team.Goals || []).map(g => ({
     side,
@@ -88,7 +103,8 @@ function normalizeEvents(side, team) {
     assist_player_id: g.IdAssistPlayer || null,
     minute: g.Minute,
     period: g.Period ?? null,
-    type: g.Type ?? null
+    type: g.Type ?? null,
+    is_own_goal: g.Type === 3,
   }));
   const bookings = (team.Bookings || []).map(b => ({
     side,

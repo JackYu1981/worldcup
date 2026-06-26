@@ -107,16 +107,18 @@ export async function onRequestGet(context) {
         ms.red_cards = inMatch.red_cards ?? 0;
       }
       // From match_lineups.events: goals + assists (count occurrences for this pid)
-      // Goals: each event with player_id = pid (excluding own goals, optionally)
+      // Goals: each event with player_id = pid (own goals tagged is_own_goal=true
+      //        in lineup.js based on FIFA Type=3, verified 2026-06-26 probe)
       // Assists: lineups events.goals[i].assist_player_id matches pid
       const events = lineup?.events || {};
       const goalEvents = events.goals || [];
-      const ownGoalKinds = new Set(['own_goal', 'OG']);   // be lenient on field name
-      let goals = 0, assists = 0;
+      let goals = 0, assists = 0, ownGoals = 0;
       for (const g of goalEvents) {
         if (String(g.player_id) === String(playerId)) {
-          // Don't count own-goals as the player's own scoring stat
-          if (!ownGoalKinds.has(g.type) && !ownGoalKinds.has(g.kind) && !g.own_goal) {
+          if (g.is_own_goal) {
+            // Own goal: don't credit as scoring stat; track separately.
+            ownGoals++;
+          } else {
             goals++;
           }
         }
@@ -124,11 +126,58 @@ export async function onRequestGet(context) {
           assists++;
         }
       }
-      if (goals > 0 || assists > 0 || Object.keys(ms).length > 0) {
+      if (goals > 0 || assists > 0 || ownGoals > 0 || Object.keys(ms).length > 0) {
         ms.goals = goals;
         ms.assists = assists;
+        if (ownGoals > 0) ms.own_goals = ownGoals;
         player.match_stats = ms;
         player.match_stats_fixture_id = fixtureId;
+      }
+
+      // ----- Live-add this match into cumulative tournament_stats -----
+      // Bug fix #1782445094586: while a match is in-progress the KV-resident
+      // tournament_stats was last refreshed when the PREVIOUS match finished —
+      // so the "累计" number stays stale and shows N when reality is N + this
+      // match's contribution. Fix by adding match_stats into tournament_stats
+      // at API response time, gated by whether KV has already absorbed this
+      // match. Gate signal: `lineup.tournament_refresh_done_at` — set exactly
+      // once when refreshTournamentStatsForMatch finalizes the post-match write
+      // (see workers/fifa-scraper/lib/main-cron.js becameFinished branch).
+      //
+      // - tournament_refresh_done_at present → KV already has this match;
+      //   adding ms would double-count. Skip.
+      // - absent → match is live or just-finished but cron hasn't refreshed yet;
+      //   add ms to the cumulative numbers so the user sees a live total.
+      const alreadyAbsorbed = !!lineup?.tournament_refresh_done_at;
+      if (!alreadyAbsorbed && ms && Object.keys(ms).length > 0) {
+        const ts = player.tournament_stats || (player.tournament_stats = {});
+        const att = ts.attacking || (ts.attacking = {});
+        const dis = ts.discipline || (ts.discipline = {});
+        const gk  = ts.goalkeeping || (ts.goalkeeping = {});
+        // (cumulative_field, match_stats_field, bucket)
+        // Only add when the live value is a number > 0 so we don't accidentally
+        // zero-out an existing cumulative value with a missing/null ms field.
+        const additions = [
+          // top-level Golden Boot
+          ['goals',           ms.goals,           att],
+          ['assists',         ms.assists,         att],
+          ['own_goals',       ms.own_goals,       att],
+          // Attacking — fdh-api per-match shots map to attempt_at_goal_* slugs
+          ['attempt_at_goal',            ms.shots,           att],
+          ['attempt_at_goal_on_target',  ms.shots_on_target, att],
+          // Discipline — note `fouls_for` is the tournament cumulative slug,
+          // match_stats uses `fouls_committed` (same concept, different name).
+          ['fouls_for',     ms.fouls_committed,   dis],
+          ['yellow_cards',  ms.yellow_cards,      dis],
+          ['red_cards',     ms.red_cards,         dis],
+        ];
+        for (const [field, addend, bucket] of additions) {
+          if (typeof addend === 'number' && addend > 0) {
+            bucket[field] = (bucket[field] || 0) + addend;
+          }
+        }
+        // Flag for transparency / debugging — UI can show a hint if it wants.
+        ts.live_added_from_fixture = fixtureId;
       }
     }
 

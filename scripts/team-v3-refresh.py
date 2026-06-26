@@ -35,10 +35,20 @@ NS  = '278f1209ffd84662bd51921370a2fbe9'
 SEASON_ID = '285023'
 DEFAULT_BUDGET = 500
 
-CLASSIFICATIONS = ['gctp_top_scorer', 'gctp_attack', 'gctp_discipline']
+CLASSIFICATIONS = ['gctp_top_scorer', 'gctp_attack', 'gctp_discipline', 'gctp_goalkeeping']
 
 # v3 bucket assignment (matches index.html STATS_CATEGORIES)
 DISCIPLINE_KEYS = {'fouls_for', 'fouls_against', 'yellow_cards', 'red_cards', 'indirect_red_cards', 'offsides'}
+# Goalkeeping slugs added 2026-06-26 after probe confirmed gctp_goalkeeping
+# returns 3 fields. `goals_conceded` reclassified here too — FIFA serves it on
+# gctp_attack but conceptually it's keeper data; routing it to `goalkeeping`
+# aligns the schema with the UI grouping.
+GOALKEEPING_KEYS = {
+    'goalkeeper_saves',
+    'goalkeeper_defensive_actions_inside_penalty_area',
+    'goalkeeper_defensive_actions_outside_penalty_area',
+    'goals_conceded',
+}
 TOP_LEVEL_MAP   = {'total_competition_minutes_played': 'minutes_played',
                    'matches_played': 'matches_played',
                    'total_competition_matches_played': 'matches_played'}
@@ -216,6 +226,10 @@ AUTHORITATIVE_CLS = {
     'red_cards': 'gctp_discipline',
     'indirect_red_cards': 'gctp_discipline',
     'offsides': 'gctp_discipline',
+    # gctp_goalkeeping — added 2026-06-26
+    'goalkeeper_saves': 'gctp_goalkeeping',
+    'goalkeeper_defensive_actions_inside_penalty_area': 'gctp_goalkeeping',
+    'goalkeeper_defensive_actions_outside_penalty_area': 'gctp_goalkeeping',
 }
 
 
@@ -272,15 +286,17 @@ def fnv1a_32(s):
 
 
 def build_tournament_stats(stats_dict):
-    top, att, dis = {}, {}, {}
+    top, att, dis, gk = {}, {}, {}, {}
     for k, v in stats_dict.items():
         if k in DISCIPLINE_KEYS:
             dis[k] = v
+        elif k in GOALKEEPING_KEYS:
+            gk[k] = v
         elif k in TOP_LEVEL_MAP:
             top[TOP_LEVEL_MAP[k]] = v
         else:
             att[k] = v
-    return top, att, dis
+    return top, att, dis, gk
 
 
 def hash_record_payload(record):
@@ -295,6 +311,7 @@ def hash_record_payload(record):
         'matches_played': ts.get('matches_played'),
         'attacking': ts.get('attacking'),
         'discipline': ts.get('discipline'),
+        'goalkeeping': ts.get('goalkeeping'),
     }
     return fnv1a_32(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')))
 
@@ -351,7 +368,7 @@ def refresh_team(team_meta, dry_run, countries_lookup=None, max_cls_workers=3, m
     # a thread pool. KV ops are I/O bound; threading is the right tool.
     def process_player(pid_agg):
         pid, agg = pid_agg
-        top, attacking, discipline = build_tournament_stats(agg['stats'])
+        top, attacking, discipline, goalkeeping = build_tournament_stats(agg['stats'])
         for noise_key in ('fdcp_top_scorer_rank', 'xg_goal_effiency_rate'):
             attacking.pop(noise_key, None)
         existing = kv_get(f'players:{pid}') or {}
@@ -374,6 +391,7 @@ def refresh_team(team_meta, dry_run, countries_lookup=None, max_cls_workers=3, m
                 **top,
                 'attacking': attacking,
                 'discipline': discipline,
+                'goalkeeping': goalkeeping,
             },
             'last_updated': now,
         }

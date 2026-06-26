@@ -1,30 +1,60 @@
 # Cloudflare Pages ignores everything here when uploading.
-# Intentionally NOT using .gitignore because wrangler doesn't follow that.
+# wrangler reads `.assetsignore` (NOT `.gitignore`).
+# Syntax: gitignore-like patterns. Use both `dir/` and `dir/**` to be safe —
+# some wrangler versions don't recurse a bare `dir/` into deep contents,
+# which is why .venv (319 MiB) was previously uploaded and blew the 25 MiB
+# per-file limit when playwright's bundled `node` binary (114 MiB) was scanned.
 
-# Python venv (playwright/chromium cache, large)
+# === Python virtualenv (huge: playwright bundles node + chromium) ===
+.venv
 .venv/
+.venv/**
+venv
 venv/
-__pycache__/
+venv/**
+**/__pycache__
+**/__pycache__/**
+*.pyc
 
-# Worker subprojects (deployed separately via `wrangler deploy` from their own dirs)
+# === Worker subprojects (deployed separately via their own wrangler.toml) ===
+workers
 workers/
+workers/**
 
-# Local script tooling not needed at the edge
+# === Local-only tooling not needed at the edge ===
+scripts
 scripts/
+scripts/**
+data
 data/
+data/**
+picks
 picks/
+picks/**
+uploads
 uploads/
-
-# Local docs (not user-facing)
+uploads/**
+docs
 docs/
+docs/**
 
-# IDE & build artifacts
+# === IDE & build artifacts ===
+.idea
 .idea/
+.idea/**
+.vscode
 .vscode/
+.vscode/**
+.wrangler
 .wrangler/
+.wrangler/**
+node_modules
 node_modules/
-*.bak
+node_modules/**
 
-# Misc local files
-IMG_*.png
+# === Misc local files & backups ===
 *.bak
+**/*.bak
+IMG_*.png
+.DS_Store
+**/.DS_Store
