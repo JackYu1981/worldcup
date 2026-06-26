@@ -333,21 +333,21 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null, cu
 async function buildPools(env, mapping, lineup, stage) {
   const pools = { home: [], away: [] };
   if (stage === 'confirmed') {
-    // Hard constraint: candidates must be in starting + substitutes
+    // Hard constraint (用户 2026-06-27): confirmed 推荐只看 starting，
+    // substitutes 不进候选池。"替补保证"原则在 preview 阶段全员入池时已
+    // 隐含（preview 时谁会首发不确定，所以全员评分）。一旦 FIFA 公布
+    // 首发，sub 出现在确定版方案里属于违规。
     for (const side of ['home', 'away']) {
       const team = lineup[side] || {};
-      for (const grpKey of ['starting', 'substitutes']) {
-        const isStarter = grpKey === 'starting';
-        const list = team[grpKey] || [];
-        const fetched = await Promise.all(list.map(s => env.MATCH_DATA.get(`players:${s.player_id}`, 'json')));
-        list.forEach((stub, i) => {
-          const p = fetched[i];
-          if (!p) return;
-          p.shirt_number = stub.shirt_number;
-          p.position = stub.position ?? p.position;
-          pools[side].push({ player: p, isStarter });
-        });
-      }
+      const list = team.starting || [];
+      const fetched = await Promise.all(list.map(s => env.MATCH_DATA.get(`players:${s.player_id}`, 'json')));
+      list.forEach((stub, i) => {
+        const p = fetched[i];
+        if (!p) return;
+        p.shirt_number = stub.shirt_number;
+        p.position = stub.position ?? p.position;
+        pools[side].push({ player: p, isStarter: true });
+      });
     }
   } else {
     // Preview: pool = entire country roster, all marked is_starter=false
