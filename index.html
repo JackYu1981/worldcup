@@ -2540,6 +2540,7 @@
                 ${statRow('禁区内防守动作', gk.goalkeeper_defensive_actions_inside_penalty_area, '在自己禁区内的防守动作总数（扑救、出击、解围等）')}
                 ${statRow('禁区外防守动作', gk.goalkeeper_defensive_actions_outside_penalty_area, '冲出禁区参与的防守动作总数')}
                 ${statRow('失球 Goals Conceded', gk.goals_conceded, '本届世界杯累计被进球数')}
+                ${(att.own_goals || ms?.own_goals) ? statRow('乌龙球 Own Goals', att.own_goals || 0, '门将本届世界杯累计乌龙球（罕见但可能发生，如扑救脱手入网）', ms?.own_goals) : ''}
               </div>
               ` : `
               <div style="background:white;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
