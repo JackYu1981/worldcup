@@ -20,6 +20,7 @@ import { fetchLiveFootball } from './fifa-api.js';
 import { normalizeLineup, upsertPlayersFromLineup, matchLineupKey } from './lineup.js';
 import { refreshTournamentStatsForMatch } from './tournament-refresh.js';
 import { refreshMatchStats } from './match-stats.js';
+import { reconcileMatchPlayedCounters } from './counters.js';
 import { parseKickoffBeijing, beijingDateStr } from './time-utils.js';
 import { logSla } from './sla.js';
 
@@ -280,6 +281,34 @@ async function processFixture(env, fixture, lookupCountryZh, ensureFifaCal) {
 
   await Promise.all(writePromises);
   counters.lineupOk++;
+
+  // Reconcile matches_played counter for the pids in this fixture's lineup.
+  // Authoritative source = COUNT(match_stats:* WHERE pid=X). This runs AFTER
+  // refreshMatchStats finished so the latest fixture's appearance is already
+  // in the count. Catches the "missed cron tick" drift permanently because
+  // every tick re-syncs from truth. See lib/counters.js for design notes.
+  try {
+    const fixturePlayerIds = new Set();
+    for (const side of ['home', 'away']) {
+      for (const grp of ['starting', 'substitutes']) {
+        for (const p of (lineup[side]?.[grp] || [])) {
+          if (p.player_id) fixturePlayerIds.add(String(p.player_id));
+        }
+      }
+    }
+    if (fixturePlayerIds.size > 0) {
+      const r = await reconcileMatchPlayedCounters(env, fixturePlayerIds, mapping.fifa_id_match);
+      if (r.reconciled > 0) {
+        counters.matchesPlayedReconciled = (counters.matchesPlayedReconciled || 0) + r.reconciled;
+        await logSla(env, {
+          level: 'info', fixture: fixture.id, event: 'matches_played_reconciled',
+          reconciled: r.reconciled, total_pids: r.total_pids
+        });
+      }
+    }
+  } catch (e) {
+    await logSla(env, { level: 'warn', fixture: fixture.id, event: 'reconcile_counters_failed', error: e.message });
+  }
 
   // SLA log on lineup change or KO-60min risk
   const minutesToKickoff = Math.round((parseKickoffBeijing(fixture).getTime() - Date.now()) / 60_000);

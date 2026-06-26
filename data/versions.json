@@ -215,6 +215,12 @@
       "date": "2026-06-26T00:49:32+08:00",
       "summary": "日期窗口健壮性 + AI 推荐弹层体验增强：\n• 修复「凌晨翻页失忆」bug：3 个 worker（shot-recommender / asian-handicap-scraper / fifa-scraper）改用 list-all matches:* + filter by kickoff，彻底解决 BJ 0 点翻页后早场 fixture 漏抓\n• 修复 lineup 弹窗比分显示：FIFA Score 字段对某些 finished 比赛返回 null，加 events.goals 数量 fallback（ARG-AUT 2:0、FRA-IRQ 3:0、NOR-SEN 3:2 等）\n• 修复亚盘水位主客反向 bug：500.com 初盘表无 class 时列序反转，scraper 改用 class-aware + 位置回退\n• AI 推荐弹层新增「🔮 预测版 / ✅ 确认版」状态 badge\n• 推荐卡片显示「#序号 + 国旗 + 球衣号 + 人名 + ⭐次数」，序号 1-6 连号\n• 去掉强/弱队分组标题\n• 即时盘口/初盘合并为单行展示，水位标签按盘口符号自动 主/客 顺序\n• 推荐窗口扩大 6h→8h，覆盖深夜查推荐的常见用例\n• ground truth 数据完整性：回填 48 场 finished WC match_stats（fdh API），ML backtest 数据齐备\n• release.sh 加 .venv stash/restore + 自动 export CLOUDFLARE_API_TOKEN",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v4.9.2",
+      "date": "2026-06-26T09:32:06+08:00",
+      "summary": "数据准确性 + AI 推荐弹层修复: fifa-scraper matches_played 改 reconcile 模型(每 tick 用 match_stats 真值校准+463个历史脏数据已修); match-stats live 期间跳过 hash 短路保证 fetched_at 实时更新; AI 推荐 UI 修强弱判断主客反向 bug + 让球改真实数值 + 弹层 header 改主客对阵 + 🔮预测版/✅确认版 badge + 推荐卡 #序号+国旗+球衣号+人名 1-6 连号 + 盘口/初盘合并单行 + preview→confirmed 保留快照 + 推荐窗口 6h→8h; release.sh 加 .venv stash/restore + 自动 export token; admin CR 1782426919487 已 adopted",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

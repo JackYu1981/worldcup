@@ -98,7 +98,15 @@ export async function refreshMatchStats(env, fixture500Id, mapping, currentMatch
   const newHash = fnv1a(canonJson(playerStats));
   const key = `match_stats:${fixture500Id}`;
   const existing = await env.MATCH_DATA.get(key, 'json');
-  if (existing?._hash === newHash) {
+  // Hash short-circuit: skip rewriting when player stats are byte-identical,
+  // UNLESS the match is currently live — during live play the user expects
+  // a fresh `fetched_at` even if no new shot has happened in the past minute,
+  // so we always rewrite (cheap: 1 KV write/min/fixture for active matches).
+  // currentMatchStatus codes per FIFA: 0=finished, 1=scheduled, 3=1st half,
+  // 5=2nd half, 7/9=extra time (all "live" states from a user-display angle).
+  const isLive = currentMatchStatus === 3 || currentMatchStatus === 5
+              || currentMatchStatus === 7 || currentMatchStatus === 9;
+  if (!isLive && existing?._hash === newHash) {
     return { written: false, fetched: true, reason: 'unchanged', players: Object.keys(playerStats).length };
   }
 

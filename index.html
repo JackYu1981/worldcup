@@ -379,6 +379,37 @@
             background: linear-gradient(135deg, #d1fae5, #6ee7b7);
             color: #064e3b;
         }
+        .bot-preview-snapshot {
+            margin: 8px 12px 4px;
+            background: #faf7f0;
+            border-radius: 8px;
+            border: 1px solid #fde68a;
+            font-size: 12px;
+        }
+        .bot-preview-snapshot summary {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: space-between;
+            font-weight: 600; color: #78350f;
+            list-style: none;
+        }
+        .bot-preview-snapshot summary::-webkit-details-marker { display: none; }
+        .bot-preview-summary-title { display: inline-flex; align-items: center; gap: 6px; }
+        .bot-preview-diff-summary { font-size: 11px; color: #92400e; font-weight: 500; }
+        .bot-preview-meta {
+            padding: 4px 12px 6px;
+            font-size: 11px; color: #92400e;
+        }
+        .bot-pick-preview {
+            margin: 4px 12px;
+            background: white;
+            opacity: 0.82;
+        }
+        .bot-pick-removed { opacity: 0.5; text-decoration: line-through; }
+        .bot-preview-removed {
+            font-size: 10px; color: #b91c1c;
+            margin-left: auto; font-weight: 600;
+        }
         .bot-pick-card {
             background: white;
             margin: 0 12px 8px;
@@ -1113,7 +1144,7 @@
         <div class="stats-sheet" id="shotRecommenderSheet">
             <div class="stats-header">
                 <button class="stats-back" onclick="closeShotRecommenderSheet()">‹ 返回</button>
-                <div class="stats-title">🤖 AI 射门推荐</div>
+                <div class="stats-title" id="shotRecommenderTitle">射门推荐</div>
             </div>
             <div class="stats-table-wrap" id="shotRecommenderBody">
                 <div class="stats-empty">加载中…</div>
@@ -2668,6 +2699,10 @@
             const sheet = document.getElementById('shotRecommenderSheet');
             sheet.classList.add('visible');
             const body = document.getElementById('shotRecommenderBody');
+            // Reset title to a neutral placeholder while loading; renderShotRecommenderSheet
+            // will overwrite it with the actual "主 vs 客" matchup once data arrives.
+            const titleEl = document.getElementById('shotRecommenderTitle');
+            if (titleEl) titleEl.textContent = '射门推荐';
             if (!currentLineupFixtureId) {
                 body.innerHTML = '<div class="stats-empty">缺少比赛上下文</div>';
                 return;
@@ -2700,19 +2735,26 @@
             return Number(n).toFixed(digits).replace(/\.?0+$/, '');
         }
 
-        // Returns the strong-side decision narrative based on AH line.
-        // Mirrors v0_baseline.py logic so engine inputs visible to user match server-side calc.
+        // Mirrors worker decideStrongSide (workers/shot-recommender/index.js).
+        // 500.com Crown sign convention:
+        //   line > 0  → 主队受让 → AWAY is strong (favourite, gives goals)
+        //   line < 0  → 主队让   → HOME is strong (favourite, gives goals)
+        //   line == 0 → pick-em
         function _decideStrongSideClient(line) {
             const abs = Math.abs(line);
-            if (line > 0.01) return { side: 'home', label: '主队', abs };
-            if (line < -0.01) return { side: 'away', label: '客队', abs };
+            if (line > 0.01) return { side: 'away', label: '客队', abs };
+            if (line < -0.01) return { side: 'home', label: '主队', abs };
             return { side: 'home', label: '平手盘', abs: 0 };
         }
+        // Distribution rule: based on |line| magnitude, decide how many of
+        // 6 shot quota go to strong vs weak side. Returns [strongCount, weakCount].
+        // The line magnitude shown to the user is the ACTUAL line.abs (not a
+        // bucket label) — bucketing is purely internal for shot allocation.
         function _distributionForLine(abs) {
-            if (abs >= 1.5) return [6, 0, '让 2 球'];
-            if (abs >= 1.0) return [5, 1, '让 1 球'];
-            if (abs >= 0.25) return [4, 2, '让 0.5 球'];
-            return [3, 3, '平手盘'];
+            if (abs >= 1.5) return [6, 0];
+            if (abs >= 1.0) return [5, 1];
+            if (abs >= 0.25) return [4, 2];
+            return [3, 3];
         }
 
         function renderShotRecommenderSheet(lineupData, rec) {
@@ -2721,6 +2763,14 @@
             const ah = lineupData?.asian_handicap;
             const lineup = lineupData?.lineup;
             if (!meta) { body.innerHTML = '<div class="stats-empty">比赛元数据缺失</div>'; return; }
+
+            // Set sheet header to "主队 vs 客队" — per user spec, the matchup is
+            // more informative than a generic "射门推荐" label. Use Chinese
+            // country names from fixture_meta; fall back to the raw country code.
+            const homeZh = meta.home?.country_zh || meta.home?.country_code || '主';
+            const awayZh = meta.away?.country_zh || meta.away?.country_code || '客';
+            const titleEl = document.getElementById('shotRecommenderTitle');
+            if (titleEl) titleEl.textContent = `${homeZh} vs ${awayZh}`;
 
             // === SECTION 1: 亚盘决策依据 ===
             let ahSection;
@@ -2733,7 +2783,12 @@
                 const cur = ah.current;
                 const open = ah.open || {};
                 const strong = _decideStrongSideClient(cur.line);
-                const [strongCnt, weakCnt, lineGrade] = _distributionForLine(strong.abs);
+                const [strongCnt, weakCnt] = _distributionForLine(strong.abs);
+                // Display the actual signed line magnitude (e.g. "让 2.25 球"),
+                // not a coarse bucket like "让 2 球".
+                const strongLineLabel = (strong.abs < 0.01)
+                    ? '平手盘'
+                    : `让 ${_fmtNum(strong.abs)} 球`;
                 const lineDelta = (cur.line !== undefined && open.line !== undefined)
                     ? (Math.abs(cur.line) - Math.abs(open.line)).toFixed(2).replace(/\.?0+$/, '')
                     : null;
@@ -2793,7 +2848,7 @@
                       <span class="bot-v bot-trend ${trendCls}">${trendLabel}</span></div>
                     <div class="bot-divider"></div>
                     <div class="bot-row"><span class="bot-k">强弱判断</span>
-                      <span class="bot-v">${strong.label}强（${lineGrade}）</span></div>
+                      <span class="bot-v">${strong.label}强（${strongLineLabel}）</span></div>
                     <div class="bot-row"><span class="bot-k">6 次射中分配</span>
                       <span class="bot-v"><strong style="color:#0a2f5c">强 ${strongCnt}</strong> · <strong style="color:#c62828">弱 ${weakCnt}</strong></span></div>
                   </div>`;
@@ -2884,11 +2939,56 @@
                         ${p.reason ? `<div class="bot-pick-reason">${p.reason}</div>` : ''}
                     </div>`;
                 };
+                // Preview snapshot — if this is a confirmed stage rec that
+                // started as a preview, surface the original preview picks
+                // below the confirmed list as a collapsible diff section.
+                const previewSnap = rec.preview_snapshot;
+                let previewBlock = '';
+                if (rec.stage === 'confirmed' && previewSnap?.picks?.length) {
+                    const previewPicks = previewSnap.picks;
+                    // Diff: identify which current picks WEREN'T in preview, and vice versa
+                    const currentPids = new Set(rec.picks.map(p => p.pid));
+                    const previewPids = new Set(previewPicks.map(p => p.pid));
+                    const removed = previewPicks.filter(p => !currentPids.has(p.pid));
+                    const added = rec.picks.filter(p => !previewPids.has(p.pid));
+                    const diffSummary = (added.length || removed.length)
+                        ? `<span class="bot-preview-diff-summary">${added.length ? '⊕' + added.length : ''}${removed.length ? ' ⊖' + removed.length : ''}</span>`
+                        : '<span class="bot-preview-diff-summary">无变动</span>';
+                    const prevAt = previewSnap.generated_at?.slice(0,16).replace('T',' ') || '';
+                    const trAt = rec.preview_to_confirmed_at?.slice(0,16).replace('T',' ') || '';
+                    const renderPreviewPick = (p, i) => {
+                        const flag = flagImg(p.country_code || countryBySide[p.side]);
+                        const shirt = p.shirt_number;
+                        const shirtHtml = (shirt != null) ? `<span class="bot-pick-shirt">${shirt}</span>` : '';
+                        const inCurrent = currentPids.has(p.pid);
+                        const tag = inCurrent ? '' : '<span class="bot-preview-removed">⊖ 已移除</span>';
+                        return `<div class="bot-pick-card bot-pick-preview${inCurrent ? '' : ' bot-pick-removed'}">
+                            <div class="bot-pick-head">
+                                <span class="bot-pick-rank">#${i+1}</span>
+                                ${flag}${shirtHtml}
+                                <span class="bot-pick-name">${p.name || p.pid}</span>
+                                ${p.shots >= 2 ? `<span class="bot-shots-badge">⭐ ${p.shots} 次</span>` : ''}
+                                ${tag}
+                            </div>
+                        </div>`;
+                    };
+                    previewBlock = `
+                        <details class="bot-preview-snapshot">
+                            <summary>
+                                <span class="bot-preview-summary-title">🔮 之前的预测版</span>
+                                ${diffSummary}
+                            </summary>
+                            <div class="bot-preview-meta">预测于 ${prevAt} · 确认于 ${trAt}</div>
+                            ${previewPicks.map((p,i)=>renderPreviewPick(p,i)).join('')}
+                        </details>
+                    `;
+                }
                 outputSection = `
                   <div class="bot-section-title">🎯 引擎推荐方案 ${rec.stage === 'confirmed' ? '<span class="bot-stage-badge bot-stage-confirmed">✅ 确认版</span>' : '<span class="bot-stage-badge bot-stage-preview">🔮 预测版</span>'}</div>
                   ${strong.map((p,i)=>renderPick(p,i)).join('')}
                   ${weak.map((p,i)=>renderPick(p,i+strong.length)).join('')}
                   ${rec.model_version ? `<div class="bot-meta">模型 ${rec.model_version} · ${rec.generated_at?.slice(0,16).replace('T',' ') || ''}</div>` : ''}
+                  ${previewBlock}
                 `;
             }
 
