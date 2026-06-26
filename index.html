@@ -852,9 +852,24 @@
         .lineup-player-name .sub-out-inline .sub-out-minute {
             font-size: 10px; font-weight: 600;
         }
+        /* sub-in inline (mirror of sub-out) — green ↑NN' next to substitute's name */
+        .lineup-player-name .sub-in-inline {
+            color: #2e7d32; font-weight: 700; font-size: 13px;
+            line-height: 1; flex-shrink: 0;
+            display: inline-flex; align-items: baseline; gap: 1px;
+        }
+        .lineup-player-name .sub-in-inline .sub-in-minute {
+            font-size: 10px; font-weight: 600;
+        }
         .lineup-player-name .sub-replaced {
             font-size: 11px; color: #2e7d32; font-weight: 500;
             display: flex; align-items: center; gap: 3px;
+        }
+        .lineup-player-name .sub-replaced.sub-replaced-off {
+            color: #d50000;
+        }
+        .lineup-player-name .sub-replaced.sub-replaced-off .sub-replaced-shirt {
+            color: #d50000;
         }
         .lineup-player-name .sub-replaced .arrow { font-weight: 700; }
         .lineup-player-name .sub-replaced-shirt {
@@ -2363,7 +2378,9 @@
                 if (b.side === side) (playerEvents[b.player_id] ||= []).push({ type: 'card', card: b.card, minute: b.minute });
             }
             // subs: store on-player's NAME + shirt on the off-player's record (for "↑ #N <name>" subline)
-            // and minute on the on-player's record (for "↑NN'" event icon)
+            // and minute on the on-player's record (for "↑NN'" event icon).
+            // Mirror logic for substitutes: store off-player's NAME + shirt on the
+            // on-player's record so the 替补 card can render "↓ #N <name>" subline.
             for (const s of events.substitutions || []) {
                 if (s.side === side) {
                     (playerEvents[s.off_player_id] ||= []).push({
@@ -2374,7 +2391,9 @@
                     });
                     (playerEvents[s.on_player_id] ||= []).push({
                         type: 'sub_in',
-                        minute: s.minute
+                        minute: s.minute,
+                        replaced_off_name: s.off_player_name || null,
+                        replaced_off_shirt: s.off_player_shirt ?? null
                     });
                 }
             }
@@ -2427,11 +2446,16 @@
             const subOutEvent = events.find(e => e.type === 'sub_out');
             const replacedByName = subOutEvent?.replaced_by_name;
             const replacedByShirt = subOutEvent?.replaced_by_shirt;
+            // 镜像逻辑：替补上场卡片显示 "↓ #N <被替换的首发>" 副标题
+            const subInEvent = events.find(e => e.type === 'sub_in');
+            const replacedOffName = subInEvent?.replaced_off_name;
+            const replacedOffShirt = subInEvent?.replaced_off_shirt;
 
             // The right-hand events column: goals, cards, sub-in arrow.
             // sub_out is RENDERED INLINE next to the player's name (mirrors the
             // green "↑ name" subline), not in this rail — so the down/up arrows
             // visually pair around the same player. Captain badge stays here too.
+            // sub_in 同理 INLINE 显示（在名字旁绿色 ↑NN' pill），不在右栏画 ↑NN' 图标。
             const eventsHtml = events.map(e => {
                 if (e.type === 'goal') return `<span class="lineup-event-icon goal">${e.minute || ''}</span>`;
                 if (e.type === 'own_goal') return `<span class="lineup-event-icon own-goal" title="乌龙球">${e.minute || ''}</span>`;
@@ -2439,8 +2463,7 @@
                     const cls = e.card === 2 ? 'red' : 'yellow';
                     return `<span class="lineup-event-icon ${cls}">${e.minute || ''}</span>`;
                 }
-                if (e.type === 'sub_in')  return `<span class="lineup-event-icon sub-in">↑${e.minute || ''}</span>`;
-                // sub_out intentionally NOT rendered here — see name-row inline pill.
+                // sub_in / sub_out 都在名字旁 inline，不在 events 右栏渲染。
                 return '';
             }).join('');
 
@@ -2449,8 +2472,16 @@
             const subOutInlineHtml = subOutEvent
                 ? `<span class="sub-out-inline">↓<span class="sub-out-minute">${subOutEvent.minute || ''}</span></span>`
                 : '';
+            // sub-in pill (mirror): green ↑ + minute, inline next to substitute's name
+            const subInInlineHtml = subInEvent
+                ? `<span class="sub-in-inline">↑<span class="sub-in-minute">${subInEvent.minute || ''}</span></span>`
+                : '';
             const replacedByHtml = replacedByName
                 ? `<div class="sub-replaced"><span class="arrow">↑</span>${replacedByShirt != null ? `<span class="sub-replaced-shirt">${replacedByShirt}</span>` : ''} ${escapeHtml(replacedByName)}</div>`
+                : '';
+            // 镜像副标题：替补显示"↓ #X 被替换者"
+            const replacedOffHtml = replacedOffName
+                ? `<div class="sub-replaced sub-replaced-off"><span class="arrow">↓</span>${replacedOffShirt != null ? `<span class="sub-replaced-shirt">${replacedOffShirt}</span>` : ''} ${escapeHtml(replacedOffName)}</div>`
                 : '';
 
             const safeName = (p.name || `Player ${p.player_id}`).replace(/"/g, '&quot;').replace(/'/g, "\\'");
@@ -2462,8 +2493,10 @@
                         <span>${escapeHtml(p.name || `Player ${p.player_id}`)}</span>
                         ${captainHtml}
                         ${subOutInlineHtml}
+                        ${subInInlineHtml}
                     </div>
                     ${replacedByHtml}
+                    ${replacedOffHtml}
                 </div>
                 <div class="lineup-player-events">${eventsHtml}</div>
             </div>`;
@@ -2853,7 +2886,9 @@
                 if (p.player_id != null) rawStByPid[String(p.player_id)] = p.shots_on_target ?? 0;
             }
             const actualStByPid = {};
-            const subs = (lineup?.events?.substitutions) || [];
+            // 替补 chain 数据源: substitutions 在 API 的 match_state.events 里，
+            // 不在 lineup.events 里 (lineup_block 不含 events 字段)。
+            const subs = (lineupData?.match_state?.events?.substitutions) || [];
             // 建 on_pid → off_pid 反向映射，沿 chain 追溯每个 pid 的"原首发"
             const onToOff = {};
             for (const s of subs) {
