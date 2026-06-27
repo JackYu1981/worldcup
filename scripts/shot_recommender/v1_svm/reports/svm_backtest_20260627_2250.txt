@@ -1,0 +1,479 @@
+SVM v1 walk-forward backtest
+Trained at: 2026-06-27 14:50 UTC
+Samples: 633, fixtures: 42
+Features (17): ['ot_overall', 'ot_vs_weak', 'ot_vs_strong', 'ot_vs_medium', 'att_overall', 'matches_played', 'n_vs_weak', 'n_vs_strong', 'n_vs_medium', 'is_FW', 'is_MF', 'is_DF', 'is_GK', 'ot_x_FW', 'ot_x_DF', 'opp_gc_per_match', 'team_favoredness']
+
+Backtested fixtures: 39
+SVM precision (hits/budget): 39.32%
+v0  precision (hits/budget): 38.03%
+SVM vs v0 (same fixtures, same allocator): +1.28pp
+
+=== Per-fixture breakdown ===
+
+f1359177 budget=6 (max 4 players, quota 4-2) SVM:1/6=17% v0:2/6=33%
+  SVM picks:
+    ~ Julian QUINONES           cc=MEX assigned=2 actual_st=1
+    ✗ Jesus GALLARDO            cc=MEX assigned=1 actual_st=0
+    ✗ Edson ALVAREZ             cc=MEX assigned=1 actual_st=0
+    ✗ LEE Hanbeom               cc=KOR assigned=2 actual_st=0
+  v0 picks:
+    ~ Julian QUINONES           cc=MEX assigned=2 actual_st=1
+    ✓ Raul JIMENEZ              cc=MEX assigned=1 actual_st=1
+    ✗ Brian GUTIERREZ           cc=MEX assigned=1 actual_st=0
+    ✗ SON Heungmin              cc=KOR assigned=2 actual_st=0
+
+f1359191 budget=6 (max 4 players, quota 5-1) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ✗ Folarin BALOGUN           cc=USA assigned=2 actual_st=0
+    ✗ Malik TILLMAN             cc=USA assigned=2 actual_st=0
+    ✗ Ricardo PEPI              cc=USA assigned=1 actual_st=0
+    ✓ Mohamed TOURE             cc=AUS assigned=1 actual_st=1
+  v0 picks:
+    ✗ Folarin BALOGUN           cc=USA assigned=2 actual_st=0
+    ✗ Malik TILLMAN             cc=USA assigned=2 actual_st=0
+    ✗ Ricardo PEPI              cc=USA assigned=1 actual_st=0
+    ✓ Mohamed TOURE             cc=AUS assigned=1 actual_st=1
+
+f1359231 budget=6 (max 4 players, quota 4-2) SVM:2/6=33% v0:1/6=17%
+  SVM picks:
+    ~ Ismael SAIBARI            cc=MAR assigned=2 actual_st=1
+    ✗ Neil EL AYNAOUI           cc=MAR assigned=1 actual_st=0
+    ✓ Bilal EL KHANNOUSS        cc=MAR assigned=1 actual_st=1
+    ✗ Che Adams                 cc=SCO assigned=2 actual_st=0
+  v0 picks:
+    ✗ Brahim DIAZ               cc=MAR assigned=2 actual_st=0
+    ✓ Ismael SAIBARI            cc=MAR assigned=1 actual_st=1
+    ✗ Neil EL AYNAOUI           cc=MAR assigned=1 actual_st=0
+    ✗ Che Adams                 cc=SCO assigned=2 actual_st=0
+
+f1359198 budget=6 (max 4 players, quota 6-0) SVM:4/6=67% v0:4/6=67%
+  SVM picks:
+    ~ RAPHINHA                  cc=BRA assigned=2 actual_st=1
+    ✓ VINICIUS JUNIOR           cc=BRA assigned=2 actual_st=2
+    ✓ MATHEUS CUNHA             cc=BRA assigned=1 actual_st=1
+    ✗ LUCAS PAQUETA             cc=BRA assigned=1 actual_st=0
+  v0 picks:
+    ~ RAPHINHA                  cc=BRA assigned=2 actual_st=1
+    ✓ VINICIUS JUNIOR           cc=BRA assigned=2 actual_st=2
+    ✗ LUCAS PAQUETA             cc=BRA assigned=1 actual_st=0
+    ✓ MATHEUS CUNHA             cc=BRA assigned=1 actual_st=1
+
+f1359234 budget=6 (max 4 players, quota 4-2) SVM:1/6=17% v0:0/6=0%
+  SVM picks:
+    ✗ Arda GULER                cc=TUR assigned=2 actual_st=0
+    ✗ Kerem AKTURKOGLU          cc=TUR assigned=1 actual_st=0
+    ✓ Kenan YILDIZ              cc=TUR assigned=1 actual_st=1
+    ✗ Julio ENCISO              cc=PAR assigned=2 actual_st=0
+  v0 picks:
+    ✗ Arda GULER                cc=TUR assigned=2 actual_st=0
+    ✗ Hakan CALHANOGLU          cc=TUR assigned=1 actual_st=0
+    ✗ Kerem AKTURKOGLU          cc=TUR assigned=1 actual_st=0
+    ✗ Julio ENCISO              cc=PAR assigned=2 actual_st=0
+
+f1359204 budget=6 (max 4 players, quota 4-2) SVM:2/6=33% v0:3/6=50%
+  SVM picks:
+    ✗ Donyell Malen             cc=NED assigned=2 actual_st=0
+    ✓ Cody GAKPO                cc=NED assigned=1 actual_st=4
+    ✗ Frenkie DE JONG           cc=NED assigned=1 actual_st=0
+    ~ Alexander Isak            cc=SWE assigned=2 actual_st=1
+  v0 picks:
+    ✗ Donyell Malen             cc=NED assigned=2 actual_st=0
+    ✓ Cody GAKPO                cc=NED assigned=1 actual_st=4
+    ✗ Virgil VAN DIJK           cc=NED assigned=1 actual_st=0
+    ✓ Viktor GYOKERES           cc=SWE assigned=2 actual_st=3
+
+f1359201 budget=6 (max 4 players, quota 5-1) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ~ Kai HAVERTZ               cc=GER assigned=2 actual_st=1
+    ✗ Felix NMECHA              cc=GER assigned=2 actual_st=0
+    ✗ Nico SCHLOTTERBECK        cc=GER assigned=1 actual_st=0
+    ✗ Amad DIALLO               cc=CIV assigned=1 actual_st=0
+  v0 picks:
+    ✗ Felix NMECHA              cc=GER assigned=2 actual_st=0
+    ~ Kai HAVERTZ               cc=GER assigned=2 actual_st=1
+    ✗ Aleksandar PAVLOVIC       cc=GER assigned=1 actual_st=0
+    ✗ Amad DIALLO               cc=CIV assigned=1 actual_st=0
+
+f1359237 budget=6 (max 4 players, quota 6-0) SVM:6/6=100% v0:6/6=100%
+  SVM picks:
+    ✓ Gonzalo PLATA             cc=ECU assigned=2 actual_st=3
+    ✓ Enner VALENCIA            cc=ECU assigned=2 actual_st=5
+    ✓ John YEBOAH               cc=ECU assigned=1 actual_st=2
+    ✓ Pedro VITE                cc=ECU assigned=1 actual_st=1
+  v0 picks:
+    ✓ Gonzalo PLATA             cc=ECU assigned=2 actual_st=3
+    ✓ John YEBOAH               cc=ECU assigned=2 actual_st=2
+    ✓ Enner VALENCIA            cc=ECU assigned=1 actual_st=5
+    ✓ Pedro VITE                cc=ECU assigned=1 actual_st=1
+
+f1359240 budget=6 (max 4 players, quota 5-1) SVM:3/6=50% v0:3/6=50%
+  SVM picks:
+    ✓ Ayase UEDA                cc=JPN assigned=2 actual_st=3
+    ✗ Keito Nakamura            cc=JPN assigned=2 actual_st=0
+    ✓ Junya ITO                 cc=JPN assigned=1 actual_st=1
+    ✗ Elias SAAD                cc=TUN assigned=1 actual_st=0
+  v0 picks:
+    ✗ Keito Nakamura            cc=JPN assigned=2 actual_st=0
+    ✓ Ayase UEDA                cc=JPN assigned=2 actual_st=3
+    ✓ Junya ITO                 cc=JPN assigned=1 actual_st=1
+    ✗ Elias SAAD                cc=TUN assigned=1 actual_st=0
+
+f1359210 budget=6 (max 4 players, quota 6-0) SVM:4/6=67% v0:3/6=50%
+  SVM picks:
+    ✓ Lamine YAMAL              cc=ESP assigned=2 actual_st=2
+    ✓ Mikel OYARZABAL           cc=ESP assigned=2 actual_st=3
+    ✗ PEDRI                     cc=ESP assigned=1 actual_st=0
+    ✗ RODRI                     cc=ESP assigned=1 actual_st=0
+  v0 picks:
+    ✓ Mikel OYARZABAL           cc=ESP assigned=2 actual_st=3
+    ✗ PEDRI                     cc=ESP assigned=2 actual_st=0
+    ✓ Lamine YAMAL              cc=ESP assigned=1 actual_st=2
+    ✗ Aymeric LAPORTE           cc=ESP assigned=1 actual_st=0
+
+f1359207 budget=6 (max 4 players, quota 5-1) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ✗ Romelu LUKAKU             cc=BEL assigned=2 actual_st=0
+    ✗ Leandro TROSSARD          cc=BEL assigned=2 actual_st=0
+    ✓ Kevin DE BRUYNE           cc=BEL assigned=1 actual_st=1
+    ✓ Mehdi TAREMI              cc=IRN assigned=1 actual_st=1
+  v0 picks:
+    ~ Kevin DE BRUYNE           cc=BEL assigned=2 actual_st=1
+    ✗ Leandro TROSSARD          cc=BEL assigned=2 actual_st=0
+    ✗ Romelu LUKAKU             cc=BEL assigned=1 actual_st=0
+    ✓ Saeid EZATOLAHI           cc=IRN assigned=1 actual_st=1
+
+f1359246 budget=6 (max 4 players, quota 5-1) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ✗ Federico VINAS            cc=URU assigned=2 actual_st=0
+    ~ Maxi ARAUJO               cc=URU assigned=2 actual_st=1
+    ✗ Federico VALVERDE         cc=URU assigned=1 actual_st=0
+    ✗ RYAN MENDES               cc=CPV assigned=1 actual_st=0
+  v0 picks:
+    ✗ Federico VINAS            cc=URU assigned=2 actual_st=0
+    ✗ Federico VALVERDE         cc=URU assigned=2 actual_st=0
+    ✓ Maxi ARAUJO               cc=URU assigned=1 actual_st=1
+    ✗ RYAN MENDES               cc=CPV assigned=1 actual_st=0
+
+f1359243 budget=6 (max 4 players, quota 4-2) SVM:3/6=50% v0:2/6=33%
+  SVM picks:
+    ~ OMAR MARMOUSH             cc=EGY assigned=2 actual_st=1
+    ✗ EMAM ASHOUR               cc=EGY assigned=1 actual_st=0
+    ✓ MOSTAFA ZICO              cc=EGY assigned=1 actual_st=1
+    ~ Elijah JUST               cc=NZL assigned=2 actual_st=1
+  v0 picks:
+    ~ OMAR MARMOUSH             cc=EGY assigned=2 actual_st=1
+    ✓ MOHAMED SALAH             cc=EGY assigned=1 actual_st=2
+    ✗ EMAM ASHOUR               cc=EGY assigned=1 actual_st=0
+    ✗ Chris WOOD                cc=NZL assigned=2 actual_st=0
+
+f1359216 budget=6 (max 4 players, quota 5-1) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ✓ Lionel MESSI              cc=ARG assigned=2 actual_st=4
+    ✗ Lautaro MARTINEZ          cc=ARG assigned=2 actual_st=0
+    ✗ Thiago ALMADA             cc=ARG assigned=1 actual_st=0
+    ✗ Romano SCHMID             cc=AUT assigned=1 actual_st=0
+  v0 picks:
+    ✓ Lionel MESSI              cc=ARG assigned=2 actual_st=4
+    ✗ Lautaro MARTINEZ          cc=ARG assigned=2 actual_st=0
+    ✗ Alexis MAC ALLISTER       cc=ARG assigned=1 actual_st=0
+    ✗ Romano SCHMID             cc=AUT assigned=1 actual_st=0
+
+f1359213 budget=6 (max 4 players, quota 6-0) SVM:3/6=50% v0:3/6=50%
+  SVM picks:
+    ✓ Kylian MBAPPE             cc=FRA assigned=2 actual_st=3
+    ✗ Michael OLISE             cc=FRA assigned=2 actual_st=0
+    ✗ Bradley BARCOLA           cc=FRA assigned=1 actual_st=0
+    ✓ Ousmane DEMBELE           cc=FRA assigned=1 actual_st=2
+  v0 picks:
+    ✓ Kylian MBAPPE             cc=FRA assigned=2 actual_st=3
+    ✗ Michael OLISE             cc=FRA assigned=2 actual_st=0
+    ✗ Bradley BARCOLA           cc=FRA assigned=1 actual_st=0
+    ✓ Ousmane DEMBELE           cc=FRA assigned=1 actual_st=2
+
+f1359249 budget=6 (max 4 players, quota 3-3) SVM:5/6=83% v0:3/6=50%
+  SVM picks:
+    ✓ Erling HAALAND            cc=NOR assigned=2 actual_st=3
+    ✗ Alexander SORLOTH         cc=NOR assigned=1 actual_st=0
+    ✓ Ismaila SARR              cc=SEN assigned=2 actual_st=3
+    ✓ Nicolas JACKSON           cc=SEN assigned=1 actual_st=1
+  v0 picks:
+    ✓ Erling HAALAND            cc=NOR assigned=2 actual_st=3
+    ✗ Alexander SORLOTH         cc=NOR assigned=1 actual_st=0
+    ✗ Sadio MANE                cc=SEN assigned=2 actual_st=0
+    ✓ Ismaila SARR              cc=SEN assigned=1 actual_st=3
+
+f1359252 budget=6 (max 4 players, quota 5-1) SVM:4/6=67% v0:4/6=67%
+  SVM picks:
+    ~ Riyad Mahrez              cc=ALG assigned=2 actual_st=1
+    ✓ Amine GOUIRI              cc=ALG assigned=2 actual_st=2
+    ✓ Fares CHAIBI              cc=ALG assigned=1 actual_st=1
+    ✗ MOHANNAD ABUTAHA          cc=JOR assigned=1 actual_st=0
+  v0 picks:
+    ~ Riyad Mahrez              cc=ALG assigned=2 actual_st=1
+    ~ Fares CHAIBI              cc=ALG assigned=2 actual_st=1
+    ✓ Amine GOUIRI              cc=ALG assigned=1 actual_st=2
+    ✓ ALI OLWAN                 cc=JOR assigned=1 actual_st=1
+
+f1359219 budget=6 (max 4 players, quota 6-0) SVM:3/6=50% v0:3/6=50%
+  SVM picks:
+    ✓ CRISTIANO RONALDO         cc=POR assigned=2 actual_st=5
+    ✗ PEDRO NETO                cc=POR assigned=2 actual_st=0
+    ✗ JOAO NEVES                cc=POR assigned=1 actual_st=0
+    ✓ BRUNO FERNANDES           cc=POR assigned=1 actual_st=1
+  v0 picks:
+    ✓ CRISTIANO RONALDO         cc=POR assigned=2 actual_st=5
+    ✗ JOAO NEVES                cc=POR assigned=2 actual_st=0
+    ✗ PEDRO NETO                cc=POR assigned=1 actual_st=0
+    ✓ BRUNO FERNANDES           cc=POR assigned=1 actual_st=1
+
+f1359222 budget=6 (max 4 players, quota 6-0) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ~ Harry KANE                cc=ENG assigned=2 actual_st=1
+    ~ Anthony GORDON            cc=ENG assigned=2 actual_st=1
+    ✗ Noni MADUEKE              cc=ENG assigned=1 actual_st=0
+    ✗ Jude BELLINGHAM           cc=ENG assigned=1 actual_st=0
+  v0 picks:
+    ~ Harry KANE                cc=ENG assigned=2 actual_st=1
+    ✗ Jude BELLINGHAM           cc=ENG assigned=2 actual_st=0
+    ✓ Anthony GORDON            cc=ENG assigned=1 actual_st=1
+    ✗ Declan RICE               cc=ENG assigned=1 actual_st=0
+
+f1359258 budget=6 (max 4 players, quota 5-1) SVM:0/6=0% v0:1/6=17%
+  SVM picks:
+    ✗ Mateo KOVACIC             cc=CRO assigned=2 actual_st=0
+    ✗ Martin BATURINA           cc=CRO assigned=2 actual_st=0
+    ✗ Luka MODRIC               cc=CRO assigned=1 actual_st=0
+    ✗ Edgar Yoel BARCENAS       cc=PAN assigned=1 actual_st=0
+  v0 picks:
+    ~ Marco PASALIC             cc=CRO assigned=2 actual_st=1
+    ✗ Petar Musa                cc=CRO assigned=2 actual_st=0
+    ✗ Mateo KOVACIC             cc=CRO assigned=1 actual_st=0
+    ✗ Cesar BLACKMAN            cc=PAN assigned=1 actual_st=0
+
+f1359255 budget=6 (max 4 players, quota 5-1) SVM:2/6=33% v0:3/6=50%
+  SVM picks:
+    ✓ Luis DIAZ                 cc=COL assigned=2 actual_st=2
+    ✗ Luis SUAREZ               cc=COL assigned=2 actual_st=0
+    ✗ Jefferson LERMA           cc=COL assigned=1 actual_st=0
+    ✗ Cedric BAKAMBU            cc=COD assigned=1 actual_st=0
+  v0 picks:
+    ✓ Luis DIAZ                 cc=COL assigned=2 actual_st=2
+    ~ James RODRIGUEZ           cc=COL assigned=2 actual_st=1
+    ✗ Jefferson LERMA           cc=COL assigned=1 actual_st=0
+    ✗ Yoane WISSA               cc=COD assigned=1 actual_st=0
+
+f1359188 budget=6 (max 4 players, quota 3-3) SVM:4/6=67% v0:3/6=50%
+  SVM picks:
+    ✓ Breel EMBOLO              cc=SUI assigned=2 actual_st=2
+    ✓ Ruben VARGAS              cc=SUI assigned=1 actual_st=1
+    ✗ Jonathan DAVID            cc=CAN assigned=2 actual_st=0
+    ✓ Cyle LARIN                cc=CAN assigned=1 actual_st=1
+  v0 picks:
+    ~ Ruben VARGAS              cc=SUI assigned=2 actual_st=1
+    ✓ Breel EMBOLO              cc=SUI assigned=1 actual_st=2
+    ✗ Jonathan DAVID            cc=CAN assigned=2 actual_st=0
+    ✓ Cyle LARIN                cc=CAN assigned=1 actual_st=1
+
+f1359229 budget=6 (max 4 players, quota 5-1) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ✗ Edin DZEKO                cc=BIH assigned=2 actual_st=0
+    ~ Kerim ALAJBEGOVIC         cc=BIH assigned=2 actual_st=1
+    ✓ Esmir BAJRAKTAREVIC       cc=BIH assigned=1 actual_st=1
+    ✗ AKRAM AFIF                cc=QAT assigned=1 actual_st=0
+  v0 picks:
+    ~ Ermedin DEMIROVIC         cc=BIH assigned=2 actual_st=1
+    ✗ Edin DZEKO                cc=BIH assigned=2 actual_st=0
+    ✓ Kerim ALAJBEGOVIC         cc=BIH assigned=1 actual_st=1
+    ✗ EDMILSON JUNIOR           cc=QAT assigned=1 actual_st=0
+
+f1359199 budget=6 (max 4 players, quota 6-0) SVM:5/6=83% v0:4/6=67%
+  SVM picks:
+    ✓ VINICIUS JUNIOR           cc=BRA assigned=2 actual_st=4
+    ✓ MATHEUS CUNHA             cc=BRA assigned=2 actual_st=2
+    ✓ RAYAN                     cc=BRA assigned=1 actual_st=1
+    ✗ BRUNO GUIMARAES           cc=BRA assigned=1 actual_st=0
+  v0 picks:
+    ✓ VINICIUS JUNIOR           cc=BRA assigned=2 actual_st=4
+    ✗ LUCAS PAQUETA             cc=BRA assigned=2 actual_st=0
+    ✓ MATHEUS CUNHA             cc=BRA assigned=1 actual_st=2
+    ✓ RAYAN                     cc=BRA assigned=1 actual_st=1
+
+f1359232 budget=6 (max 4 players, quota 6-0) SVM:3/6=50% v0:3/6=50%
+  SVM picks:
+    ~ Ismael SAIBARI            cc=MAR assigned=2 actual_st=1
+    ✗ Brahim DIAZ               cc=MAR assigned=2 actual_st=0
+    ✓ Bilal EL KHANNOUSS        cc=MAR assigned=1 actual_st=2
+    ✓ Neil EL AYNAOUI           cc=MAR assigned=1 actual_st=1
+  v0 picks:
+    ✗ Brahim DIAZ               cc=MAR assigned=2 actual_st=0
+    ~ Ismael SAIBARI            cc=MAR assigned=2 actual_st=1
+    ✓ Bilal EL KHANNOUSS        cc=MAR assigned=1 actual_st=2
+    ✓ Neil EL AYNAOUI           cc=MAR assigned=1 actual_st=1
+
+f1359179 budget=6 (max 4 players, quota 4-2) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ~ Julian QUINONES           cc=MEX assigned=2 actual_st=1
+    ✗ Roberto ALVARADO          cc=MEX assigned=1 actual_st=0
+    ✗ Luis ROMO                 cc=MEX assigned=1 actual_st=0
+    ✗ Adam HLOZEK               cc=CZE assigned=2 actual_st=0
+  v0 picks:
+    ~ Julian QUINONES           cc=MEX assigned=2 actual_st=1
+    ✗ Luis ROMO                 cc=MEX assigned=1 actual_st=0
+    ✗ Roberto ALVARADO          cc=MEX assigned=1 actual_st=0
+    ✗ Michal SADILEK            cc=CZE assigned=2 actual_st=0
+
+f1359226 budget=6 (max 4 players, quota 4-2) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ~ OH Hyeongyu               cc=KOR assigned=2 actual_st=1
+    ✗ HWANG Inbeom              cc=KOR assigned=1 actual_st=0
+    ✗ LEE Kangin                cc=KOR assigned=1 actual_st=0
+    ~ Thapelo MASEKO            cc=RSA assigned=2 actual_st=1
+  v0 picks:
+    ~ OH Hyeongyu               cc=KOR assigned=2 actual_st=1
+    ✗ HWANG Inbeom              cc=KOR assigned=1 actual_st=0
+    ✗ LEE Kangin                cc=KOR assigned=1 actual_st=0
+    ~ Evidence MAKGOPA          cc=RSA assigned=2 actual_st=1
+
+f1359202 budget=6 (max 4 players, quota 4-2) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ~ Kai HAVERTZ               cc=GER assigned=2 actual_st=1
+    ✗ Felix NMECHA              cc=GER assigned=1 actual_st=0
+    ✗ Jamal MUSIALA             cc=GER assigned=1 actual_st=0
+    ~ Enner VALENCIA            cc=ECU assigned=2 actual_st=1
+  v0 picks:
+    ~ Kai HAVERTZ               cc=GER assigned=2 actual_st=1
+    ✗ Felix NMECHA              cc=GER assigned=1 actual_st=0
+    ✗ Jamal MUSIALA             cc=GER assigned=1 actual_st=0
+    ~ Enner VALENCIA            cc=ECU assigned=2 actual_st=1
+
+f1359238 budget=6 (max 4 players, quota 6-0) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ✗ Amad DIALLO               cc=CIV assigned=2 actual_st=0
+    ✗ Yan DIOMANDE              cc=CIV assigned=2 actual_st=0
+    ✗ Franck KESSIE             cc=CIV assigned=1 actual_st=0
+    ✓ Nicolas PEPE              cc=CIV assigned=1 actual_st=2
+  v0 picks:
+    ✗ Amad DIALLO               cc=CIV assigned=2 actual_st=0
+    ✗ Ange-Yoan BONNY           cc=CIV assigned=2 actual_st=0
+    ✓ Nicolas PEPE              cc=CIV assigned=1 actual_st=2
+    ✗ Yan DIOMANDE              cc=CIV assigned=1 actual_st=0
+
+f1359205 budget=6 (max 4 players, quota 6-0) SVM:1/6=17% v0:2/6=33%
+  SVM picks:
+    ✗ Cody GAKPO                cc=NED assigned=2 actual_st=0
+    ✗ Donyell Malen             cc=NED assigned=2 actual_st=0
+    ✓ Brian BROBBEY             cc=NED assigned=1 actual_st=1
+    ✗ Ryan GRAVENBERCH          cc=NED assigned=1 actual_st=0
+  v0 picks:
+    ✗ Cody GAKPO                cc=NED assigned=2 actual_st=0
+    ✗ Donyell Malen             cc=NED assigned=2 actual_st=0
+    ✓ Brian BROBBEY             cc=NED assigned=1 actual_st=1
+    ✓ Virgil VAN DIJK           cc=NED assigned=1 actual_st=1
+
+f1359241 budget=6 (max 4 players, quota 3-3) SVM:2/6=33% v0:2/6=33%
+  SVM picks:
+    ✗ Ayase UEDA                cc=JPN assigned=2 actual_st=0
+    ✓ Keito Nakamura            cc=JPN assigned=1 actual_st=1
+    ✗ Yasin AYARI               cc=SWE assigned=2 actual_st=0
+    ✓ Alexander Isak            cc=SWE assigned=1 actual_st=2
+  v0 picks:
+    ✗ Ayase UEDA                cc=JPN assigned=2 actual_st=0
+    ✓ Keito Nakamura            cc=JPN assigned=1 actual_st=1
+    ✗ Viktor GYOKERES           cc=SWE assigned=2 actual_st=0
+    ✓ Alexander Isak            cc=SWE assigned=1 actual_st=2
+
+f1359193 budget=6 (max 4 players, quota 3-3) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ✗ Kenan YILDIZ              cc=TUR assigned=2 actual_st=0
+    ✓ Arda GULER                cc=TUR assigned=1 actual_st=1
+    ✗ Timothy WEAH              cc=USA assigned=2 actual_st=0
+    ✗ Ricardo PEPI              cc=USA assigned=1 actual_st=0
+  v0 picks:
+    ~ Arda GULER                cc=TUR assigned=2 actual_st=1
+    ✗ Kenan YILDIZ              cc=TUR assigned=1 actual_st=0
+    ✗ Timothy WEAH              cc=USA assigned=2 actual_st=0
+    ✗ Giovanni REYNA            cc=USA assigned=1 actual_st=0
+
+f1359235 budget=6 (max 4 players, quota 3-3) SVM:1/6=17% v0:0/6=0%
+  SVM picks:
+    ✗ Julio ENCISO              cc=PAR assigned=2 actual_st=0
+    ✗ Matias GALARZA            cc=PAR assigned=1 actual_st=0
+    ~ Cristian VOLPATO          cc=AUS assigned=2 actual_st=1
+    ✗ Connor METCALFE           cc=AUS assigned=1 actual_st=0
+  v0 picks:
+    ✗ Matias GALARZA            cc=PAR assigned=2 actual_st=0
+    ✗ Julio ENCISO              cc=PAR assigned=1 actual_st=0
+    ✗ Nestory IRANKUNDA         cc=AUS assigned=2 actual_st=0
+    ✗ Connor METCALFE           cc=AUS assigned=1 actual_st=0
+
+f1359214 budget=6 (max 4 players, quota 5-1) SVM:5/6=83% v0:5/6=83%
+  SVM picks:
+    ✓ Kylian MBAPPE             cc=FRA assigned=2 actual_st=2
+    ✓ Ousmane DEMBELE           cc=FRA assigned=2 actual_st=3
+    ✗ Michael OLISE             cc=FRA assigned=1 actual_st=0
+    ✓ Kristian Thorstvedt       cc=NOR assigned=1 actual_st=1
+  v0 picks:
+    ✓ Kylian MBAPPE             cc=FRA assigned=2 actual_st=2
+    ✓ Ousmane DEMBELE           cc=FRA assigned=2 actual_st=3
+    ✗ Michael OLISE             cc=FRA assigned=1 actual_st=0
+    ✓ Oscar BOBB                cc=NOR assigned=1 actual_st=1
+
+f1359250 budget=6 (max 4 players, quota 6-0) SVM:3/6=50% v0:3/6=50%
+  SVM picks:
+    ✓ Ismaila SARR              cc=SEN assigned=2 actual_st=2
+    ✗ Ibrahim MBAYE             cc=SEN assigned=2 actual_st=0
+    ✓ Sadio MANE                cc=SEN assigned=1 actual_st=1
+    ✗ Idrissa Gana GUEYE        cc=SEN assigned=1 actual_st=0
+  v0 picks:
+    ✓ Ismaila SARR              cc=SEN assigned=2 actual_st=2
+    ✗ Ibrahim MBAYE             cc=SEN assigned=2 actual_st=0
+    ✓ Sadio MANE                cc=SEN assigned=1 actual_st=1
+    ✗ Idrissa Gana GUEYE        cc=SEN assigned=1 actual_st=0
+
+f1359211 budget=6 (max 4 players, quota 4-2) SVM:1/6=17% v0:0/6=0%
+  SVM picks:
+    ✗ Mikel OYARZABAL           cc=ESP assigned=2 actual_st=0
+    ✗ Lamine YAMAL              cc=ESP assigned=1 actual_st=0
+    ✓ Alex BAENA                cc=ESP assigned=1 actual_st=1
+    ✗ Darwin NUNEZ              cc=URU assigned=2 actual_st=0
+  v0 picks:
+    ✗ Mikel OYARZABAL           cc=ESP assigned=2 actual_st=0
+    ✗ Lamine YAMAL              cc=ESP assigned=1 actual_st=0
+    ✗ PEDRI                     cc=ESP assigned=1 actual_st=0
+    ✗ Federico VALVERDE         cc=URU assigned=2 actual_st=0
+
+f1359247 budget=6 (max 4 players, quota 3-3) SVM:1/6=17% v0:1/6=17%
+  SVM picks:
+    ✗ DAILON LIVRAMENTO         cc=CPV assigned=2 actual_st=0
+    ✗ RYAN MENDES               cc=CPV assigned=1 actual_st=0
+    ~ MOHAMED KANNO             cc=KSA assigned=2 actual_st=1
+    ✗ FERAS ALBRIKAN            cc=KSA assigned=1 actual_st=0
+  v0 picks:
+    ✗ RYAN MENDES               cc=CPV assigned=2 actual_st=0
+    ✗ DAILON LIVRAMENTO         cc=CPV assigned=1 actual_st=0
+    ✗ SALEM ALDAWSARI           cc=KSA assigned=2 actual_st=0
+    ✓ MOHAMED KANNO             cc=KSA assigned=1 actual_st=1
+
+f1359208 budget=6 (max 4 players, quota 6-0) SVM:4/6=67% v0:5/6=83%
+  SVM picks:
+    ~ Jeremy DOKU               cc=BEL assigned=2 actual_st=1
+    ~ Charles DE KETELAERE      cc=BEL assigned=2 actual_st=1
+    ✓ Leandro TROSSARD          cc=BEL assigned=1 actual_st=2
+    ✓ Kevin DE BRUYNE           cc=BEL assigned=1 actual_st=2
+  v0 picks:
+    ~ Maxim DE CUYPER           cc=BEL assigned=2 actual_st=1
+    ✓ Kevin DE BRUYNE           cc=BEL assigned=2 actual_st=2
+    ✓ Leandro TROSSARD          cc=BEL assigned=1 actual_st=2
+    ✓ Jeremy DOKU               cc=BEL assigned=1 actual_st=1
+
+f1359244 budget=6 (max 4 players, quota 3-3) SVM:1/6=17% v0:2/6=33%
+  SVM picks:
+    ✗ MOSTAFA ZICO              cc=EGY assigned=2 actual_st=0
+    ✗ MOHAMED SALAH             cc=EGY assigned=1 actual_st=0
+    ✗ Saeid EZATOLAHI           cc=IRN assigned=2 actual_st=0
+    ✓ Mehdi TAREMI              cc=IRN assigned=1 actual_st=1
+  v0 picks:
+    ✗ MOHAMED SALAH             cc=EGY assigned=2 actual_st=0
+    ✓ TREZEGUET                 cc=EGY assigned=1 actual_st=2
+    ~ Mehdi TAREMI              cc=IRN assigned=2 actual_st=1
+    ✗ Saeid EZATOLAHI           cc=IRN assigned=1 actual_st=0

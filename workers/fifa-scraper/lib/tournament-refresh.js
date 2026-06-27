@@ -312,6 +312,24 @@ async function refreshTeam(env, token, teamExternalId, teamCountryCode, countrie
         },
         last_updated: now,
       };
+      // Bug fix (2026-06-27): mangodev's gctp_top_scorer.matches_played is
+      // unreliable (DE CUYPER showed mp=1 after 3 appearances; Vinicius same
+      // pattern verified earlier in memory feedback_ml_eval_betting). The
+      // authoritative source is counter.js reconcileMatchPlayedCounters which
+      // COUNT(*)s match_stats records. Preserve the reconciled value here so
+      // tournament-refresh doesn't clobber it. Only adopt mangodev's mp when
+      // existing has none (fresh archive). Same logic for minutes_played.
+      const reconciledMp = (existing.tournament_stats || {}).matches_played;
+      if (typeof reconciledMp === 'number' && reconciledMp > 0) {
+        newRecord.tournament_stats.matches_played = reconciledMp;
+      }
+      const reconciledMinutes = (existing.tournament_stats || {}).minutes_played;
+      if (typeof reconciledMinutes === 'number' && reconciledMinutes > 0) {
+        // Keep reconciled minutes if mangodev's is smaller (mangodev sometimes
+        // returns less than reality)
+        const mangoMinutes = newRecord.tournament_stats.minutes_played || 0;
+        newRecord.tournament_stats.minutes_played = Math.max(reconciledMinutes, mangoMinutes);
+      }
       // Strip v1/v2 stale fields (clean migration)
       delete newRecord.fdh_match_ids;
       delete newRecord.last_match_id;

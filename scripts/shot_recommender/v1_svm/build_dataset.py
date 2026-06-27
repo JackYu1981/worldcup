@@ -238,8 +238,28 @@ def main():
                 ot_vs_strong_clean = ot_vs_strong if ot_vs_strong >= 0 else 0
                 ot_x_FW = ot_vs_strong_clean * is_FW
                 ot_x_DF = ot_vs_strong_clean * is_DF
+                # NEW (v1.2 2026-06-27): mp-weighted ot 折扣 — when player only
+                # has 1 prior match, their ot/m is single-game noise. weight
+                # 0.5 for mp=1, 1.0 for mp>=2. SVM 学这个特征比纯 ot_overall
+                # 更稳健。
+                mp_weight = 1.0 if p_matches >= 2 else 0.5
+                ot_overall_weighted = (ot_overall if ot_overall >= 0 else 0) * mp_weight
+                # NEW: 位置可信度衰减 — 后卫的 ot 数据本质上是定位球/反击产物，
+                # 不具有累计可预测性。前锋数据连续性强。手动注入业务规则。
+                position_credibility = {3: 1.0, 2: 0.9, 1: 0.4, 0: 0.0}.get(pos, 0.7)
+                ot_position_adjusted = (ot_overall if ot_overall >= 0 else 0) * position_credibility
+                # NEW: 队整体进攻能力 — 单球员 prob 不仅取决于自己也取决于队是否能
+                # 制造机会。前面累计的 team_capacity (该队所有球员 ot 之和) 比
+                # team_favoredness (亚盘市场) 更基础。
+                # team_capacity reads from team_cum (built incrementally in main loop)
                 # Opponent weakness from history (not for bucketing — that comes from AH)
                 opp_gc_per_match = opp_state.get('goals_conceded', 0) / max(1, opp_matches)
+                # NEW (v1.2): 队整体进攻 / 对手整体进攻 — 反映"该队是否能制造机会"。
+                # 跟 team_favoredness (亚盘市场预期) 互补：能用 attacking 数据反驳市场。
+                own_team_state = team_cum.get(side.get('country_code'), {})
+                own_team_matches = own_team_state.get('matches', 0)
+                own_team_capacity = own_team_state.get('team_ot', 0) / max(1, own_team_matches)
+                opp_team_capacity = opp_state.get('team_ot', 0) / max(1, opp_matches)
                 # Own-team favoredness from AH (this match)
                 if ah_line is None:
                     own_team_favoredness = 0
@@ -280,6 +300,11 @@ def main():
                     # features — context
                     'opp_gc_per_match':   round(opp_gc_per_match, 3),
                     'team_favoredness':   own_team_favoredness,
+                    # NEW v1.2 features
+                    'ot_overall_weighted':    round(ot_overall_weighted, 3),
+                    'ot_position_adjusted':   round(ot_position_adjusted, 3),
+                    'own_team_capacity':      round(own_team_capacity, 3),
+                    'opp_team_capacity':      round(opp_team_capacity, 3),
                     # label
                     'shots_on_target_actual': shots_on_target_this_match,
                     'y': y,
@@ -332,10 +357,18 @@ def main():
             home_score = sum(1 for g in events_goals if g.get('side')=='home')
         if away_score is None:
             away_score = sum(1 for g in events_goals if g.get('side')=='away')
-        hc = team_cum.setdefault(home_cc, {'matches':0,'goals_conceded':0,'saves':0})
-        ac = team_cum.setdefault(away_cc, {'matches':0,'goals_conceded':0,'saves':0})
+        hc = team_cum.setdefault(home_cc, {'matches':0,'goals_conceded':0,'saves':0,'team_ot':0})
+        ac = team_cum.setdefault(away_cc, {'matches':0,'goals_conceded':0,'saves':0,'team_ot':0})
         hc['matches'] += 1; hc['goals_conceded'] += away_score
         ac['matches'] += 1; ac['goals_conceded'] += home_score
+        # Team-level cumulative ot (sum of all players' on_target on this team)
+        # — proxy for "整队进攻能力", different from team_favoredness (market).
+        for pid_ms, pms in (ms.get('players') or {}).items():
+            ot = pms.get('shots_on_target', 0) or 0
+            # Determine which side this pid was on (starter or sub)
+            found_home = any(str(p.get('player_id')) == str(pid_ms) for p in (home.get('starting') or []) + (home.get('substitutes') or []))
+            if found_home: hc['team_ot'] += ot
+            else: ac['team_ot'] += ot
         # saves: we don't have per-match saves in match_stats; leave 0 for now (V2 add)
 
         if (idx+1) % 10 == 0:
@@ -355,6 +388,7 @@ def main():
             'is_FW','is_MF','is_DF','is_GK',
             'ot_x_FW','ot_x_DF',
             'opp_gc_per_match','team_favoredness',
+            'ot_overall_weighted','ot_position_adjusted','own_team_capacity','opp_team_capacity',
             'shots_on_target_actual','y']
     with open(csv_path,'w',newline='',encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=keys)
@@ -369,7 +403,9 @@ def main():
                        'att_overall','matches_played','n_vs_weak','n_vs_strong','n_vs_medium',
                        'is_FW','is_MF','is_DF','is_GK',
                        'ot_x_FW','ot_x_DF',
-                       'opp_gc_per_match','team_favoredness'],
+                       'opp_gc_per_match','team_favoredness',
+                       'ot_overall_weighted','ot_position_adjusted',
+                       'own_team_capacity','opp_team_capacity'],
         'label_y': 'shots_on_target_actual >= 1',
         'cold_start_dropped': skipped_cold,
         'fixtures_used': len(fixtures),

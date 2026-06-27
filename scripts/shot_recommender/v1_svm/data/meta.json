@@ -1,6 +1,6 @@
 {
-  "n_samples": 529,
-  "positive_rate": 0.2722117202268431,
+  "n_samples": 633,
+  "positive_rate": 0.26224328593996843,
   "features_x": [
     "ot_overall",
     "ot_vs_weak",
@@ -18,11 +18,15 @@
     "ot_x_FW",
     "ot_x_DF",
     "opp_gc_per_match",
-    "team_favoredness"
+    "team_favoredness",
+    "ot_overall_weighted",
+    "ot_position_adjusted",
+    "own_team_capacity",
+    "opp_team_capacity"
   ],
   "label_y": "shots_on_target_actual >= 1",
-  "cold_start_dropped": 791,
-  "fixtures_used": 60,
+  "cold_start_dropped": 819,
+  "fixtures_used": 66,
   "opponent_definition": {
     "weak": "this-match AH own-favoredness >= 2.0",
     "strong": "this-match AH own-favoredness <= -0.5",

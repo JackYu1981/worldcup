@@ -195,13 +195,14 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null, cu
   const { playerCum, teamCum } = cumTables;
   const ahLine = handicap.current?.line ?? null;
   const trend = handicap.trend || 'stable';
-  const homeTeamCum = teamCum.get(mapping.home_code) || { matches: 0, goals_conceded: 0 };
-  const awayTeamCum = teamCum.get(mapping.away_code) || { matches: 0, goals_conceded: 0 };
+  const homeTeamCum = teamCum.get(mapping.home_code) || { matches: 0, goals_conceded: 0, team_ot: 0 };
+  const awayTeamCum = teamCum.get(mapping.away_code) || { matches: 0, goals_conceded: 0, team_ot: 0 };
 
   function scoreOne(player, sideIsHome) {
     const oppCum = sideIsHome ? awayTeamCum : homeTeamCum;
+    const ownCum = sideIsHome ? homeTeamCum : awayTeamCum;
     const pm = getPlayerPerMatch(playerCum, player.id);
-    const feats = buildFeatureVector(player, oppCum, ahLine, sideIsHome, pm);
+    const feats = buildFeatureVector(player, oppCum, ahLine, sideIsHome, pm, ownCum);
     const { prob, decision } = svmScorePlayer(feats);
     return { total: Math.round(prob * 1000) / 10, prob, decision };
   }
@@ -230,18 +231,49 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null, cu
 
   const budget = svmDecideBudget(homeCapacity, awayCapacity, ahLine);
   const maxPlayers = BUDGET_TO_PLAYERS[budget];
-  const { strong: strongCount, weak: weakCount } = svmQuotaSplit(budget, strongFav);
-  const strongMaxP = strongCount > 0
-    ? Math.max(1, Math.round(maxPlayers * strongCount / budget)) : 0;
-  const weakMaxP = weakCount > 0 ? (maxPlayers - strongMaxP) : 0;
 
-  // Sort by prob desc within each side
+  // Sort by prob desc within each side (needed before quota adjustment)
   const sortedStrong = scored[strongSide]
     .slice().sort((a, b) => b.score.prob - a.score.prob)
     .map(e => ({ player: e.player, prob: e.score.prob, score: e.score, isStarter: e.isStarter }));
   const sortedWeak = scored[weakSide]
     .slice().sort((a, b) => b.score.prob - a.score.prob)
     .map(e => ({ player: e.player, prob: e.score.prob, score: e.score, isStarter: e.isStarter }));
+
+  // v1.2 (2026-06-27): COMPREHENSIVE strong/weak判定 — 综合让球 + attacking 数据
+  // Default quota from AH line magnitude
+  let { strong: strongCount, weak: weakCount } = svmQuotaSplit(budget, strongFav);
+
+  // Rule 1: 弱队整体进攻数据极弱 → 即使受让不大也降级
+  // 本队 team_capacity (own attacking ot/match) > 1.5x 对手 → 给对手减一注 + 强队加一注
+  const strongTeamCum = strongSide === 'home' ? homeTeamCum : awayTeamCum;
+  const weakTeamCum = strongSide === 'home' ? awayTeamCum : homeTeamCum;
+  const strongTeamOtPerMatch = strongTeamCum.matches > 0
+    ? (strongTeamCum.team_ot || 0) / strongTeamCum.matches : 0;
+  const weakTeamOtPerMatch = weakTeamCum.matches > 0
+    ? (weakTeamCum.team_ot || 0) / weakTeamCum.matches : 0;
+  // 如果弱队整体进攻远低于强队 (< 50%)，把 weak 多一注挪给 strong
+  if (weakCount > 0 && weakTeamOtPerMatch > 0 && strongTeamOtPerMatch > 0
+      && weakTeamOtPerMatch < 0.5 * strongTeamOtPerMatch) {
+    strongCount += 1;
+    weakCount -= 1;
+  }
+
+  // Rule 2: 弱队强候选保底 — 如果弱队 top-1 prob ≥ 强队 top-1 prob × 0.65，
+  // 强制保 weak 至少 1 注 (从 strong 借)
+  const FLOOR_RATIO = 0.65;
+  if (weakCount === 0 && sortedWeak.length > 0 && sortedStrong.length > 0) {
+    const strongTopProb = sortedStrong[0]?.prob ?? 0;
+    const weakTopProb = sortedWeak[0]?.prob ?? 0;
+    if (strongTopProb > 0 && weakTopProb >= strongTopProb * FLOOR_RATIO) {
+      strongCount -= 1;
+      weakCount += 1;
+    }
+  }
+
+  const strongMaxP = strongCount > 0
+    ? Math.max(1, Math.round(maxPlayers * strongCount / budget)) : 0;
+  const weakMaxP = weakCount > 0 ? (maxPlayers - strongMaxP) : 0;
 
   const strongAlloc = svmAllocateMultiShot(sortedStrong, strongCount, strongMaxP);
   const weakAlloc = svmAllocateMultiShot(sortedWeak, weakCount, weakMaxP);

@@ -23,20 +23,19 @@ export const FEATURE_NAMES = MODEL.features;
 const POSITION_FW = 3, POSITION_MF = 2, POSITION_DF = 1, POSITION_GK = 0;
 
 /**
- * Build the 17-D feature vector for one player in the context of a fixture.
+ * Build the 21-D feature vector for one player in the context of a fixture.
  *
  * @param player      players:{pid} record with tournament_stats
  * @param oppTeamCum  pre-match cumulative stats for the opponent team
- *                    { matches, goals_conceded }
+ *                    { matches, goals_conceded, team_ot }
  * @param ahLine      bet365 line (home-perspective; negative = home favored)
  * @param sideIsHome  true if this player is on the home side
- * @param playerPerMatch  per-bucket pre-match averages for this player:
- *                    { matches_overall, ot_overall, att_overall,
- *                      matches_vs_weak, ot_vs_weak,
- *                      matches_vs_strong, ot_vs_strong,
- *                      matches_vs_medium, ot_vs_medium }
+ * @param playerPerMatch  per-bucket pre-match averages for this player
+ * @param ownTeamCum  pre-match cumulative stats for the player's own team
+ *                    { matches, goals_conceded, team_ot } — needed for
+ *                    own_team_capacity feature (v1.2)
  */
-export function buildFeatureVector(player, oppTeamCum, ahLine, sideIsHome, playerPerMatch) {
+export function buildFeatureVector(player, oppTeamCum, ahLine, sideIsHome, playerPerMatch, ownTeamCum) {
   const pm = playerPerMatch;
   const matches = pm.matches_overall;
   const otOverall = matches > 0 ? pm.ot_overall / matches : -1;
@@ -66,26 +65,44 @@ export function buildFeatureVector(player, oppTeamCum, ahLine, sideIsHome, playe
     teamFav = sideIsHome ? -ahLine : ahLine;
   }
 
+  // v1.2 NEW features
+  // (1) mp-weighted ot: mp=1 noise discount
+  const mpWeight = matches >= 2 ? 1.0 : 0.5;
+  const otOverallClean = otOverall >= 0 ? otOverall : 0;
+  const otOverallWeighted = otOverallClean * mpWeight;
+  // (2) position-credibility-adjusted ot: DF data isn't predictive
+  const posCredibility = pos === 3 ? 1.0 : pos === 2 ? 0.9 : pos === 1 ? 0.4 : pos === 0 ? 0.0 : 0.7;
+  const otPositionAdjusted = otOverallClean * posCredibility;
+  // (3) own team capacity: team-level ot/match (proxy for 整队进攻能力)
+  const ownMatches = ownTeamCum?.matches || 0;
+  const ownTeamCapacity = ownMatches > 0 ? (ownTeamCum.team_ot || 0) / ownMatches : 0;
+  // (4) opp team capacity: same for opponent — used to flag weak opponent
+  const oppTeamCapacity = oppTeamCum.matches > 0 ? (oppTeamCum.team_ot || 0) / oppTeamCum.matches : 0;
+
   // CRITICAL: order MUST match FEATURE_NAMES (model.features) exactly.
   // Verified against scripts/shot_recommender/v1_svm/build_dataset.py csv header.
   return [
-    otOverall,        // ot_overall
-    otVsWeak,         // ot_vs_weak
-    otVsStrong,       // ot_vs_strong
-    otVsMedium,       // ot_vs_medium
-    attOverall,       // att_overall
-    matches,          // matches_played
-    matchesVsWeak,    // n_vs_weak
-    matchesVsStrong,  // n_vs_strong
-    matchesVsMedium,  // n_vs_medium
-    isFW,             // is_FW
-    isMF,             // is_MF
-    isDF,             // is_DF
-    isGK,             // is_GK
-    otXFW,            // ot_x_FW
-    otXDF,            // ot_x_DF
-    oppGcPerMatch,    // opp_gc_per_match
-    teamFav,          // team_favoredness
+    otOverall,              // ot_overall
+    otVsWeak,               // ot_vs_weak
+    otVsStrong,             // ot_vs_strong
+    otVsMedium,             // ot_vs_medium
+    attOverall,             // att_overall
+    matches,                // matches_played
+    matchesVsWeak,          // n_vs_weak
+    matchesVsStrong,        // n_vs_strong
+    matchesVsMedium,        // n_vs_medium
+    isFW,                   // is_FW
+    isMF,                   // is_MF
+    isDF,                   // is_DF
+    isGK,                   // is_GK
+    otXFW,                  // ot_x_FW
+    otXDF,                  // ot_x_DF
+    oppGcPerMatch,          // opp_gc_per_match
+    teamFav,                // team_favoredness
+    otOverallWeighted,      // ot_overall_weighted (v1.2)
+    otPositionAdjusted,     // ot_position_adjusted (v1.2)
+    ownTeamCapacity,        // own_team_capacity (v1.2)
+    oppTeamCapacity,        // opp_team_capacity (v1.2)
   ];
 }
 
@@ -302,18 +319,26 @@ export async function buildCumulativeTables(env, fidKickoff = null) {
       }
     }
 
-    // === fold team-level concede ===
+    // === fold team-level concede + team-level on_target (for capacity feature) ===
     const eventsGoals = (lu.events?.goals) || [];
     let homeScore = home.score;
     let awayScore = away.score;
     if (homeScore == null) homeScore = eventsGoals.filter(g => g.side === 'home').length;
     if (awayScore == null) awayScore = eventsGoals.filter(g => g.side === 'away').length;
-    if (!teamCum.has(homeCc)) teamCum.set(homeCc, { matches: 0, goals_conceded: 0 });
-    if (!teamCum.has(awayCc)) teamCum.set(awayCc, { matches: 0, goals_conceded: 0 });
+    if (!teamCum.has(homeCc)) teamCum.set(homeCc, { matches: 0, goals_conceded: 0, team_ot: 0 });
+    if (!teamCum.has(awayCc)) teamCum.set(awayCc, { matches: 0, goals_conceded: 0, team_ot: 0 });
     teamCum.get(homeCc).matches += 1;
     teamCum.get(homeCc).goals_conceded += awayScore;
     teamCum.get(awayCc).matches += 1;
     teamCum.get(awayCc).goals_conceded += homeScore;
+    // Sum each team's on_target this match (proxy for "整队进攻能力")
+    for (const [pidMs, pStats] of Object.entries(ms.players || {})) {
+      const ot = pStats.shots_on_target || 0;
+      const onHome = (home.starting || []).concat(home.substitutes || [])
+        .some(x => String(x.player_id) === String(pidMs));
+      if (onHome) teamCum.get(homeCc).team_ot += ot;
+      else teamCum.get(awayCc).team_ot += ot;
+    }
   }
 
   return { playerCum, teamCum, fidKickoff };
