@@ -2484,8 +2484,8 @@
                 ? `<div class="sub-replaced sub-replaced-off"><span class="arrow">↓</span>${replacedOffShirt != null ? `<span class="sub-replaced-shirt">${replacedOffShirt}</span>` : ''} ${escapeHtml(replacedOffName)}</div>`
                 : '';
 
-            const safeName = (p.name || `Player ${p.player_id}`).replace(/"/g, '&quot;').replace(/'/g, "\\'");
-            return `<div class="lineup-player-card" onclick="openPlayerSheet('${p.player_id}', '${safeName}')">
+            const safeName = attrEscape(p.name || `Player ${p.player_id}`);
+            return `<div class="lineup-player-card" onclick="openPlayerSheet('${attrEscape(p.player_id)}', '${safeName}')">
                 ${photoHtml}
                 <span class="lineup-player-shirt">${p.shirt_number ?? ''}</span>
                 <div class="lineup-player-name">
@@ -2504,6 +2504,15 @@
 
         function escapeHtml(s) {
             return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        // For onclick='...${var}...' single-quoted attribute interpolation.
+        // After HTML entity decoding, ' must NOT close the attribute and
+        // " must NOT break a surrounding double-quoted attribute. Encode both,
+        // plus < > & to harden against nested HTML injection.
+        function attrEscape(s) {
+            return String(s ?? '')
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
         }
 
         function proxyPhotoUrl(originalUrl) {
@@ -2930,7 +2939,16 @@
                 const cur = ah.current;
                 const open = ah.open || {};
                 const strong = _decideStrongSideClient(cur.line);
-                const [strongCnt, weakCnt] = _distributionForLine(strong.abs);
+                // Prefer recommendation's authoritative distribution + budget
+                // over frontend's _distributionForLine — they diverge when
+                // worker upgrades budget from 6 → 7/8 based on team capacity.
+                // Fallback only when recommendation hasn't been generated yet.
+                const recBudget = rec?.budget;
+                const recDist = rec?.distribution;
+                const [strongCnt, weakCnt] = (Array.isArray(recDist) && recDist.length === 2)
+                    ? recDist
+                    : _distributionForLine(strong.abs);
+                const budgetTotal = recBudget || (strongCnt + weakCnt);
                 // Display the actual signed line magnitude (e.g. "让 2.25 球"),
                 // not a coarse bucket like "让 2 球".
                 const strongLineLabel = (strong.abs < 0.01)
@@ -2996,7 +3014,7 @@
                     <div class="bot-divider"></div>
                     <div class="bot-row"><span class="bot-k">强弱判断</span>
                       <span class="bot-v">${strong.label}强（${strongLineLabel}）</span></div>
-                    <div class="bot-row"><span class="bot-k">6 次射中分配</span>
+                    <div class="bot-row"><span class="bot-k">${budgetTotal} 次射中分配</span>
                       <span class="bot-v"><strong style="color:#0a2f5c">强 ${strongCnt}</strong> · <strong style="color:#c62828">弱 ${weakCnt}</strong></span></div>
                   </div>`;
             }
@@ -3083,18 +3101,18 @@
                     const fulfilledTag = fulfilled
                         ? `<span class="bot-pick-fulfilled-tag" title="本场实际射正 ${actualSt} ≥ 分配 ${p.shots}">✓${actualSt}</span>`
                         : (actualSt > 0 ? `<span class="bot-pick-progress-tag" title="本场已射正 ${actualSt} / 分配 ${p.shots}">${actualSt}/${p.shots}</span>` : '');
-                    const safeName = (p.name || p.pid).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    return `<div class="bot-pick-card" onclick="openPlayerSheet('${p.pid}','${safeName}')" style="cursor:pointer">
+                    const safeName = attrEscape(p.name || p.pid);
+                    return `<div class="bot-pick-card" onclick="openPlayerSheet('${attrEscape(p.pid)}','${safeName}')" style="cursor:pointer">
                         <div class="bot-pick-head">
                             <span class="bot-pick-rank">#${i+1}</span>
                             ${flag}
                             ${shirtHtml}
-                            <span class="${nameCls}">${p.name || p.pid}</span>
+                            <span class="${nameCls}">${escapeHtml(p.name || p.pid)}</span>
                             ${fulfilledTag}
                             ${star}
                             <span class="bot-pick-score">${(p.score || 0).toFixed(1)}</span>
                         </div>
-                        ${p.reason ? `<div class="bot-pick-reason">${p.reason}</div>` : ''}
+                        ${p.reason ? `<div class="bot-pick-reason">${escapeHtml(p.reason)}</div>` : ''}
                     </div>`;
                 };
                 // Preview snapshot — if this is a confirmed stage rec that
@@ -3173,17 +3191,17 @@
                         const stTag = actualSt >= 1
                             ? `<span class="bot-pick-fulfilled-tag" title="本场已射正 ${actualSt} 次">✓${actualSt}</span>`
                             : '';
-                        const safeName = (c.name || c.pid).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                        return `<div class="bot-candidate-row" onclick="openPlayerSheet('${c.pid}','${safeName}')" style="cursor:pointer">
+                        const safeName = attrEscape(c.name || c.pid);
+                        return `<div class="bot-candidate-row" onclick="openPlayerSheet('${attrEscape(c.pid)}','${safeName}')" style="cursor:pointer">
                             ${shirtHtml}
-                            <span class="${nameCls}">${c.name || c.pid}</span>
+                            <span class="${nameCls}">${escapeHtml(c.name || c.pid)}</span>
                             ${stTag}
                             <span class="bot-candidate-pos">${posLbl}</span>
                             <span class="bot-pick-score">${probPct}%</span>
                         </div>`;
                     }).join('');
                     return `<div class="bot-candidate-team">
-                        <div class="bot-candidate-team-head">${flag}<span>${zh}</span></div>
+                        <div class="bot-candidate-team-head">${flag}<span>${escapeHtml(zh)}</span></div>
                         ${rows}
                     </div>`;
                 }).join('');
@@ -3401,11 +3419,26 @@
             const section = cat.section;
             const finalCols = cols;
 
-            // Only show starters when lineup is locked (22 players)
+            // Determine which players actually appeared in this fixture.
+            // Pool = starting (22 — always appear) ∪ substitutes who came on
+            // (= union of events.substitutions[].on_player_id from match_state).
+            // Falls back to starters-only when lineup is locked but events haven't
+            // been captured yet (e.g. fresh confirmed stage seconds after KO).
             const allPlayers = currentStatsData.players || [];
             const starters = allPlayers.filter(p => p.lineup_role === 'starter');
             const lineupLocked = starters.length === 22;
-            const playersToShow = lineupLocked ? starters : allPlayers;
+            const onPids = new Set();
+            const subs = currentLineupData?.match_state?.events?.substitutions || [];
+            for (const s of subs) {
+                if (s.on_player_id != null) onPids.add(String(s.on_player_id));
+            }
+            // Build pool: starters + subs who actually came on. Pre-match (lineup
+            // not locked) → show everyone for browsing.
+            const playersToShow = lineupLocked
+                ? allPlayers.filter(p =>
+                    p.lineup_role === 'starter' || onPids.has(String(p.player_id))
+                  )
+                : allPlayers;
 
             // Sort by current sort col
             const sortCol = finalCols.find(c => c.key === currentStatsSort.col) || finalCols[0];

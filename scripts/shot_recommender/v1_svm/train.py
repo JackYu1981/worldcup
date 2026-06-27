@@ -80,12 +80,15 @@ def v0_score(row):
     """Reproduce v0 baseline's hand-tuned scoring formula on a sample row.
 
     Faithful port from scripts/shot_recommender/v0_baseline.py (weights v0.5):
-      - 50% on_target/match (norm * 15, capped 100)
-      - 20% attempt/match (norm * 10, capped 100)
-      - 15% position bonus (FW=100, MF=60, DF=20, GK=0)
-      - 10% xG/match (we don't track xG per match; substitute with 0 - matches
-                       v0 behaviour for matches where xG is missing)
-      - 5% starter bonus (always 1.0 since we only train on starters)
+      - on_target/match (norm * 15, capped 100)
+      - attempt/match (norm * 10, capped 100)
+      - position bonus (FW=100, MF=60, DF=20, GK=0)
+      - xG/match — UNAVAILABLE in walk-forward (per-match xG isn't in
+        match_stats; production reads cumulative xg from players:{pid} which
+        is post-match and would leak). To compensate, we re-normalize the
+        remaining 4 weights to sum to 1.0 (instead of 0.90), so v0 isn't
+        unfairly handicapped by missing 10% weight that just appears as 0.
+      - starter bonus (always 1.0 since we only train on starters)
     """
     ot = float(row['ot_overall']) if float(row['ot_overall']) >= 0 else 0
     att = float(row['att_overall'])
@@ -93,9 +96,13 @@ def v0_score(row):
     pos_norm = {3: 100, 2: 60, 1: 20, 0: 0}.get(pos, 30)
     ot_norm = min(100, ot * 15)
     att_norm = min(100, att * 10)
-    xg_norm = 0  # we don't have per-match xG for cumulative buildup
     starter_bonus = 100   # all our samples are starters
-    return 0.50 * ot_norm + 0.20 * att_norm + 0.15 * pos_norm + 0.10 * xg_norm + 0.05 * starter_bonus
+    # Re-normalize 0.50 + 0.20 + 0.15 + 0.05 = 0.90 → divide by 0.90 to scale
+    # weights back to 1.0 sum. Mathematically identical to dropping xg term
+    # and scaling the rest proportionally, which is the fairest comparison
+    # for walk-forward backtest.
+    raw = 0.50 * ot_norm + 0.20 * att_norm + 0.15 * pos_norm + 0.05 * starter_bonus
+    return raw / 0.90
 
 
 def main():
@@ -297,28 +304,33 @@ def main():
     delta = (overall - v0_overall) * 100
     print(f'  SVM vs v0 (same fixtures, same allocator): {"+" if delta>=0 else ""}{delta:.2f}pp')
 
-    # Train final model on ALL data → export for worker
+    # Train final model on ALL data → export for worker.
+    # Single SVC + single Platt calibrator (instead of 5-fold ensemble) so
+    # the exported (coef, intercept, platt_a, platt_b) is mathematically
+    # equivalent to what worker JS computes. The old cv=5 ensemble averaged
+    # 5 different SVC decision boundaries — not equivalent to sklearn's
+    # ensemble predict_proba (which averages per-fold probabilities).
     print('\n=== Training final model on all 529 samples for worker export ===')
+    from sklearn.model_selection import train_test_split
+    from sklearn.frozen import FrozenEstimator
     X_all, y_all = feature_matrix(rows, feature_keys)
     scaler_final = StandardScaler()
     X_all_s = scaler_final.fit_transform(X_all)
+    X_train_final, X_cal, y_train_final, y_cal = train_test_split(
+        X_all_s, y_all, test_size=0.2, stratify=y_all, random_state=42
+    )
     base = LinearSVC(C=args.C, penalty=args.penalty, class_weight='balanced',
                      max_iter=5000, dual='auto' if args.penalty=='l2' else False)
-    clf_final = CalibratedClassifierCV(base, method='sigmoid', cv=5)
-    clf_final.fit(X_all_s, y_all)
+    base.fit(X_train_final, y_train_final)
+    clf_final = CalibratedClassifierCV(FrozenEstimator(base), method='sigmoid', cv=None)
+    clf_final.fit(X_cal, y_cal)
 
-    # Extract the linear coefficients from the underlying SVC (averaged over
-    # CV folds). For inference in worker JS we only need the linear form
-    # (w · x + b), then sigmoid-calibrated. We also need each calibrator's
-    # (a, b) for the Platt sigmoid: prob = 1 / (1 + exp(a * decision + b)).
-    # Average across calibrated_classifiers_ to get an ensemble form.
-    calibrators = clf_final.calibrated_classifiers_
-    coef_avg = np.mean([cc.estimator.coef_[0] for cc in calibrators], axis=0).tolist()
-    intercept_avg = float(np.mean([cc.estimator.intercept_[0] for cc in calibrators]))
-    # For each calibrator there is one calibrator per class, but binary case has 1.
-    # CalibratedClassifierCV stores .calibrators_ list (length = n_classes - 1 = 1)
-    platt_a = float(np.mean([cc.calibrators[0].a_ for cc in calibrators]))
-    platt_b = float(np.mean([cc.calibrators[0].b_ for cc in calibrators]))
+    # Single SVC + single calibrator. Extract directly — no averaging.
+    coef_avg = base.coef_[0].tolist()
+    intercept_avg = float(base.intercept_[0])
+    only_cc = clf_final.calibrated_classifiers_[0]
+    platt_a = float(only_cc.calibrators[0].a_)
+    platt_b = float(only_cc.calibrators[0].b_)
 
     model_export = {
         'version': 'v1_svm_linear_calibrated',
