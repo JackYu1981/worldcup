@@ -419,8 +419,12 @@ function buildReason(pickEntry, isStrongSide, lineAbs, trend) {
 
 // ============= Signature (hash) for write short-circuit =============
 function signaturePayload(p) {
-  // Hash only the user-visible part — picks + stage + meta. Avoids re-write
-  // when only insignificant fields like generated_at differ.
+  // Hash only the user-visible part — picks + stage + meta + candidate pool
+  // ranking. Avoids re-write when only insignificant fields like generated_at
+  // differ; but DOES re-write when top-4 candidate ranking changes even if
+  // picks themselves are stable (so the "几乎入选"边界 stays fresh).
+  const candHomePids = (p.candidate_pools?.home || []).map(c => c.pid).join(',');
+  const candAwayPids = (p.candidate_pools?.away || []).map(c => c.pid).join(',');
   const sigInput = JSON.stringify({
     stage: p.stage,
     strong_side: p.strong_side,
@@ -429,6 +433,8 @@ function signaturePayload(p) {
     trend: p.trend,
     total_shots: p.total_shots,
     picks: p.picks.map(x => ({ pid: x.pid, side: x.side, shots: x.shots, via: x.via })),
+    cand_home: candHomePids,
+    cand_away: candAwayPids,
   });
   return fnv1a(sigInput);
 }

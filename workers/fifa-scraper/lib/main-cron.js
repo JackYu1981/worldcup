@@ -325,6 +325,22 @@ async function processFixture(env, fixture, lookupCountryZh, ensureFifaCal) {
 
   if (becameFinished) {
     counters.finishedDetected++;
+    // Final match_stats fetch — 之前 refreshMatchStats (line 277) 可能在
+    // FIFA 把 match_status 翻 0 之前的几秒拉到的数据，缺最后几分钟的射门/犯规。
+    // becameFinished 这一刻 fdh-api 通常已结算完毕，重抓一次拿到终场数据。
+    // 之后 finished gate (line 177) 会让 worker 永远跳过这场，所以这是最后机会。
+    try {
+      const r = await refreshMatchStats(env, fixture.id, mapping, lineup.match_status);
+      if (r.written) {
+        counters.matchStatsWritten++;
+        await logSla(env, {
+          level: 'info', fixture: fixture.id, event: 'match_stats_final_refresh',
+          countries: [mapping.home_code, mapping.away_code],
+        });
+      }
+    } catch (e) {
+      await logSla(env, { level: 'warn', fixture: fixture.id, event: 'match_stats_final_refresh_failed', error: e.message });
+    }
     try {
       const r = await refreshTournamentStatsForMatch(env, mapping, lookupCountryZh);
       await logSla(env, {
