@@ -79,6 +79,15 @@ export function buildFeatureVector(player, oppTeamCum, ahLine, sideIsHome, playe
   // (4) opp team capacity: same for opponent — used to flag weak opponent
   const oppTeamCapacity = oppTeamCum.matches > 0 ? (oppTeamCum.team_ot || 0) / oppTeamCum.matches : 0;
 
+  // v1.3 NEW features — opp_strength-weighted ot/att
+  // Σ(ot_i × opp_strength_i) / Σ(opp_strength_i) — "vs 强队的射正才是真本事"
+  const otStrengthAdj = pm.opp_strength_sum > 0
+    ? (pm.weighted_on_target || 0) / pm.opp_strength_sum
+    : -1;
+  const attStrengthAdj = pm.opp_strength_sum > 0
+    ? (pm.weighted_attempts || 0) / pm.opp_strength_sum
+    : 0;
+
   // CRITICAL: order MUST match FEATURE_NAMES (model.features) exactly.
   // Verified against scripts/shot_recommender/v1_svm/build_dataset.py csv header.
   return [
@@ -103,6 +112,8 @@ export function buildFeatureVector(player, oppTeamCum, ahLine, sideIsHome, playe
     otPositionAdjusted,     // ot_position_adjusted (v1.2)
     ownTeamCapacity,        // own_team_capacity (v1.2)
     oppTeamCapacity,        // opp_team_capacity (v1.2)
+    otStrengthAdj,          // ot_overall_strength_adj (v1.3)
+    attStrengthAdj,         // att_overall_strength_adj (v1.3)
   ];
 }
 
@@ -214,8 +225,56 @@ function isStrongOpponent(ahLine, sideIsHome) {
   return ownFav <= -0.5;
 }
 
+// v1.3: composite opponent strength in [0, 1].
+// Mirrors scripts/shot_recommender/v1_svm/build_dataset.py compute_opp_strength.
+// Higher = stronger opponent. Used to weight player's per-match ot accumulation:
+// "对强队的射正才是真本事" — Σ(ot_i × opp_strength_i) / Σ(opp_strength_i).
+function computeOppStrength(oppTeamState, ahLine, sideIsHome, alpha = [0.3, 0.5, 0.2]) {
+  const ownDisfavor = ahLine != null ? (sideIsHome ? ahLine : -ahLine) : 0;
+  const ahNorm = Math.max(0, Math.min(1, 0.5 + ownDisfavor / 4.0));
+  const matches = oppTeamState?.matches || 0;
+  if (matches === 0) return ahNorm;
+  const gcPm = (oppTeamState.goals_conceded || 0) / matches;
+  const gcNorm = Math.max(0, Math.min(1, 1.0 - gcPm / 2.0));
+  const otPm = (oppTeamState.ot_against || 0) / matches;
+  const otNorm = Math.max(0, Math.min(1, 1.0 - otPm / 6.0));
+  const [wAh, wGc, wOt] = alpha;
+  return wAh * ahNorm + wGc * gcNorm + wOt * otNorm;
+}
+
+// Parse FIFA minute "56'" or "90'+5'" → integer minutes. Match build_dataset.py.
+function parseMinute(s) {
+  if (!s) return 0;
+  const str = String(s).replace(/[''""]/g, '').trim();
+  if (str.includes('+')) {
+    const [a, b] = str.split('+', 2);
+    return (parseInt(a, 10) || 0) + (parseInt(b, 10) || 0);
+  }
+  return parseInt(str, 10) || 0;
+}
+
+// Compute player's actual minutes played in a match (mirror of build_dataset).
+function computePlayerMinutes(pid, startersSet, subsSet, subsList, matchTotal) {
+  const pidStr = String(pid);
+  let onMinute = null, offMinute = null;
+  for (const s of subsList) {
+    if (String(s.on_player_id || '') === pidStr) onMinute = parseMinute(s.minute);
+    if (String(s.off_player_id || '') === pidStr) offMinute = parseMinute(s.minute);
+  }
+  if (startersSet.has(pidStr)) {
+    const end = offMinute != null ? offMinute : matchTotal;
+    return Math.max(0, end);
+  }
+  if (subsSet.has(pidStr) && onMinute != null) {
+    const end = offMinute != null ? offMinute : matchTotal;
+    return Math.max(0, end - onMinute);
+  }
+  return 0;
+}
+
 function emptyBucket() {
-  return { matches: 0, on_target: 0, attempts: 0 };
+  return { matches: 0, on_target: 0, attempts: 0,
+           weighted_on_target: 0, weighted_attempts: 0, opp_strength_sum: 0 };
 }
 
 function emptyPlayerCum() {
@@ -286,58 +345,102 @@ export async function buildCumulativeTables(env, fidKickoff = null) {
     const awayCc = away.country_code;
     if (!homeCc || !awayCc) continue;
 
-    // === fold per-player shots into buckets (use THIS match's ah_line) ===
-    for (const [side, info, sideIsHome] of [
-      ['home', home, true], ['away', away, false]
-    ]) {
-      let bucketName;
-      if (isWeakOpponent(ahLine, sideIsHome)) bucketName = 'vs_weak';
-      else if (isStrongOpponent(ahLine, sideIsHome)) bucketName = 'vs_strong';
-      else bucketName = 'vs_medium';
-
-      const players = [...(info.starting || []), ...(info.substitutes || [])];
-      for (const p of players) {
-        const pid = String(p.player_id || '');
-        if (!pid) continue;
-        const pStats = (ms.players || {})[pid];
-        if (!pStats) continue;
-        const appeared = (pStats.shots || 0) > 0 ||
-                         (pStats.shots_on_target || 0) > 0 ||
-                         (pStats.fouls_committed || 0) > 0 ||
-                         (info.starting || []).some(x => String(x.player_id) === pid);
-        if (!appeared) continue;
-        const ot = pStats.shots_on_target || 0;
-        const att = pStats.shots || 0;
-        if (!playerCum.has(pid)) playerCum.set(pid, emptyPlayerCum());
-        const pc = playerCum.get(pid);
-        pc.overall.matches += 1;
-        pc.overall.on_target += ot;
-        pc.overall.attempts += att;
-        pc[bucketName].matches += 1;
-        pc[bucketName].on_target += ot;
-        pc[bucketName].attempts += att;
-      }
-    }
-
-    // === fold team-level concede + team-level on_target (for capacity feature) ===
+    // === Team-level fold FIRST (so player fold can compute opp_strength using
+    // pre-this-match team state). Order matters: opp_strength reads opp.matches
+    // BEFORE adding this match. Walk-forward safety.
     const eventsGoals = (lu.events?.goals) || [];
     let homeScore = home.score;
     let awayScore = away.score;
     if (homeScore == null) homeScore = eventsGoals.filter(g => g.side === 'home').length;
     if (awayScore == null) awayScore = eventsGoals.filter(g => g.side === 'away').length;
-    if (!teamCum.has(homeCc)) teamCum.set(homeCc, { matches: 0, goals_conceded: 0, team_ot: 0 });
-    if (!teamCum.has(awayCc)) teamCum.set(awayCc, { matches: 0, goals_conceded: 0, team_ot: 0 });
+    if (!teamCum.has(homeCc)) teamCum.set(homeCc, { matches: 0, goals_conceded: 0, team_ot: 0, ot_against: 0 });
+    if (!teamCum.has(awayCc)) teamCum.set(awayCc, { matches: 0, goals_conceded: 0, team_ot: 0, ot_against: 0 });
+
+    // === fold per-player shots into buckets (use THIS match's ah_line + pre-match team state) ===
+    const subsList = (lu.events?.substitutions) || [];
+    const matchTotalMinutes = parseMinute(lu.match_time) || 90;
+
+    for (const [side, info, sideIsHome] of [
+      ['home', home, true], ['away', away, false]
+    ]) {
+      const oppCc = sideIsHome ? awayCc : homeCc;
+      // Compute opp_strength using opponent's PRE-this-match state
+      const oppPrevState = teamCum.get(oppCc);
+      const oppStrength = computeOppStrength(oppPrevState, ahLine, sideIsHome);
+
+      let bucketName;
+      if (isWeakOpponent(ahLine, sideIsHome)) bucketName = 'vs_weak';
+      else if (isStrongOpponent(ahLine, sideIsHome)) bucketName = 'vs_strong';
+      else bucketName = 'vs_medium';
+
+      const startersSet = new Set((info.starting || []).map(p => String(p.player_id || '')));
+      const subsSet = new Set((info.substitutes || []).map(p => String(p.player_id || '')));
+      const subsWhoCameOn = new Set();
+      for (const s of subsList) {
+        if (String(s.on_player_id || '') && (s.side === side || (sideIsHome && s.side === 'home') || (!sideIsHome && s.side === 'away'))) {
+          // simpler check — substitutions[].side matches this side
+          if (s.side === side) subsWhoCameOn.add(String(s.on_player_id));
+        }
+      }
+
+      // Build appeared players for this side (starters + subs who came on)
+      const appearedPlayers = new Map();
+      for (const p of (info.starting || [])) {
+        const pid = String(p.player_id || ''); if (!pid) continue;
+        appearedPlayers.set(pid, { ot: 0, att: 0 });
+      }
+      for (const p of [...(info.starting || []), ...(info.substitutes || [])]) {
+        const pid = String(p.player_id || ''); if (!pid) continue;
+        const pStats = (ms.players || {})[pid];
+        if (!pStats) continue;
+        const ot = pStats.shots_on_target || 0;
+        const att = pStats.shots || 0;
+        if (startersSet.has(pid)) {
+          appearedPlayers.set(pid, { ot, att });
+        } else if (subsSet.has(pid) && subsWhoCameOn.has(pid)) {
+          appearedPlayers.set(pid, { ot, att });
+        }
+      }
+
+      // Fold into player_cum with minute-weighted mp + opp_strength-weighted ot
+      for (const [pid, stats] of appearedPlayers) {
+        const minutes = computePlayerMinutes(pid, startersSet, subsSet, subsList, matchTotalMinutes);
+        const mpWeight = minutes / 90.0;
+        if (mpWeight <= 0) continue;
+        if (!playerCum.has(pid)) playerCum.set(pid, emptyPlayerCum());
+        const pc = playerCum.get(pid);
+        pc.overall.matches += mpWeight;
+        pc.overall.on_target += stats.ot;
+        pc.overall.attempts += stats.att;
+        pc.overall.weighted_on_target += stats.ot * oppStrength;
+        pc.overall.weighted_attempts += stats.att * oppStrength;
+        pc.overall.opp_strength_sum += oppStrength * mpWeight;
+        pc[bucketName].matches += mpWeight;
+        pc[bucketName].on_target += stats.ot;
+        pc[bucketName].attempts += stats.att;
+        pc[bucketName].weighted_on_target += stats.ot * oppStrength;
+        pc[bucketName].weighted_attempts += stats.att * oppStrength;
+        pc[bucketName].opp_strength_sum += oppStrength * mpWeight;
+      }
+    }
+
+    // === fold team-level concede + team_ot + ot_against AFTER player fold ===
     teamCum.get(homeCc).matches += 1;
     teamCum.get(homeCc).goals_conceded += awayScore;
     teamCum.get(awayCc).matches += 1;
     teamCum.get(awayCc).goals_conceded += homeScore;
-    // Sum each team's on_target this match (proxy for "整队进攻能力")
+    // Sum each team's on_target + opponent's ot_against this match
     for (const [pidMs, pStats] of Object.entries(ms.players || {})) {
       const ot = pStats.shots_on_target || 0;
       const onHome = (home.starting || []).concat(home.substitutes || [])
         .some(x => String(x.player_id) === String(pidMs));
-      if (onHome) teamCum.get(homeCc).team_ot += ot;
-      else teamCum.get(awayCc).team_ot += ot;
+      if (onHome) {
+        teamCum.get(homeCc).team_ot += ot;
+        teamCum.get(awayCc).ot_against += ot;
+      } else {
+        teamCum.get(awayCc).team_ot += ot;
+        teamCum.get(homeCc).ot_against += ot;
+      }
     }
   }
 
@@ -355,6 +458,7 @@ export function getPlayerPerMatch(playerCum, pid) {
       matches_vs_weak: 0, ot_vs_weak: 0,
       matches_vs_strong: 0, ot_vs_strong: 0,
       matches_vs_medium: 0, ot_vs_medium: 0,
+      weighted_on_target: 0, weighted_attempts: 0, opp_strength_sum: 0,
     };
   }
   return {
@@ -367,5 +471,9 @@ export function getPlayerPerMatch(playerCum, pid) {
     ot_vs_strong: pc.vs_strong.on_target,
     matches_vs_medium: pc.vs_medium.matches,
     ot_vs_medium: pc.vs_medium.on_target,
+    // v1.3: opp_strength-weighted
+    weighted_on_target: pc.overall.weighted_on_target || 0,
+    weighted_attempts: pc.overall.weighted_attempts || 0,
+    opp_strength_sum: pc.overall.opp_strength_sum || 0,
   };
 }
