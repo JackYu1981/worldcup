@@ -221,9 +221,11 @@ async function computeOne(env, fid, includeDebug = false, fixtureHint = null, cu
   const lineAbs = Math.abs(ahLine ?? 0);
 
   // Team attacking capacity (sum of historical on_target / matches over candidates)
+  // v1.5 schema: total_ot / matches_played
   const teamCap = (sidePool) => sidePool.reduce((acc, e) => {
     const pm = getPlayerPerMatch(playerCum, e.player.id);
-    const otpm = pm.matches_overall > 0 ? pm.ot_overall / pm.matches_overall : 0;
+    const mp = pm.matches_played || 0;
+    const otpm = mp > 0 ? pm.total_ot / mp : 0;
     return acc + Math.max(0, otpm);
   }, 0);
   const homeCapacity = teamCap(pools.home);

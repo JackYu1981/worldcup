@@ -89,18 +89,18 @@ def v0_score(row):
         remaining 4 weights to sum to 1.0 (instead of 0.90), so v0 isn't
         unfairly handicapped by missing 10% weight that just appears as 0.
       - starter bonus (always 1.0 since we only train on starters)
+
+    v1.4 schema: derive ot/m and att/m from total_ot/matches_played
+    (raw fields in CSV) since ot_overall/att_overall were dropped.
     """
-    ot = float(row['ot_overall']) if float(row['ot_overall']) >= 0 else 0
-    att = float(row['att_overall'])
+    mp = max(1, int(row['matches_played']))
+    ot = float(row['total_ot']) / mp
+    att = float(row['total_att']) / mp
     pos = int(row['position'])
     pos_norm = {3: 100, 2: 60, 1: 20, 0: 0}.get(pos, 30)
     ot_norm = min(100, ot * 15)
     att_norm = min(100, att * 10)
     starter_bonus = 100   # all our samples are starters
-    # Re-normalize 0.50 + 0.20 + 0.15 + 0.05 = 0.90 → divide by 0.90 to scale
-    # weights back to 1.0 sum. Mathematically identical to dropping xg term
-    # and scaling the rest proportionally, which is the fairest comparison
-    # for walk-forward backtest.
     raw = 0.50 * ot_norm + 0.20 * att_norm + 0.15 * pos_norm + 0.05 * starter_bonus
     return raw / 0.90
 
@@ -123,15 +123,11 @@ def main():
         meta = json.load(f)
 
     if args.features == 'pruned':
-        # Drop redundant / near-zero-weight signals identified in v1 inspection:
-        #  - ot_overall:   redundant with vs_weak/strong/medium split (learned -)
-        #  - ot_x_FW/DF:   redundant with is_FW/DF (small mag, opposite sign noise)
-        #  - n_vs_*:       3 counts had |w| < 0.03 each
+        # v1.4: pruned subset (drop position one-hot if you want to test less).
+        # Keep 5 raw + match context (drop is_*) → 9 features.
         feature_keys = [
-            'ot_vs_weak','ot_vs_strong','ot_vs_medium',
-            'att_overall','matches_played',
-            'is_FW','is_MF','is_DF','is_GK',
-            'opp_gc_per_match','team_favoredness',
+            'total_ot','total_att','total_minutes','matches_played','opp_strength_sum',
+            'opp_gc_per_match','team_favoredness','own_team_capacity','opp_team_capacity',
         ]
     else:
         feature_keys = meta['features_x']
@@ -212,9 +208,13 @@ def main():
             weak_side_rows = home_rows
             strong_fav = away_fav
 
-        # Team attacking capacity: sum of ot_overall for each side's starters.
-        home_cap = sum(max(0, float(r['ot_overall'])) for _, r in home_rows)
-        away_cap = sum(max(0, float(r['ot_overall'])) for _, r in away_rows)
+        # Team attacking capacity: sum of ot/m for each side's starters.
+        # v1.4: derive ot/m from total_ot / matches_played (raw fields).
+        def _ot_per_match(r):
+            mp = max(1, int(r['matches_played']))
+            return float(r['total_ot']) / mp
+        home_cap = sum(max(0, _ot_per_match(r)) for _, r in home_rows)
+        away_cap = sum(max(0, _ot_per_match(r)) for _, r in away_rows)
         ah_line_estimate = strong_fav   # magnitude only matters for budget
         budget = decide_budget(home_cap, away_cap, ah_line_estimate, side_is_home_strong=(home_fav >= away_fav))
         max_players = BUDGET_TO_PLAYERS[budget]
@@ -310,7 +310,7 @@ def main():
     # equivalent to what worker JS computes. The old cv=5 ensemble averaged
     # 5 different SVC decision boundaries — not equivalent to sklearn's
     # ensemble predict_proba (which averages per-fold probabilities).
-    print('\n=== Training final model on all 529 samples for worker export ===')
+    print(f'\n=== Training final model on all {len(rows)} samples for worker export ===')
     from sklearn.model_selection import train_test_split
     from sklearn.frozen import FrozenEstimator
     X_all, y_all = feature_matrix(rows, feature_keys)
@@ -333,7 +333,7 @@ def main():
     platt_b = float(only_cc.calibrators[0].b_)
 
     model_export = {
-        'version': 'v1_svm_linear_calibrated',
+        'version': 'v1_5_svm_linear_calibrated',
         'features': feature_keys,
         'coef': coef_avg,
         'intercept': intercept_avg,

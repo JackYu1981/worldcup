@@ -236,26 +236,23 @@ def main():
 
     # 2) Walk-forward: maintain cumulative tables; emit samples per match.
     print('\nStep 2: walk-forward feature extraction', flush=True)
-    # Player cumulative table — split by opponent strength so we can compute
-    # vs_weak vs vs_strong averages separately. Each bucket tracks (matches,
-    # on_target, attempts) so the consumer can compute per-match averages.
+    # v1.4: 简化累计结构。删除 vs_weak/vs_strong/vs_medium 分桶 — 由
+    # opp_strength_sum 统一表达对手强度信号。
     # Schema: pid → {
-    #   'overall':    {matches, on_target, attempts},
-    #   'vs_weak':    {matches, on_target, attempts},
-    #   'vs_strong':  {matches, on_target, attempts},
-    #   'vs_medium':  {matches, on_target, attempts},
+    #   'matches_played':    int   累计 ≥15min 的场次
+    #   'total_ot':          int   累计射正
+    #   'total_att':         int   累计射门
+    #   'total_minutes':     int   累计上场分钟
+    #   'opp_strength_sum':  float Σ(对手强度 × 1) — 每场加一次对手强度
     # }
     player_cum = {}
     team_cum   = {}   # cc → {matches, goals_conceded, ot_against, team_ot}
 
-    def _empty_bucket():
-        return {'matches':0, 'on_target':0, 'attempts':0,
-                'weighted_on_target': 0.0, 'weighted_attempts': 0.0,
-                'opp_strength_sum': 0.0}
+    MIN_MINUTES_FOR_MP = 15  # 上场 ≥15min 才算一场 (matches_played +1)
 
     def _empty_player():
-        return {'overall':_empty_bucket(), 'vs_weak':_empty_bucket(),
-                'vs_strong':_empty_bucket(), 'vs_medium':_empty_bucket()}
+        return {'matches_played': 0, 'total_ot': 0, 'total_att': 0,
+                'total_minutes': 0, 'opp_strength_sum': 0.0}
 
     samples = []
     skipped_cold = 0
@@ -286,85 +283,44 @@ def main():
                 pid = str(p.get('player_id') or '')
                 if not pid: continue
                 ppre_check = player_cum.get(pid) or _empty_player()
-                p_matches_check = ppre_check['overall']['matches']
+                p_matches_check = ppre_check['matches_played']
 
-                # Cold-start gate: drop sample if player or opponent has < 1 prior match.
-                # (Loosely interpreted "drop first 2 rounds": once both have at least 1
-                #  prior game we have a usable signal.)
-                if p_matches_check < 0.5 or opp_matches < 1:
+                # v1.4 cold-start gate: drop sample if player has < 1 prior match.
+                # (Looser than v1.3's <0.5 mp_weight — small tournament so we
+                #  need every usable sample. 0 prior matches → no signal, drop.)
+                if p_matches_check < 1 or opp_matches < 1:
                     skipped_cold += 1
                     continue
 
-                # === Features ===
-                # Pre-match cumulative buckets — separated by opponent strength
-                # in the historical match (not this match).
+                # === v1.5 Features ===
+                # v1.4: 5 raw cumulative + 4 position + 4 context = 13 features
+                # v1.5: + att_per_mp (per-game shooting frequency) = 14 features
                 ppre = player_cum.get(pid) or _empty_player()
-                ov = ppre['overall']
-                vw = ppre['vs_weak']
-                vs = ppre['vs_strong']
-                vm = ppre['vs_medium']
-                p_matches = ov['matches']
-                # Per-match ot averages within each bucket; -1 sentinel when bucket empty
-                # so SVM can distinguish "0.0 average from 3 matches" vs "no data yet".
-                def avg_or_neg1(b):
-                    return round(b['on_target'] / b['matches'], 3) if b['matches'] > 0 else -1.0
+                total_ot = ppre['total_ot']
+                total_att = ppre['total_att']
+                total_minutes = ppre['total_minutes']
+                matches_played = ppre['matches_played']
+                opp_strength_sum = round(ppre['opp_strength_sum'], 3)
 
-                ot_overall    = avg_or_neg1(ov)
-                ot_vs_weak    = avg_or_neg1(vw)
-                ot_vs_strong  = avg_or_neg1(vs)
-                ot_vs_medium  = avg_or_neg1(vm)
-                att_overall   = round(ov['attempts'] / ov['matches'], 3) if ov['matches'] > 0 else 0
-                # v1.3 NEW: opp_strength-weighted ot. Σ(ot_i × opp_strength_i) /
-                # Σ(opp_strength_i). 对强队表现权重高 (对强队 ot=1 vs 对弱队 ot=4,
-                # 弱队那场几乎不算 — "vs 强队的射正才是真本事").
-                strength_sum = ov.get('opp_strength_sum', 0)
-                ot_overall_strength_adj = (
-                    ov.get('weighted_on_target', 0) / strength_sum
-                    if strength_sum > 0 else -1.0
-                )
-                att_overall_strength_adj = (
-                    ov.get('weighted_attempts', 0) / strength_sum
-                    if strength_sum > 0 else 0
-                )
-                # Position one-hot (replaces ordinal position_score). Lets SVM
-                # learn per-position effects independently — important because
-                # DF's historical ot is NOT predictive of next match (defenders'
-                # shots are situational/set-piece, not pattern). FW's is.
+                # v1.5 NEW: 球员每场射门频率
+                # 帮助识别"历史 ot=0 但 att/m 高"的隐藏中场/后卫射手
+                # (e.g. REIJNDERS att/m=0.5 但首发中场，本场 2 射正)
+                # 2-fold CV (R2/R3): Metric B 翻倍 (2.08% → 4.17%)
+                att_per_mp = round(total_att / max(1, matches_played), 3)
+
+                # Position one-hot
                 pos = p.get('position')
                 is_FW = 1 if pos == 3 else 0
                 is_MF = 1 if pos == 2 else 0
                 is_DF = 1 if pos == 1 else 0
                 is_GK = 1 if pos == 0 else 0
-                # Key interaction terms: how much weight to give a player's
-                # historical vs-strong record, conditioned on their position.
-                # Use 0 (not -1) when bucket is empty so the interaction is
-                # neutral instead of misleadingly negative.
-                ot_vs_strong_clean = ot_vs_strong if ot_vs_strong >= 0 else 0
-                ot_x_FW = ot_vs_strong_clean * is_FW
-                ot_x_DF = ot_vs_strong_clean * is_DF
-                # NEW (v1.2 2026-06-27): mp-weighted ot 折扣 — when player only
-                # has 1 prior match, their ot/m is single-game noise. weight
-                # 0.5 for mp=1, 1.0 for mp>=2. SVM 学这个特征比纯 ot_overall
-                # 更稳健。
-                mp_weight = 1.0 if p_matches >= 2 else 0.5
-                ot_overall_weighted = (ot_overall if ot_overall >= 0 else 0) * mp_weight
-                # NEW: 位置可信度衰减 — 后卫的 ot 数据本质上是定位球/反击产物，
-                # 不具有累计可预测性。前锋数据连续性强。手动注入业务规则。
-                position_credibility = {3: 1.0, 2: 0.9, 1: 0.4, 0: 0.0}.get(pos, 0.7)
-                ot_position_adjusted = (ot_overall if ot_overall >= 0 else 0) * position_credibility
-                # NEW: 队整体进攻能力 — 单球员 prob 不仅取决于自己也取决于队是否能
-                # 制造机会。前面累计的 team_capacity (该队所有球员 ot 之和) 比
-                # team_favoredness (亚盘市场) 更基础。
-                # team_capacity reads from team_cum (built incrementally in main loop)
-                # Opponent weakness from history (not for bucketing — that comes from AH)
-                opp_gc_per_match = opp_state.get('goals_conceded', 0) / max(1, opp_matches)
-                # NEW (v1.2): 队整体进攻 / 对手整体进攻 — 反映"该队是否能制造机会"。
-                # 跟 team_favoredness (亚盘市场预期) 互补：能用 attacking 数据反驳市场。
+
+                # Match context
+                opp_gc_per_match = round(opp_state.get('goals_conceded', 0) / max(1, opp_matches), 3)
                 own_team_state = team_cum.get(side.get('country_code'), {})
                 own_team_matches = own_team_state.get('matches', 0)
-                own_team_capacity = own_team_state.get('team_ot', 0) / max(1, own_team_matches)
-                opp_team_capacity = opp_state.get('team_ot', 0) / max(1, opp_matches)
-                # Own-team favoredness from AH (this match)
+                own_team_capacity = round(own_team_state.get('team_ot', 0) / max(1, own_team_matches), 3)
+                opp_team_capacity = round(opp_state.get('team_ot', 0) / max(1, opp_matches), 3)
                 if ah_line is None:
                     own_team_favoredness = 0
                 else:
@@ -383,66 +339,34 @@ def main():
                     'opp_cc': opp_cc,
                     'name': p.get('name'),
                     'position': pos,
-                    # features — cumulative split by opponent strength
-                    'ot_overall':         ot_overall,
-                    'ot_vs_weak':         ot_vs_weak,
-                    'ot_vs_strong':       ot_vs_strong,
-                    'ot_vs_medium':       ot_vs_medium,
-                    'att_overall':        att_overall,
-                    'matches_played':     p_matches,
-                    'n_vs_weak':          vw['matches'],
-                    'n_vs_strong':        vs['matches'],
-                    'n_vs_medium':        vm['matches'],
+                    # v1.4 features — 5 raw cumulative
+                    'total_ot':           total_ot,
+                    'total_att':          total_att,
+                    'total_minutes':      total_minutes,
+                    'matches_played':     matches_played,
+                    'opp_strength_sum':   opp_strength_sum,
+                    # v1.5 NEW: per-game shooting frequency
+                    'att_per_mp':         att_per_mp,
                     # features — position one-hot
                     'is_FW':              is_FW,
                     'is_MF':              is_MF,
                     'is_DF':              is_DF,
                     'is_GK':              is_GK,
-                    # features — interactions (position × strong opponent history)
-                    'ot_x_FW':            round(ot_x_FW, 3),
-                    'ot_x_DF':            round(ot_x_DF, 3),
-                    # features — context
-                    'opp_gc_per_match':   round(opp_gc_per_match, 3),
+                    # features — match context
+                    'opp_gc_per_match':   opp_gc_per_match,
                     'team_favoredness':   own_team_favoredness,
-                    # NEW v1.2 features
-                    'ot_overall_weighted':    round(ot_overall_weighted, 3),
-                    'ot_position_adjusted':   round(ot_position_adjusted, 3),
-                    'own_team_capacity':      round(own_team_capacity, 3),
-                    'opp_team_capacity':      round(opp_team_capacity, 3),
-                    # v1.3 NEW: opp-strength-weighted
-                    'ot_overall_strength_adj':  round(ot_overall_strength_adj, 3),
-                    'att_overall_strength_adj': round(att_overall_strength_adj, 3),
+                    'own_team_capacity':  own_team_capacity,
+                    'opp_team_capacity':  opp_team_capacity,
                     # label
                     'shots_on_target_actual': shots_on_target_this_match,
                     'y': y,
                 })
 
         # --- After emitting samples, fold THIS match's data into cumulative tables ---
-        # For each side, the player's opponent strength is determined from THIS
-        # match's AH line + side_is_home. Then per-match shots fold into the
-        # matching bucket (vs_weak / vs_strong / vs_medium) AND the overall bucket.
-        # ALSO: 替补保证 — substitutions[].on_player_id 的当场 ot 归并到对应的
-        # off_player_id（首发位置），让 starter 的累计反映"那个位置整场表现".
+        # v1.4 simplification: drop vs_weak/vs_strong/vs_medium bucketing.
+        # Every appeared player gets raw totals added — 上场 ≥15min 才算 mp +1.
         events = lu.get('events') or {}
         subs_list = events.get('substitutions') or []
-
-        # Build sub-chain map: on_player_id → off_player_id (per side).
-        # When B replaces A (A→B), and later C replaces B (B→C), C's stats
-        # should accumulate to A (chain root). Same logic as worker UI chain.
-        on_to_off_map = {}
-        for s in subs_list:
-            on_pid = str(s.get('on_player_id') or '')
-            off_pid = str(s.get('off_player_id') or '')
-            if on_pid and off_pid:
-                on_to_off_map[on_pid] = off_pid
-
-        def chain_root_pid(pid):
-            cur = str(pid)
-            seen = set()
-            while cur in on_to_off_map and cur not in seen:
-                seen.add(cur)
-                cur = on_to_off_map[cur]
-            return cur
 
         for side_name, side, side_is_home in [('home', home, True), ('away', away, False)]:
             # Pre-compute opp_strength for THIS match (this side's opponent)
@@ -450,45 +374,15 @@ def main():
             opp_state_this = team_cum.get(opp_cc_this, {})
             opp_strength_value = compute_opp_strength(opp_state_this, ah_line, side_is_home, alpha)
 
-            if is_weak_opponent(ah_line, side_is_home):
-                bucket_name = 'vs_weak'
-            elif is_strong_opponent(ah_line, side_is_home):
-                bucket_name = 'vs_strong'
-            else:
-                bucket_name = 'vs_medium'
-
-            # First pass: gather each player's per-match ot/att.
-            #
-            # Two distinct concepts:
-            #  (1) Each player who appeared this match (starter OR sub) gets
-            #      THEIR OWN mp +1 and own ot accumulated. This is the player's
-            #      personal accumulator — used in feature `matches_played`,
-            #      `ot_overall` etc.
-            #  (2) "替补保证" semantics: when sub B replaces starter A, B's ot
-            #      ALSO accumulates to A as a SEPARATE "position-level" stat.
-            #      Stored in player_cum[A].position_ot etc. Not used yet but
-            #      kept for future feature.
-            # For SVM training (current samples), we use (1) — actual personal
-            # stats. Subs DO get their own累计 (mp +1 when they came on).
-            appeared_players = {}  # pid → {ot, att, is_chain_root: bool}
+            # Build appeared players (starters + subs who came on)
             starters_set = set(str(p.get('player_id') or '') for p in (side.get('starting') or []))
             subs_set = set(str(p.get('player_id') or '') for p in (side.get('substitutes') or []))
-
-            # Initialize all starters as appeared (they always play)
-            for p in (side.get('starting') or []):
-                spid = str(p.get('player_id') or '')
-                if spid:
-                    appeared_players[spid] = {'ot': 0, 'att': 0}
-
-            # For subs: only count if they actually came on. The signal:
-            # they appear in events.substitutions[].on_player_id, OR they have
-            # any stat in match_stats.
             subs_who_came_on = set()
             for s in subs_list:
                 onp = str(s.get('on_player_id') or '')
                 if onp: subs_who_came_on.add(onp)
 
-            # Add match_stats values; for subs who came on, add them too
+            appeared_players = {}  # pid → {ot, att}
             for p in (side.get('starting') or []) + (side.get('substitutes') or []):
                 pid = str(p.get('player_id') or '')
                 if not pid: continue
@@ -499,36 +393,22 @@ def main():
                     appeared_players[pid] = {'ot': ot, 'att': att}
                 elif pid in subs_set and pid in subs_who_came_on:
                     appeared_players[pid] = {'ot': ot, 'att': att}
-                # else: sub who never came on — skip
 
-            # Now fold into player_cum. Every appeared player (starter or sub
-            # who came on) accumulates mp by his actual minutes played / 90.
-            # 用户 2026-06-28: "上场都算 mp + ot 都算（0 也是事实），但
-            # 替补上场 30 分钟应该算 0.33 mp，不是 1 mp"。
-            # Minutes-weighted mp 让 "上场强度" 自然反映在 per-match 平均里.
-            #
-            # Match total minutes: lineup.match_time = e.g. "96'" — 终场时刻
+            # Fold into player_cum. matches_played 整数 (≥15min +1).
+            # total_minutes / total_ot / total_att 累加. opp_strength_sum 也累加 (每场加一次).
             match_total = parse_minute(lu.get('match_time')) or 90
             for pid, stats in appeared_players.items():
-                ot = stats['ot']
-                att = stats['att']
-                # 替补 30 分钟 → mp += 0.33；首发整场 → mp += 1.0+
                 minutes = compute_player_minutes(pid, starters_set, subs_set, subs_list, match_total)
-                mp_weight = minutes / 90.0
-                if mp_weight <= 0: continue  # safety
+                if minutes <= 0: continue
                 pc = player_cum.setdefault(pid, _empty_player())
-                pc['overall']['matches']   += mp_weight
-                pc['overall']['on_target'] += ot
-                pc['overall']['attempts']  += att
-                pc['overall']['weighted_on_target'] += ot * opp_strength_value
-                pc['overall']['weighted_attempts']  += att * opp_strength_value
-                pc['overall']['opp_strength_sum']   += opp_strength_value * mp_weight
-                pc[bucket_name]['matches']   += mp_weight
-                pc[bucket_name]['on_target'] += ot
-                pc[bucket_name]['attempts']  += att
-                pc[bucket_name]['weighted_on_target'] += ot * opp_strength_value
-                pc[bucket_name]['weighted_attempts']  += att * opp_strength_value
-                pc[bucket_name]['opp_strength_sum']   += opp_strength_value * mp_weight
+                pc['total_ot']      += stats['ot']
+                pc['total_att']     += stats['att']
+                pc['total_minutes'] += minutes
+                if minutes >= MIN_MINUTES_FOR_MP:
+                    pc['matches_played'] += 1
+                # opp_strength_sum: 每场加一次 opp_strength (不乘 mp_weight).
+                # 这是球员历史"对手强度累加"，SVM 配合 total_ot 学权重.
+                pc['opp_strength_sum'] += opp_strength_value
 
         # Team accumulator
         # lineup.{side}.score is occasionally null even for finished matches
@@ -571,15 +451,17 @@ def main():
     print('\nStep 3: writing CSV', flush=True)
     import csv
     csv_path = os.path.join(OUT_DIR, 'samples.csv')
-    keys = ['fid','pid','side','cc','opp_cc','name','position',
-            'ot_overall','ot_vs_weak','ot_vs_strong','ot_vs_medium',
-            'att_overall','matches_played','n_vs_weak','n_vs_strong','n_vs_medium',
-            'is_FW','is_MF','is_DF','is_GK',
-            'ot_x_FW','ot_x_DF',
-            'opp_gc_per_match','team_favoredness',
-            'ot_overall_weighted','ot_position_adjusted','own_team_capacity','opp_team_capacity',
-            'ot_overall_strength_adj','att_overall_strength_adj',
-            'shots_on_target_actual','y']
+    # v1.5 feature order — 14 features total (v1.4 13 + att_per_mp)
+    # IMPORTANT: must match svm-score.js buildFeatureVector order exactly
+    feature_names = [
+        'total_ot', 'total_att', 'total_minutes', 'matches_played', 'opp_strength_sum',
+        'att_per_mp',
+        'is_FW', 'is_MF', 'is_DF', 'is_GK',
+        'opp_gc_per_match', 'team_favoredness', 'own_team_capacity', 'opp_team_capacity',
+    ]
+    keys = ['fid','pid','side','cc','opp_cc','name','position'] \
+           + feature_names \
+           + ['shots_on_target_actual','y']
     with open(csv_path,'w',newline='',encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=keys)
         w.writeheader()
@@ -587,25 +469,29 @@ def main():
     print(f'  wrote {csv_path}')
 
     meta = {
+        'version': 'v1.5',
         'n_samples': len(samples),
         'positive_rate': pos_cnt / len(samples) if samples else 0,
-        'features_x': ['ot_overall','ot_vs_weak','ot_vs_strong','ot_vs_medium',
-                       'att_overall','matches_played','n_vs_weak','n_vs_strong','n_vs_medium',
-                       'is_FW','is_MF','is_DF','is_GK',
-                       'ot_x_FW','ot_x_DF',
-                       'opp_gc_per_match','team_favoredness',
-                       'ot_overall_weighted','ot_position_adjusted',
-                       'own_team_capacity','opp_team_capacity',
-                       'ot_overall_strength_adj','att_overall_strength_adj'],
+        'features_x': feature_names,
         'label_y': 'shots_on_target_actual >= 1',
         'cold_start_dropped': skipped_cold,
+        'cold_start_rule': 'matches_played < 1 OR opp_matches < 1',
+        'min_minutes_for_mp': MIN_MINUTES_FOR_MP,
         'fixtures_used': len(fixtures),
-        'opponent_definition': {
-            'weak': 'this-match AH own-favoredness >= 2.0',
-            'strong': 'this-match AH own-favoredness <= -0.5',
-            'medium': 'everything else (incl. AH missing)',
-        },
-        'note': 'ot_vs_* uses -1 as "no historical data" sentinel; n_vs_* gives sample count',
+        'changelog_from_v1_4': [
+            'added att_per_mp = total_att / max(1, matches_played)',
+            'rationale: detect "hidden shooters" — MF/DF with low total_ot but high att frequency',
+            '2-fold CV (R2/R3): Metric A 持平 41.32%, Metric B 翻倍 2.08% → 4.17%',
+        ],
+        'changelog_from_v1_3': [
+            'dropped vs_weak/vs_strong/vs_medium buckets (6 features)',
+            'dropped ot_strength_adj / att_strength_adj (2 features)',
+            'dropped ot_overall_weighted / ot_position_adjusted (2 features)',
+            'dropped ot_x_FW / ot_x_DF interactions (2 features)',
+            'added total_ot / total_att / total_minutes / opp_strength_sum (raw)',
+            'matches_played: int (>=15min counts as 1) instead of mp_weight',
+            'cold-start: matches_played < 1 (was mp_weight < 0.5)',
+        ],
     }
     with open(os.path.join(OUT_DIR, 'meta.json'),'w',encoding='utf-8') as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)

@@ -1,38 +1,40 @@
 {
-  "n_samples": 758,
-  "positive_rate": 0.21503957783641162,
+  "version": "v1.5",
+  "n_samples": 953,
+  "positive_rate": 0.21720881427072403,
   "features_x": [
-    "ot_overall",
-    "ot_vs_weak",
-    "ot_vs_strong",
-    "ot_vs_medium",
-    "att_overall",
+    "total_ot",
+    "total_att",
+    "total_minutes",
     "matches_played",
-    "n_vs_weak",
-    "n_vs_strong",
-    "n_vs_medium",
+    "opp_strength_sum",
+    "att_per_mp",
     "is_FW",
     "is_MF",
     "is_DF",
     "is_GK",
-    "ot_x_FW",
-    "ot_x_DF",
     "opp_gc_per_match",
     "team_favoredness",
-    "ot_overall_weighted",
-    "ot_position_adjusted",
     "own_team_capacity",
-    "opp_team_capacity",
-    "ot_overall_strength_adj",
-    "att_overall_strength_adj"
+    "opp_team_capacity"
   ],
   "label_y": "shots_on_target_actual >= 1",
-  "cold_start_dropped": 694,
-  "fixtures_used": 66,
-  "opponent_definition": {
-    "weak": "this-match AH own-favoredness >= 2.0",
-    "strong": "this-match AH own-favoredness <= -0.5",
-    "medium": "everything else (incl. AH missing)"
-  },
-  "note": "ot_vs_* uses -1 as \"no historical data\" sentinel; n_vs_* gives sample count"
+  "cold_start_dropped": 631,
+  "cold_start_rule": "matches_played < 1 OR opp_matches < 1",
+  "min_minutes_for_mp": 15,
+  "fixtures_used": 72,
+  "changelog_from_v1_4": [
+    "added att_per_mp = total_att / max(1, matches_played)",
+    "rationale: detect \"hidden shooters\" — MF/DF with low total_ot but high att frequency",
+    "2-fold CV (R2/R3): Metric A 持平 41.32%, Metric B 翻倍 2.08% → 4.17%"
+  ],
+  "changelog_from_v1_3": [
+    "dropped vs_weak/vs_strong/vs_medium buckets (6 features)",
+    "dropped ot_strength_adj / att_strength_adj (2 features)",
+    "dropped ot_overall_weighted / ot_position_adjusted (2 features)",
+    "dropped ot_x_FW / ot_x_DF interactions (2 features)",
+    "added total_ot / total_att / total_minutes / opp_strength_sum (raw)",
+    "matches_played: int (>=15min counts as 1) instead of mp_weight",
+    "cold-start: matches_played < 1 (was mp_weight < 0.5)"
+  ]
 }
