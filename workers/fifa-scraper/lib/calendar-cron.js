@@ -16,7 +16,10 @@ import { beijingDateStr } from './time-utils.js';
 const COMPETITION_ID = 17;
 const CALENDAR_WINDOW_DAYS_FORWARD = 35;
 const CALENDAR_WINDOW_DAYS_BACK = 14;
-const FIXTURE_SCAN_DAYS_BACK = 14;
+// 回溯窗口必须覆盖整届世界杯（6/11 → 7/19，≈38 天）。
+// 此前为 14 天，导致小组赛比赛在赛后 14 天滑出扫描窗口、被反向索引静默删除，
+// 表现为 lineup「本届战绩」逐场消失（例：6/12 加拿大 vs 波黑在 6/26 之后丢失）。
+const FIXTURE_SCAN_DAYS_BACK = 40;
 const FIXTURE_SCAN_DAYS_FORWARD = 35;
 
 // FNV-1a 32-bit on a canonical projection of the calendar — used to short-circuit
