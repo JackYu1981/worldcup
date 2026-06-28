@@ -221,6 +221,12 @@
       "date": "2026-06-26T09:32:06+08:00",
       "summary": "数据准确性 + AI 推荐弹层修复: fifa-scraper matches_played 改 reconcile 模型(每 tick 用 match_stats 真值校准+463个历史脏数据已修); match-stats live 期间跳过 hash 短路保证 fetched_at 实时更新; AI 推荐 UI 修强弱判断主客反向 bug + 让球改真实数值 + 弹层 header 改主客对阵 + 🔮预测版/✅确认版 badge + 推荐卡 #序号+国旗+球衣号+人名 1-6 连号 + 盘口/初盘合并单行 + preview→confirmed 保留快照 + 推荐窗口 6h→8h; release.sh 加 .venv stash/restore + 自动 export token; admin CR 1782426919487 已 adopted",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v5.3",
+      "date": "2026-06-28T13:02:54+08:00",
+      "summary": "SVM v1.5 — 新增 att_per_mp 特征 (球员每场射门频率) 帮助识别中场/后卫隐藏射手 · 14 features · Walk-forward 39.49% (+0.36pp vs v1.4) · 2-fold CV (R2/R3): Metric B 翻倍 4.17% · 实战 ALG-AUT 命中 5/6=83% (vs v1.3 33%) · 经验沉淀: scripts/shot_recommender/v1_svm/reference docs",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

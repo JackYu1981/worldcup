@@ -1,0 +1,485 @@
+#!/usr/bin/env python3
+"""
+build_dataset.py — walk-forward feature/label extraction for SVM v1.
+
+Same source-of-truth as the production worker (Cloudflare KV). Iterates 60 finished
+WC2026 fixtures in kickoff order, maintains incremental cumulative tables for each
+player and each team, and emits one sample per starter per match.
+
+Causal guarantee: features for a match come from cumulative tables BEFORE that
+match's own contribution is added. No data leakage.
+
+Outputs:
+  scripts/shot_recommender/v1_svm/data/samples.csv  — one row per starter-match
+  scripts/shot_recommender/v1_svm/data/meta.json    — feature names + label counts
+
+Usage:
+  python3 scripts/shot_recommender/v1_svm/build_dataset.py
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+ACC = '0bf8afedf1e0b911f3c1733e93546b71'
+NS  = '278f1209ffd84662bd51921370a2fbe9'
+HEADERS = {'Authorization': 'Bearer ' + subprocess.run(
+    ['security','find-generic-password','-s','cloudflare-api-token','-w'],
+    capture_output=True, text=True, check=True).stdout.strip()}
+
+OUT_DIR = os.path.join(os.path.dirname(__file__), 'data')
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# Position FWD/MID/DEF/GK → ordinal "attack tier"
+POSITION_SCORE = {3: 3, 2: 2, 1: 1, 0: 0, 6: 1}   # FWD=3, MID=2, DEF=1, GK=0
+
+
+def kv_get(key, retries=3):
+    url = f'https://api.cloudflare.com/client/v4/accounts/{ACC}/storage/kv/namespaces/{NS}/values/{urllib.parse.quote(key, safe="")}'
+    for i in range(retries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS), timeout=30) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 404: return None
+        except Exception:
+            time.sleep(1 + i)
+    return None
+
+
+def kv_list_all(prefix):
+    keys, cursor = [], ''
+    while True:
+        url = f'https://api.cloudflare.com/client/v4/accounts/{ACC}/storage/kv/namespaces/{NS}/keys?prefix={urllib.parse.quote(prefix)}&limit=1000'
+        if cursor: url += f'&cursor={cursor}'
+        for i in range(3):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS), timeout=30) as r:
+                    j = json.loads(r.read()); break
+            except Exception:
+                time.sleep(1 + i)
+        keys += [k['name'] for k in j['result']]
+        cursor = (j.get('result_info') or {}).get('cursor') or ''
+        if not cursor: break
+    return keys
+
+
+def parse_ah_line(ah):
+    """Extract bet365 line from asian_handicap KV blob.
+
+    KV shape (from workers/asian-handicap-scraper):
+      { current: { line, home_water, away_water }, open: {...}, trend, ... }
+    `line` is the home-team-perspective line (negative = home gives goals,
+    e.g. -1.5 means home is favored to win by 1.5).
+    """
+    if not ah: return None
+    cur = ah.get('current') or {}
+    h = cur.get('line')
+    if h is None: return None
+    try:
+        return float(h)
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_minute(min_str):
+    """Parse FIFA minute like "56'" or "90'+5'" → integer minutes.
+    "90'+3'" → 93. Returns 0 on failure."""
+    if not min_str: return 0
+    s = str(min_str).replace("'", "").replace('"', '').strip()
+    if '+' in s:
+        parts = s.split('+', 1)
+        try:
+            return int(parts[0]) + int(parts[1])
+        except (ValueError, TypeError):
+            return 0
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return 0
+
+
+def compute_player_minutes(pid, side_starting_pids, side_subs_pids, subs_list, match_total_minutes):
+    """Returns minutes player actually played in this match.
+
+    Cases:
+      - Starter, never substituted off → match_total_minutes
+      - Starter, substituted off at minute X → X
+      - Sub, came on at minute X, never substituted off → match_total_minutes - X
+      - Sub, came on at X, substituted off at Y → Y - X
+      - Sub who never came on → 0
+    """
+    pid_str = str(pid)
+    is_starter = pid_str in side_starting_pids
+    is_sub = pid_str in side_subs_pids
+
+    on_minute = None
+    off_minute = None
+    for s in subs_list:
+        if str(s.get('on_player_id') or '') == pid_str:
+            on_minute = parse_minute(s.get('minute'))
+        if str(s.get('off_player_id') or '') == pid_str:
+            off_minute = parse_minute(s.get('minute'))
+
+    if is_starter:
+        # Played from minute 0 until either match end or substituted off
+        end = off_minute if off_minute is not None else match_total_minutes
+        return max(0, end)
+    elif is_sub:
+        if on_minute is None:
+            return 0  # never came on
+        end = off_minute if off_minute is not None else match_total_minutes
+        return max(0, end - on_minute)
+    return 0
+
+
+def compute_opp_strength(opp_team_state, ah_line, side_is_home, alpha=(0.3, 0.5, 0.2)):
+    """Composite opponent strength score in [0, 1].
+
+    Combines three signals using fixed thresholds (walk-forward safe):
+      - AH signal (market): own_disfavor in [-2, +2] → ah_norm in [0, 1]
+      - Goals conceded /m: gc_pm in [0, 2] → gc_norm in [1, 0]
+      - On-target against /m: ot_pm in [0, 6] → ot_norm in [1, 0]
+
+    Higher = stronger opponent (good defense + market favored).
+    Lower = weaker opponent.
+
+    alpha = (w_ah, w_gc, w_ot). Default 0.3 / 0.5 / 0.2 (defense实绩为主，亚盘辅).
+    """
+    own_disfavor = (ah_line if side_is_home else -ah_line) if ah_line is not None else 0
+    ah_norm = max(0.0, min(1.0, 0.5 + own_disfavor / 4.0))
+
+    matches = opp_team_state.get('matches', 0)
+    if matches == 0:
+        # No history yet — use AH only (rare, only first round of fixtures)
+        return ah_norm
+
+    gc_pm = opp_team_state.get('goals_conceded', 0) / matches
+    gc_norm = max(0.0, min(1.0, 1.0 - gc_pm / 2.0))
+
+    ot_pm = opp_team_state.get('ot_against', 0) / matches
+    ot_norm = max(0.0, min(1.0, 1.0 - ot_pm / 6.0))
+
+    w_ah, w_gc, w_ot = alpha
+    return w_ah * ah_norm + w_gc * gc_norm + w_ot * ot_norm
+
+
+def is_weak_opponent(ah_line, side_is_home):
+    """Opponent is 'weak' iff THIS MATCH's AH line is at least 2.0 in our favor.
+
+    Domain rule (用户 2026-06-26): "协议球" scenarios exist — even against a
+    historically weak opponent, if our team has already qualified for KO stage
+    the AH line stays modest (e.g. -0.5) because we won't go full effort.
+    Using only opponent's historical goals_conceded would mistake "协议球 vs
+    weak team" for a normal "powerhouse vs weak team" — completely different
+    expected shot output. Market AH is the only signal that captures effort
+    intensity per match.
+    """
+    if ah_line is None: return False
+    own_fav = -ah_line if side_is_home else ah_line
+    return own_fav >= 2.0
+
+def is_strong_opponent(ah_line, side_is_home):
+    """Opponent is 'strong' iff THIS MATCH's AH line is at least 0.5 against us."""
+    if ah_line is None: return False
+    own_fav = -ah_line if side_is_home else ah_line
+    return own_fav <= -0.5
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--alpha-ah', type=float, default=0.3, help='AH market weight')
+    ap.add_argument('--alpha-gc', type=float, default=0.5, help='goals_conceded weight')
+    ap.add_argument('--alpha-ot', type=float, default=0.2, help='ot_against weight')
+    args = ap.parse_args()
+    alpha = (args.alpha_ah, args.alpha_gc, args.alpha_ot)
+    print(f'opp_strength alpha (ah, gc, ot): {alpha}')
+    # 1) Gather all fixtures we have lineup+match_stats+asian_handicap for.
+    print('Step 1: enumerate fixtures with full data triple', flush=True)
+    lu_keys = kv_list_all('match_lineups:')
+    ms_keys = set(k.split(':',1)[1] for k in kv_list_all('match_stats:'))
+    ah_keys = set(k.split(':',1)[1] for k in kv_list_all('asian_handicap:'))
+
+    # Build fid → kickoff map from matches:{date} daily buckets (kickoff is in +08:00).
+    # This is the ground truth for temporal ordering; lineup.fetched_at is NOT
+    # reliable because some lineups were backfilled out-of-order.
+    print('  building fid→kickoff map from matches:* daily buckets', flush=True)
+    fid_kickoff = {}
+    for dk in kv_list_all('matches:'):
+        bucket = kv_get(dk)
+        if not bucket: continue
+        for m in (bucket.get('matches') or bucket.get('items') or []):
+            mid = m.get('id'); ko = m.get('kickoff')
+            if mid and ko: fid_kickoff[mid] = ko
+    print(f'  collected {len(fid_kickoff)} fid→kickoff entries', flush=True)
+
+    fixtures = []
+    for lk in lu_keys:
+        fid = lk.split(':',1)[1]
+        if fid not in ms_keys or fid not in ah_keys: continue
+        lu = kv_get(lk)
+        if not lu: continue
+        if lu.get('match_status_label') != 'finished': continue
+        ko = fid_kickoff.get(fid)
+        if not ko: continue   # without kickoff we can't temporally order
+        fixtures.append({'fid': fid, 'lineup': lu, 'kickoff': ko})
+
+    fixtures.sort(key=lambda x: x['kickoff'])
+    print(f'  {len(fixtures)} finished fixtures with full data triple + kickoff', flush=True)
+    if len(fixtures) < 5:
+        print('  not enough data — abort')
+        sys.exit(1)
+
+    # 2) Walk-forward: maintain cumulative tables; emit samples per match.
+    print('\nStep 2: walk-forward feature extraction', flush=True)
+    # v1.4: 简化累计结构。删除 vs_weak/vs_strong/vs_medium 分桶 — 由
+    # opp_strength_sum 统一表达对手强度信号。
+    # Schema: pid → {
+    #   'matches_played':    int   累计 ≥15min 的场次
+    #   'total_ot':          int   累计射正
+    #   'total_att':         int   累计射门
+    #   'total_minutes':     int   累计上场分钟
+    #   'opp_strength_sum':  float Σ(对手强度 × 1) — 每场加一次对手强度
+    # }
+    player_cum = {}
+    team_cum   = {}   # cc → {matches, goals_conceded, ot_against, team_ot}
+
+    MIN_MINUTES_FOR_MP = 15  # 上场 ≥15min 才算一场 (matches_played +1)
+
+    def _empty_player():
+        return {'matches_played': 0, 'total_ot': 0, 'total_att': 0,
+                'total_minutes': 0, 'opp_strength_sum': 0.0}
+
+    samples = []
+    skipped_cold = 0
+
+    for idx, fx in enumerate(fixtures):
+        fid = fx['fid']
+        lu = fx['lineup']
+        ms = kv_get(f'match_stats:{fid}')
+        ah = kv_get(f'asian_handicap:{fid}')
+
+        home = lu.get('home') or {}
+        away = lu.get('away') or {}
+        home_cc, away_cc = home.get('country_code'), away.get('country_code')
+        if not home_cc or not away_cc: continue
+
+        ah_line = parse_ah_line(ah)   # home-perspective
+
+        # --- Per-side iteration: emit one sample per starter, using PRE-MATCH state ---
+        for side_name, side, opp_cc, side_is_home in [
+            ('home', home, away_cc, True),
+            ('away', away, home_cc, False),
+        ]:
+            starters = side.get('starting') or []
+            opp_state = team_cum.get(opp_cc, {})
+            opp_matches = opp_state.get('matches', 0)
+
+            for p in starters:
+                pid = str(p.get('player_id') or '')
+                if not pid: continue
+                ppre_check = player_cum.get(pid) or _empty_player()
+                p_matches_check = ppre_check['matches_played']
+
+                # v1.4 cold-start gate: drop sample if player has < 1 prior match.
+                # (Looser than v1.3's <0.5 mp_weight — small tournament so we
+                #  need every usable sample. 0 prior matches → no signal, drop.)
+                if p_matches_check < 1 or opp_matches < 1:
+                    skipped_cold += 1
+                    continue
+
+                # === v1.4 Features ===
+                # 5 raw cumulative + 4 position + 4 context = 13 features
+                ppre = player_cum.get(pid) or _empty_player()
+                total_ot = ppre['total_ot']
+                total_att = ppre['total_att']
+                total_minutes = ppre['total_minutes']
+                matches_played = ppre['matches_played']
+                opp_strength_sum = round(ppre['opp_strength_sum'], 3)
+
+                # Position one-hot
+                pos = p.get('position')
+                is_FW = 1 if pos == 3 else 0
+                is_MF = 1 if pos == 2 else 0
+                is_DF = 1 if pos == 1 else 0
+                is_GK = 1 if pos == 0 else 0
+
+                # Match context
+                opp_gc_per_match = round(opp_state.get('goals_conceded', 0) / max(1, opp_matches), 3)
+                own_team_state = team_cum.get(side.get('country_code'), {})
+                own_team_matches = own_team_state.get('matches', 0)
+                own_team_capacity = round(own_team_state.get('team_ot', 0) / max(1, own_team_matches), 3)
+                opp_team_capacity = round(opp_state.get('team_ot', 0) / max(1, opp_matches), 3)
+                if ah_line is None:
+                    own_team_favoredness = 0
+                else:
+                    own_team_favoredness = -ah_line if side_is_home else ah_line
+
+                # === Label ===
+                p_ms = (ms.get('players') or {}).get(pid) if ms else None
+                shots_on_target_this_match = (p_ms or {}).get('shots_on_target', 0) if p_ms else 0
+                y = 1 if shots_on_target_this_match >= 1 else 0
+
+                samples.append({
+                    'fid': fid,
+                    'pid': pid,
+                    'side': side_name,
+                    'cc': side.get('country_code'),
+                    'opp_cc': opp_cc,
+                    'name': p.get('name'),
+                    'position': pos,
+                    # v1.4 features — 5 raw cumulative
+                    'total_ot':           total_ot,
+                    'total_att':          total_att,
+                    'total_minutes':      total_minutes,
+                    'matches_played':     matches_played,
+                    'opp_strength_sum':   opp_strength_sum,
+                    # features — position one-hot
+                    'is_FW':              is_FW,
+                    'is_MF':              is_MF,
+                    'is_DF':              is_DF,
+                    'is_GK':              is_GK,
+                    # features — match context
+                    'opp_gc_per_match':   opp_gc_per_match,
+                    'team_favoredness':   own_team_favoredness,
+                    'own_team_capacity':  own_team_capacity,
+                    'opp_team_capacity':  opp_team_capacity,
+                    # label
+                    'shots_on_target_actual': shots_on_target_this_match,
+                    'y': y,
+                })
+
+        # --- After emitting samples, fold THIS match's data into cumulative tables ---
+        # v1.4 simplification: drop vs_weak/vs_strong/vs_medium bucketing.
+        # Every appeared player gets raw totals added — 上场 ≥15min 才算 mp +1.
+        events = lu.get('events') or {}
+        subs_list = events.get('substitutions') or []
+
+        for side_name, side, side_is_home in [('home', home, True), ('away', away, False)]:
+            # Pre-compute opp_strength for THIS match (this side's opponent)
+            opp_cc_this = away_cc if side_is_home else home_cc
+            opp_state_this = team_cum.get(opp_cc_this, {})
+            opp_strength_value = compute_opp_strength(opp_state_this, ah_line, side_is_home, alpha)
+
+            # Build appeared players (starters + subs who came on)
+            starters_set = set(str(p.get('player_id') or '') for p in (side.get('starting') or []))
+            subs_set = set(str(p.get('player_id') or '') for p in (side.get('substitutes') or []))
+            subs_who_came_on = set()
+            for s in subs_list:
+                onp = str(s.get('on_player_id') or '')
+                if onp: subs_who_came_on.add(onp)
+
+            appeared_players = {}  # pid → {ot, att}
+            for p in (side.get('starting') or []) + (side.get('substitutes') or []):
+                pid = str(p.get('player_id') or '')
+                if not pid: continue
+                p_ms = (ms.get('players') or {}).get(pid) if ms else None
+                ot = (p_ms or {}).get('shots_on_target', 0) or 0
+                att = (p_ms or {}).get('shots', 0) or 0
+                if pid in starters_set:
+                    appeared_players[pid] = {'ot': ot, 'att': att}
+                elif pid in subs_set and pid in subs_who_came_on:
+                    appeared_players[pid] = {'ot': ot, 'att': att}
+
+            # Fold into player_cum. matches_played 整数 (≥15min +1).
+            # total_minutes / total_ot / total_att 累加. opp_strength_sum 也累加 (每场加一次).
+            match_total = parse_minute(lu.get('match_time')) or 90
+            for pid, stats in appeared_players.items():
+                minutes = compute_player_minutes(pid, starters_set, subs_set, subs_list, match_total)
+                if minutes <= 0: continue
+                pc = player_cum.setdefault(pid, _empty_player())
+                pc['total_ot']      += stats['ot']
+                pc['total_att']     += stats['att']
+                pc['total_minutes'] += minutes
+                if minutes >= MIN_MINUTES_FOR_MP:
+                    pc['matches_played'] += 1
+                # opp_strength_sum: 每场加一次 opp_strength (不乘 mp_weight).
+                # 这是球员历史"对手强度累加"，SVM 配合 total_ot 学权重.
+                pc['opp_strength_sum'] += opp_strength_value
+
+        # Team accumulator
+        # lineup.{side}.score is occasionally null even for finished matches
+        # (FIFA Score quirk; lineup.js has a fallback that counts events.goals).
+        # Replicate that fallback here so cumulative team tables are correct.
+        events_goals = (lu.get('events') or {}).get('goals') or []
+        home_score = home.get('score')
+        away_score = away.get('score')
+        if home_score is None:
+            home_score = sum(1 for g in events_goals if g.get('side')=='home')
+        if away_score is None:
+            away_score = sum(1 for g in events_goals if g.get('side')=='away')
+        hc = team_cum.setdefault(home_cc, {'matches':0,'goals_conceded':0,'saves':0,'team_ot':0,'ot_against':0})
+        ac = team_cum.setdefault(away_cc, {'matches':0,'goals_conceded':0,'saves':0,'team_ot':0,'ot_against':0})
+        hc['matches'] += 1; hc['goals_conceded'] += away_score
+        ac['matches'] += 1; ac['goals_conceded'] += home_score
+        # Team-level cumulative ot (sum of all players' on_target on this team)
+        # AND ot_against (sum of opponent players' on_target = how much defense conceded).
+        # Both proxies for attack/defense quality respectively.
+        for pid_ms, pms in (ms.get('players') or {}).items():
+            ot = pms.get('shots_on_target', 0) or 0
+            # Determine which side this pid was on (starter or sub)
+            found_home = any(str(p.get('player_id')) == str(pid_ms) for p in (home.get('starting') or []) + (home.get('substitutes') or []))
+            if found_home:
+                hc['team_ot'] += ot
+                ac['ot_against'] += ot   # away faced this home player's ot
+            else:
+                ac['team_ot'] += ot
+                hc['ot_against'] += ot
+        # saves: we don't have per-match saves in match_stats; leave 0 for now (V2 add)
+
+        if (idx+1) % 10 == 0:
+            print(f'  ...{idx+1}/{len(fixtures)} fixtures processed, {len(samples)} samples', flush=True)
+
+    print(f'\n  total samples: {len(samples)}; skipped (cold-start): {skipped_cold}', flush=True)
+    pos_cnt = sum(1 for s in samples if s['y']==1)
+    print(f'  label distribution: y=1 {pos_cnt} / y=0 {len(samples)-pos_cnt}  ({100*pos_cnt/len(samples):.1f}% positive)', flush=True)
+
+    # 3) Write CSV
+    print('\nStep 3: writing CSV', flush=True)
+    import csv
+    csv_path = os.path.join(OUT_DIR, 'samples.csv')
+    # v1.4 feature order — 13 features total
+    feature_names = [
+        'total_ot', 'total_att', 'total_minutes', 'matches_played', 'opp_strength_sum',
+        'is_FW', 'is_MF', 'is_DF', 'is_GK',
+        'opp_gc_per_match', 'team_favoredness', 'own_team_capacity', 'opp_team_capacity',
+    ]
+    keys = ['fid','pid','side','cc','opp_cc','name','position'] \
+           + feature_names \
+           + ['shots_on_target_actual','y']
+    with open(csv_path,'w',newline='',encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=keys)
+        w.writeheader()
+        for s in samples: w.writerow(s)
+    print(f'  wrote {csv_path}')
+
+    meta = {
+        'version': 'v1.4',
+        'n_samples': len(samples),
+        'positive_rate': pos_cnt / len(samples) if samples else 0,
+        'features_x': feature_names,
+        'label_y': 'shots_on_target_actual >= 1',
+        'cold_start_dropped': skipped_cold,
+        'cold_start_rule': 'matches_played < 1 OR opp_matches < 1',
+        'min_minutes_for_mp': MIN_MINUTES_FOR_MP,
+        'fixtures_used': len(fixtures),
+        'changelog_from_v1_3': [
+            'dropped vs_weak/vs_strong/vs_medium buckets (6 features)',
+            'dropped ot_strength_adj / att_strength_adj (2 features)',
+            'dropped ot_overall_weighted / ot_position_adjusted (2 features)',
+            'dropped ot_x_FW / ot_x_DF interactions (2 features)',
+            'added total_ot / total_att / total_minutes / opp_strength_sum (raw)',
+            'matches_played: int (>=15min counts as 1) instead of mp_weight',
+            'cold-start: matches_played < 1 (was mp_weight < 0.5)',
+        ],
+    }
+    with open(os.path.join(OUT_DIR, 'meta.json'),'w',encoding='utf-8') as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+    print(f'  wrote meta.json')
+
+if __name__ == '__main__':
+    main()
