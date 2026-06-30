@@ -101,8 +101,17 @@ export async function onRequestGet(context) {
       const awayHt = lu.away?.score_ht;
       // Penalty-shootout conversions (period=11 goals). FIFA-style: only set on
       // KO matches that actually went to PSO. UI renders "(H_pen) H-A (A_pen)".
-      const homePen = lu.home?.score_pen;
-      const awayPen = lu.away?.score_pen;
+      // Fall back to counting goal events when scraper hasn't backfilled score_pen
+      // yet (handles transition period right after this feature deploys, before
+      // fifa-scraper's next cron rewrites the match_lineups KV entry).
+      let homePen = lu.home?.score_pen;
+      let awayPen = lu.away?.score_pen;
+      if (homePen == null && awayPen == null) {
+        const goals = lu.events?.goals || [];
+        const psoH = goals.filter(g => g.side === 'home' && g.period === 11).length;
+        const psoA = goals.filter(g => g.side === 'away' && g.period === 11).length;
+        if (psoH + psoA > 0) { homePen = psoH; awayPen = psoA; }
+      }
 
       if (lu.match_status === 0) {
         m.status = 'finished';
