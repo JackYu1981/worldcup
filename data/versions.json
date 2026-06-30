@@ -227,6 +227,12 @@
       "date": "2026-06-28T13:02:54+08:00",
       "summary": "SVM v1.5 — 新增 att_per_mp 特征 (球员每场射门频率) 帮助识别中场/后卫隐藏射手 · 14 features · Walk-forward 39.49% (+0.36pp vs v1.4) · 2-fold CV (R2/R3): Metric B 翻倍 4.17% · 实战 ALG-AUT 命中 5/6=83% (vs v1.3 33%) · 经验沉淀: scripts/shot_recommender/v1_svm/reference docs",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v5.31",
+      "date": "2026-06-30T14:28:48+08:00",
+      "summary": "淘汰赛点球大战比分按 FIFA 风格 (X)A-B(Y) 显示，calendar 和 lineup 弹窗同步生效",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }
