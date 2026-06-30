@@ -147,25 +147,44 @@ export function normalizeLineup(liveData, mapping) {
   const awayEvents = normalizeEvents('away', awayTeam);
 
   // Half-time score derived from goals' Period field. FIFA doesn't expose HT score
-  // directly — Period codes: 3 = 1st half (incl. 45'+stoppage), 5 = 2nd half.
-  // So HT goals are those with Period <= 3.
+  // directly. Period codes (verified across 2026-06 group + KO stages):
+  //   3 = 1st half (incl. 45'+stoppage)
+  //   5 = 2nd half (incl. 90'+stoppage)
+  //   7 = 1st extra time, 9 = 2nd extra time
+  //   11 = penalty shootout (Minute="" — no clock)
+  // Top-level liveData.Period: 10 = finished (incl. AET/PSO)
+  // HT goals = period <= 3.
   let homeHt = 0, awayHt = 0;
   for (const g of homeEvents.goals) if ((g.period ?? 99) <= 3) homeHt++;
   for (const g of awayEvents.goals) if ((g.period ?? 99) <= 3) awayHt++;
 
+  // Penalty-shootout goals (period === 11). Emitted only when the match
+  // actually went to PSO — otherwise leave null so UI can simply test
+  // `if (score_pen)` to decide whether to render "(X) A-B (Y)" format.
+  // FIFA's HomeTeam.Score / AwayTeam.Score is regulation+ET only (verified on
+  // f1359157 GER 1 vs PAR 1, PSO 3-4: FIFA returned Score=1/1 with 7 period=11
+  // goal events), so PSO goals are NOT folded into `score`.
+  let homePen = 0, awayPen = 0;
+  for (const g of homeEvents.goals) if (g.period === 11) homePen++;
+  for (const g of awayEvents.goals) if (g.period === 11) awayPen++;
+  const hasShootout = (homePen + awayPen) > 0;
+
   // Final score fallback: FIFA occasionally leaves HomeTeam.Score / AwayTeam.Score
   // null even after the match is finished (observed on ARG-AUT, FRA-IRQ, NOR-SEN
   // among others on 2026-06-25). When that happens, count `events.goals` instead
-  // — it's authoritative because each goal event is a confirmed FIFA-tracked
-  // event. Only apply the fallback when the match is finished, otherwise leave
-  // null so the UI shows the "not yet started / in progress" state correctly.
+  // — but EXCLUDE period=11 (PSO) goals from the regulation tally, otherwise a
+  // PSO match would show "4-5" in the regulation slot instead of "1-1".
+  // Only apply the fallback when the match is finished, otherwise leave null
+  // so the UI shows the "not yet started / in progress" state correctly.
   const isFinished = matchStatusLabel(liveData.MatchStatus) === 'finished'
                   || (typeof liveData.Period === 'number' && liveData.Period >= 10);
+  const homeRegGoals = homeEvents.goals.filter(g => g.period !== 11).length;
+  const awayRegGoals = awayEvents.goals.filter(g => g.period !== 11).length;
   const homeScore = (homeTeam.Score != null) ? homeTeam.Score
-                  : isFinished                ? homeEvents.goals.length
+                  : isFinished                ? homeRegGoals
                   : null;
   const awayScore = (awayTeam.Score != null) ? awayTeam.Score
-                  : isFinished                ? awayEvents.goals.length
+                  : isFinished                ? awayRegGoals
                   : null;
 
   return {
@@ -182,8 +201,9 @@ export function normalizeLineup(liveData, mapping) {
       team_id: homeTeam.IdTeam,
       team_name_en: pickEnglish(homeTeam.TeamName),
       tactics: homeTeam.Tactics || null,
-      score: homeScore,                       // FIFA full-time score, with goal-count fallback
+      score: homeScore,                       // regulation+ET score (FIFA Score, with goal-count fallback)
       score_ht: homeHt,                       // computed half-time goals
+      score_pen: hasShootout ? homePen : null, // penalty-shootout conversions (null if no PSO)
       starting: home.starting,
       substitutes: home.substitutes,
       coach: pickHeadCoach(homeTeam.Coaches),
@@ -195,6 +215,7 @@ export function normalizeLineup(liveData, mapping) {
       tactics: awayTeam.Tactics || null,
       score: awayScore,
       score_ht: awayHt,
+      score_pen: hasShootout ? awayPen : null,
       starting: away.starting,
       substitutes: away.substitutes,
       coach: pickHeadCoach(awayTeam.Coaches),

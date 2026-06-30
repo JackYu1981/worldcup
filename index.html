@@ -1588,12 +1588,23 @@
 
             // Determine winner for score-underline highlight (FIFA-style green bar).
             // Only applies to finished matches with a score difference.
+            // For KO matches that went to penalty shootout (m.score_pen exists),
+            // the PSO score decides the winner — regulation score is 1-1 / 0-0
+            // tied so the winner-side underline must follow PSO conversions.
             let homeWinner = false, awayWinner = false;
             if (status === 'finished' && m.score) {
-                const [hs, as] = (typeof m.score === 'string' ? m.score.split('-') : [m.score.home, m.score.away]).map(Number);
-                if (Number.isFinite(hs) && Number.isFinite(as)) {
-                    if (hs > as) homeWinner = true;
-                    else if (as > hs) awayWinner = true;
+                if (m.score_pen) {
+                    const [hp, ap] = m.score_pen.split('-').map(Number);
+                    if (Number.isFinite(hp) && Number.isFinite(ap)) {
+                        if (hp > ap) homeWinner = true;
+                        else if (ap > hp) awayWinner = true;
+                    }
+                } else {
+                    const [hs, as] = (typeof m.score === 'string' ? m.score.split('-') : [m.score.home, m.score.away]).map(Number);
+                    if (Number.isFinite(hs) && Number.isFinite(as)) {
+                        if (hs > as) homeWinner = true;
+                        else if (as > hs) awayWinner = true;
+                    }
                 }
             }
 
@@ -1607,10 +1618,18 @@
                     homeScore = m.score.home; awayScore = m.score.away;
                 }
                 // 半场比分挪到 lineup 弹窗显示，index 卡片只保留终场
-                // Wrap winning side's digit in winner-side span for green underline
-                const hh = homeWinner ? `<span class="winner-side">${homeScore}</span>` : homeScore;
-                const aa = awayWinner ? `<span class="winner-side">${awayScore}</span>` : awayScore;
-                centerHtml = `<div class="score-box"><span class="score-badge">${hh}-${aa}</span></div>`;
+                // KO+PSO: FIFA-style "(H_pen) H-A (A_pen)" — winner-side green underline goes on PSO digit.
+                if (m.score_pen) {
+                    const [hp, ap] = m.score_pen.split('-');
+                    const hpWrap = homeWinner ? `<span class="winner-side">${hp}</span>` : hp;
+                    const apWrap = awayWinner ? `<span class="winner-side">${ap}</span>` : ap;
+                    centerHtml = `<div class="score-box"><span class="score-badge">(${hpWrap})${homeScore}-${awayScore}(${apWrap})</span></div>`;
+                } else {
+                    // Wrap winning side's digit in winner-side span for green underline
+                    const hh = homeWinner ? `<span class="winner-side">${homeScore}</span>` : homeScore;
+                    const aa = awayWinner ? `<span class="winner-side">${awayScore}</span>` : awayScore;
+                    centerHtml = `<div class="score-box"><span class="score-badge">${hh}-${aa}</span></div>`;
+                }
             } else if (status === 'live' && m.score) {
                 // 进行中：比分 + 实时分钟（前端走秒，每 30s 后台 refresh 锚点）
                 let homeScore, awayScore;
@@ -2097,17 +2116,27 @@
             if (statusLabel === 'finished') {
                 const hs = state.home_score, as = state.away_score;
                 const hht = state.home_score_ht, aht = state.away_score_ht;
+                const hp = state.home_score_pen, ap = state.away_score_pen;
                 const hasHt = (hht != null && aht != null) && (hht !== hs || aht !== as);
                 const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
-                centerHtml = `<div class="lineup-score">${hs ?? '-'} - ${as ?? '-'}</div>
+                // KO+PSO: FIFA-style "(H_pen) H-A (A_pen)" with regulation score in the middle.
+                const mainScore = (hp != null && ap != null)
+                    ? `(${hp}) ${hs ?? '-'} - ${as ?? '-'} (${ap})`
+                    : `${hs ?? '-'} - ${as ?? '-'}`;
+                centerHtml = `<div class="lineup-score">${mainScore}</div>
                               ${htLine}
                               <div class="lineup-status-tag finished">已结束</div>`;
             } else if (statusLabel === 'live') {
                 const hs = state.home_score, as = state.away_score;
                 const hht = state.home_score_ht, aht = state.away_score_ht;
+                const hp = state.home_score_pen, ap = state.away_score_pen;
                 const hasHt = (hht != null && aht != null) && (state.period >= 4);
                 const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
-                centerHtml = `<div class="lineup-score">${hs ?? '-'} - ${as ?? '-'}</div>
+                // Live during PSO (period=11): show "(H_pen) H-A (A_pen)" as conversions stream in.
+                const mainScore = (hp != null && ap != null)
+                    ? `(${hp}) ${hs ?? '-'} - ${as ?? '-'} (${ap})`
+                    : `${hs ?? '-'} - ${as ?? '-'}`;
+                centerHtml = `<div class="lineup-score">${mainScore}</div>
                               ${htLine}
                               <div class="lineup-status-tag live">进行中 ${state.match_time || ''}</div>`;
             } else {

@@ -99,6 +99,10 @@ export async function onRequestGet(context) {
       const awayScore = lu.away?.score;
       const homeHt = lu.home?.score_ht;
       const awayHt = lu.away?.score_ht;
+      // Penalty-shootout conversions (period=11 goals). FIFA-style: only set on
+      // KO matches that actually went to PSO. UI renders "(H_pen) H-A (A_pen)".
+      const homePen = lu.home?.score_pen;
+      const awayPen = lu.away?.score_pen;
 
       if (lu.match_status === 0) {
         m.status = 'finished';
@@ -112,6 +116,9 @@ export async function onRequestGet(context) {
       }
       if (homeHt != null && awayHt != null) {
         m.score_ht = `${homeHt}-${awayHt}`;
+      }
+      if (homePen != null && awayPen != null) {
+        m.score_pen = `${homePen}-${awayPen}`;
       }
       m._score_source = (homeScore != null && awayScore != null) ? 'fifa' : '500';
 

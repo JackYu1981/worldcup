@@ -106,16 +106,26 @@ export async function onRequestGet(context) {
       // Fall back to counting `events.goals` by side, which is always reliable.
       // The lineup's `match_status_label === 'finished'` gates this fallback so
       // we don't show partial in-progress scores as final.
+      //
+      // PSO carve-out: period=11 goals are PSO conversions — they must NOT count
+      // toward the regulation score slot. score_pen surfaces them separately
+      // so UI can render "(X) A-B (Y)" on KO matches that went to shootout.
       const goals = lineup.events?.goals || [];
-      const goalsBySide = (side) => goals.filter(g => g.side === side).length;
+      const regGoalsBySide = (side) => goals.filter(g => g.side === side && g.period !== 11).length;
+      const penGoalsBySide = (side) => goals.filter(g => g.side === side && g.period === 11).length;
       const isFinished = lineup.match_status_label === 'finished'
                        || (typeof lineup.period === 'number' && lineup.period >= 10);
       const homeScore = (lineup.home?.score != null) ? lineup.home.score
-                      : isFinished                    ? goalsBySide('home')
+                      : isFinished                    ? regGoalsBySide('home')
                       : null;
       const awayScore = (lineup.away?.score != null) ? lineup.away.score
-                      : isFinished                    ? goalsBySide('away')
+                      : isFinished                    ? regGoalsBySide('away')
                       : null;
+      // score_pen: prefer scraper-written field; fall back to goal-event count.
+      // Only emit when a shootout actually occurred (>0 on either side).
+      const homePenRaw = (lineup.home?.score_pen != null) ? lineup.home.score_pen : penGoalsBySide('home');
+      const awayPenRaw = (lineup.away?.score_pen != null) ? lineup.away.score_pen : penGoalsBySide('away');
+      const hasShootout = (homePenRaw + awayPenRaw) > 0;
       match_state = {
         match_status: lineup.match_status ?? null,
         match_status_label: lineup.match_status_label || null,
@@ -126,6 +136,8 @@ export async function onRequestGet(context) {
         away_score: awayScore,
         home_score_ht: ht.home,
         away_score_ht: ht.away,
+        home_score_pen: hasShootout ? homePenRaw : null,
+        away_score_pen: hasShootout ? awayPenRaw : null,
         events: lineup.events || { goals: [], bookings: [], substitutions: [] },
       };
     }
