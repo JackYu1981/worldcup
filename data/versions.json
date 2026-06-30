@@ -233,6 +233,12 @@
       "date": "2026-06-30T14:28:48+08:00",
       "summary": "淘汰赛点球大战比分按 FIFA 风格 (X)A-B(Y) 显示，calendar 和 lineup 弹窗同步生效",
       "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
+    },
+    {
+      "version": "v5.32",
+      "date": "2026-06-30T14:33:12+08:00",
+      "summary": "lineup 比分改为黑色字体，点球大战括号部分调小调细变灰，视觉更舒服",
+      "doc_url": "https://github.com/JackYu1981/worldcup/blob/main/docs/release-workflow.md"
     }
   ]
 }

@@ -196,6 +196,11 @@
             position: absolute; left: 10%; right: 10%; bottom: -3px;
             height: 2px; background: #00b04f; border-radius: 1px;
         }
+        /* PSO 比分括号部分 — 字号小一档、字重正常、灰色，让常规比分主体仍是视觉焦点 */
+        .match-center .score-badge .score-pen-paren {
+            font-size: 12px; font-weight: 400; color: #888;
+            letter-spacing: 0;
+        }
         .match-center .score-half {
             font-size: 10px; color: #999; margin-top: 4px;
         }
@@ -656,10 +661,14 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .lineup-center-block { text-align: center; padding: 0 10px; }
-        .lineup-score { font-size: 22px; font-weight: 700; color: #e74c3c; }
+        .lineup-score { font-size: 22px; font-weight: 700; color: #222; }
         .lineup-score-ht {
             font-size: 11px; color: #888; margin-top: 2px;
             font-variant-numeric: tabular-nums;
+        }
+        /* PSO 括号在 lineup 弹窗里也用小灰色 — 与 calendar 视觉一致 */
+        .lineup-score .score-pen-paren {
+            font-size: 14px; font-weight: 400; color: #888;
         }
         .lineup-status-tag {
             display: inline-block; padding: 2px 8px; border-radius: 3px;
@@ -1619,11 +1628,12 @@
                 }
                 // 半场比分挪到 lineup 弹窗显示，index 卡片只保留终场
                 // KO+PSO: FIFA-style "(H_pen) H-A (A_pen)" — winner-side green underline goes on PSO digit.
+                // 括号本身用 .score-pen-paren 弱化（小字号、细字重、灰色），让常规比分仍是视觉主角。
                 if (m.score_pen) {
                     const [hp, ap] = m.score_pen.split('-');
                     const hpWrap = homeWinner ? `<span class="winner-side">${hp}</span>` : hp;
                     const apWrap = awayWinner ? `<span class="winner-side">${ap}</span>` : ap;
-                    centerHtml = `<div class="score-box"><span class="score-badge">(${hpWrap})${homeScore}-${awayScore}(${apWrap})</span></div>`;
+                    centerHtml = `<div class="score-box"><span class="score-badge"><span class="score-pen-paren">(${hpWrap})</span>${homeScore}-${awayScore}<span class="score-pen-paren">(${apWrap})</span></span></div>`;
                 } else {
                     // Wrap winning side's digit in winner-side span for green underline
                     const hh = homeWinner ? `<span class="winner-side">${homeScore}</span>` : homeScore;
@@ -2120,8 +2130,9 @@
                 const hasHt = (hht != null && aht != null) && (hht !== hs || aht !== as);
                 const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
                 // KO+PSO: FIFA-style "(H_pen) H-A (A_pen)" with regulation score in the middle.
+                // 括号用 .score-pen-paren 弱化（小一档、字重 normal、灰色）。
                 const mainScore = (hp != null && ap != null)
-                    ? `(${hp}) ${hs ?? '-'} - ${as ?? '-'} (${ap})`
+                    ? `<span class="score-pen-paren">(${hp})</span> ${hs ?? '-'} - ${as ?? '-'} <span class="score-pen-paren">(${ap})</span>`
                     : `${hs ?? '-'} - ${as ?? '-'}`;
                 centerHtml = `<div class="lineup-score">${mainScore}</div>
                               ${htLine}
@@ -2134,7 +2145,7 @@
                 const htLine = hasHt ? `<div class="lineup-score-ht">半 ${hht} - ${aht}</div>` : '';
                 // Live during PSO (period=11): show "(H_pen) H-A (A_pen)" as conversions stream in.
                 const mainScore = (hp != null && ap != null)
-                    ? `(${hp}) ${hs ?? '-'} - ${as ?? '-'} (${ap})`
+                    ? `<span class="score-pen-paren">(${hp})</span> ${hs ?? '-'} - ${as ?? '-'} <span class="score-pen-paren">(${ap})</span>`
                     : `${hs ?? '-'} - ${as ?? '-'}`;
                 centerHtml = `<div class="lineup-score">${mainScore}</div>
                               ${htLine}
